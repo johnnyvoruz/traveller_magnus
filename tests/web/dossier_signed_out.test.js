@@ -82,7 +82,7 @@ describe('signed-out sector dossier', { concurrency: 1 }, () => {
         session.user = { id: 'me', email: null, role: 'user', profile: null, username: null, hasPasskey: false, unusedRecoveryCodes: 0, linkedProviders: [] };
         const html = await render('/s/Spinward_Marches');
         session.user = null;
-        assert.match(html, /Build is off\. Switch it on to select and generate in this sector\./);
+        assert.match(html, /Build is off\. Switch it on to select hexes and generate them in this sector\./);
         assert.equal(html.includes('doss-signin'), false);
     });
 });

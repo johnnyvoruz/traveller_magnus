@@ -766,3 +766,20 @@ p {
 .ui-brand-dot {
   color: var(--mark-red);
 }
+
+/*
+ * The one reduced-motion guard. The --t-* tokens are already zero (tokens.css). This catches a
+ * duration that is not a token, and it stops a loop. A component does not grow a second path.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: var(--t-fast) !important;
+    animation-delay: var(--t-fast) !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: var(--t-fast) !important;
+    transition-delay: var(--t-fast) !important;
+    scroll-behavior: auto !important;
+  }
+}

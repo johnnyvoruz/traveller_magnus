@@ -162,6 +162,12 @@ test('pane changes are the query the screens write', () => {
     assert.deepEqual(paneChanges({ kind: 'timeline', type: null, ship: false, row: null }), { panel: 'timeline', record: null, entry: null, character: null, batch: null, tl: null, tlType: null, tlShip: null });
     assert.deepEqual(paneChanges({ kind: 'timeline', type: 'person', ship: true, row: 'cr_1' }), { panel: 'timeline', record: null, entry: null, character: null, batch: null, tl: 'cr_1', tlType: 'person', tlShip: '1' });
     assert.deepEqual(paneChanges({ kind: 'proposals', batch: 'pb_1' }), { panel: 'proposals', record: null, entry: null, character: null, batch: 'pb_1', tl: null, tlType: null, tlShip: null });
+    // The session board (DU1).
+    assert.deepEqual(paneChanges({ kind: 'session' }), { panel: 'session', record: null, entry: null, character: null, batch: null, tl: null, tlType: null, tlShip: null });
+    assert.deepEqual(addressPane('/', { panel: 'session', record: 'cr_1' }).pane, { kind: 'session' });
+    assert.equal(hostsCampaign({ kind: 'session' }), true);
+    assert.deepEqual(escapePane('/', { panel: 'session' }), { path: '/', query: { panel: 'campaign' } });
+    assert.equal(focusTarget({ kind: 'campaign', record: null }, { kind: 'session' }), 'leave');
     const orbitPath = '/s/' + SECTOR + '/' + HEX + '/orbit';
     const opened = withQuery({ date: '120', time: '0800', x: '1' }, paneChanges(LIST));
     assert.deepEqual(addressPane(orbitPath, opened).pane, LIST);

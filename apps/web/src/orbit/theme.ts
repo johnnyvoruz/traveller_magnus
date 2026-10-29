@@ -255,6 +255,85 @@ export function readOrbitTheme(el: HTMLElement): OrbitTheme {
     };
 }
 
+/**
+ * The system map on paper (CP2): the same theme shape read from the --print-orbit-* tokens, ink
+ * on --print-paper. A saved image is one frame, so every duration is 0. The backdrop is not
+ * drawn for this theme; the field and the nebulae are the paper, in case one is.
+ */
+export function printOrbitTheme(el: HTMLElement): OrbitTheme {
+    const style = getComputedStyle(el);
+    const token = (name: string): string => style.getPropertyValue(name).trim();
+    const ink = (name: string): string => token('--print-orbit-' + name);
+    const star = starPaint(ink('star'));
+    const stars: Record<string, StarPaint> = {};
+    for (const type of STAR_TYPES) stars[type] = star;
+    const paper = token('--print-paper');
+    const blank: [string, string] = [withAlpha(paper, 0), withAlpha(paper, 0)];
+    const nebulae: [string, string][][] = [];
+    for (let i = 0; i < 5; i++) nebulae.push([blank, blank, blank]);
+    const hz = ink('hz');
+    const night = ink('night');
+    const body = ink('world');
+    const signal = ink('signal');
+    const text = ink('text');
+    const hub = text;
+    return {
+        space: paper,
+        spaceClear: withAlpha(paper, 0),
+        starCore: ink('star'),
+        stars,
+        starUnknown: star,
+        field: FIELD_TYPES.map(() => paper),
+        nebulae,
+        hzEdge: withAlpha(hz, 0.16),
+        hzMid: withAlpha(hz, 0.28),
+        hzLine: withAlpha(hz, 0.8),
+        jump: ink('jump'),
+        pathBase: ink('path'),
+        hzPanel: withAlpha(hz, 0.2),
+        rock: ink('rock'),
+        scanWedge: [withAlpha(signal, 0), withAlpha(signal, 0.035)],
+        tones: {
+            gasLarge: ink('gas-large'),
+            gasMedium: ink('gas-medium'),
+            gasSmall: ink('gas-small'),
+            belt: ink('belt'),
+            world: body,
+        },
+        moon: ink('moon'),
+        ring: ink('ring'),
+        beltBand: withAlpha(ink('belt'), 0.85),
+        night: withAlpha(night, 0.72),
+        shadow: [withAlpha(night, 0.94), withAlpha(night, 0.55), withAlpha(night, 0)],
+        mainworld: text,
+        text,
+        textMuted: ink('text-muted'),
+        lock: signal,
+        lockGlow: [withAlpha(signal, 0.16), withAlpha(signal, 0)],
+        signal,
+        attention: signal,
+        tag: paper,
+        port: {
+            major: portPaint(signal, hub),
+            minor: portPaint(ink('text-muted'), hub),
+        },
+        portStarboard: lampPaint(signal),
+        portPort: lampPaint(ink('jump')),
+        portStrobe: lampPaint(text),
+        portShade: withAlpha(night, 0.5),
+        portPath: withAlpha(ink('path'), 0.45),
+        fontText: token('--font-text'),
+        fontCode: token('--font-code'),
+        tLock: 0,
+        tPulse: 0,
+        tSweep: 0,
+        tBase: 0,
+        tSlow: 0,
+        tLong: 0,
+        easeOut: null,
+    };
+}
+
 /** The camera moves: a hop is --t-slow, a flight is --t-long (tokens.css names both for the camera); a layout change is --t-lineup. */
 export function readOrbitMotion(el: HTMLElement): OrbitMotion {
     const style = getComputedStyle(el);

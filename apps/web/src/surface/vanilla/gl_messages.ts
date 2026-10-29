@@ -62,6 +62,15 @@ export type RpcRequest = {
     delivery?: DiscDelivery;
 };
 
+/** A body's painted hexes (DW2c): one texture the worker keeps by key; null forgets it. */
+export type PaintMessage = {
+    op: 'paint';
+    key: string;
+    image: PaintImage | null;
+};
+
+export type PaintImage = { width: number; height: number; pixels: Uint8ClampedArray };
+
 export type WatchRequest = {
     op: 'watch';
     requests: ShadeRequest[];

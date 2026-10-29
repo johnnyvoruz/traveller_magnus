@@ -4,9 +4,10 @@
  * free of zod (ZP2). tests/web/news_graph.test.js checks that NEWS_PARAMS passes this schema
  * and that a bad route rule or a wait of 12 hours is judged as before.
  *
- * Zod 3 lives with @voyage/shared. The app does not import the root zod.
+ * The schema package is the root zod, the same 4 the shared package uses.
+ * The map does not import this file.
  */
-import { z } from '../../../../packages/shared/node_modules/zod/index.js';
+import { z } from 'zod';
 
 /** `rules/mgt2e_space_travel.json` `jump.durationHours`: base hours plus that many D. */
 export const JumpHours = z.object({

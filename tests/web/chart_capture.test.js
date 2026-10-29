@@ -129,7 +129,7 @@ test('the renderer draws one frame elsewhere and restores in a finally; the capt
     assert.match(renderer, /drawInto\(\s*canvas: HTMLCanvasElement,\s*cam: Camera,\s*width: number,\s*height: number,\s*dpr: number,\s*theme: MapTheme,/);
     const body = renderer.slice(renderer.indexOf('    drawInto('), renderer.indexOf('    /** `animating` is true while a title fade'));
     assert.match(body, /try \{[\s\S]*this\.canvas = canvas;[\s\S]*this\.resize\(width, height, dpr\);[\s\S]*const drawn = this\.draw\(cam\);[\s\S]*\} finally \{[\s\S]*this\.canvas = live\.canvas;[\s\S]*this\.theme = live\.theme;[\s\S]*this\.selected = live\.selected;[\s\S]*this\.titleStates\.clear\(\);[\s\S]*this\.dotTiles\.clear\(\);/);
-    assert.match(body, /opts: \{ titleTop: number; workspaceLeft: number; selection: Selection \| null \}/);
+    assert.match(body, /opts: \{ titleTop: number; workspaceLeft: number; selection: Selection \| null; only\?: readonly \{ q: number; r: number \}\[\] \}/);
     assert.match(renderer, /ctx\.globalAlpha = alpha \* this\.fillScale\(\);/, 'polity fills at the theme\'s share');
     assert.match(renderer, /ctx\.globalAlpha = REGION_FILL_ALPHA \* this\.fillScale\(\);/, 'region fills too');
     const capture = read('map/capture.ts');
@@ -186,4 +186,54 @@ test('the button, the sheet, the command and the menu entry', () => {
     assert.match(button, /aria-label="Save image"/);
     assert.match(button, /<Icon name="file-export" :size="16" \/>/);
     assert.match(button, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test('DF20: a capture with an area draws only its own worlds; the screen and a capture without an area draw them all', async () => {
+    const { MapRenderer } = await import('../../apps/web/src/map/MapRenderer.ts');
+    const { hexCentre, toGlobal } = await import('../../apps/web/src/map/geometry.ts');
+    if (typeof globalThis.Path2D !== 'function') globalThis.Path2D = class Path2D { moveTo() {} lineTo() {} closePath() {} rect() {} };
+    const recorder = () => {
+        const calls = [];
+        const ctx = new Proxy({}, {
+            get(_t, prop) {
+                if (prop === 'measureText') return (text) => ({ width: 7 * String(text).length });
+                return (...args) => { calls.push([String(prop), ...args]); };
+            },
+            set(_t, prop, value) { calls.push(['set', String(prop), value]); return true; },
+        });
+        return { calls, ctx, canvas: { width: 0, height: 0, getContext: () => ctx } };
+    };
+    const theme = {
+        bg0: 'bg', line1: 'l1', line2: 'l2', signal: 'sig', signalDim: 'sigdim', text1: 't1', textMuted: 'muted',
+        fontDisplay: 'display', fontData: 'data', fontText: 'text',
+        chart: { world: 'world', water: 'water', zoneAmber: 'amber', zoneRed: 'red', grid: 'grid', selected: 'selected', routeXboat: 'xboat', routeOther: 'other', titleText: 'title', titlePill: 'pill' },
+        routeColours: {},
+    };
+    const live = recorder();
+    const renderer = new MapRenderer(live.canvas, theme);
+    renderer.setChart({ sectors: [{ slug: 'Spinward_Marches', name: 'Spinward Marches', x: -4, y: -1, canonical: true }] }, { truthVersion: 'v', sectors: [] }, 'canonical');
+    renderer.setIndexSource(() => ({ hexes: { '1910': { name: 'Regina', uwp: 'A788899-C' }, '2040': { name: 'Ougzdaelzoerrgh', uwp: 'A899335-B' } } }));
+    renderer.resize(800, 600, 1);
+    const regina = toGlobal(-4, -1, 19, 10);
+    const above = toGlobal(-4, -1, 20, 40);
+    // A camera over both worlds at the names zoom. 2040 is the row above subsector C's 2001 in the next sector down; here it stands in for any world outside the area.
+    const mid = hexCentre(regina.q, regina.r);
+    const cam = { x: mid.x, y: mid.y + 10, ppp: 64 };
+    const names = (calls) => calls.filter((call) => call[0] === 'fillText').map((call) => call[1]).filter((text) => text === 'Regina' || text === 'Ougzdaelzoerrgh');
+
+    const off = recorder();
+    renderer.drawInto(off.canvas, cam, 800, 600, 1, theme, { titleTop: 0, workspaceLeft: 0, selection: null, only: [regina] });
+    assert.deepEqual(names(off.calls), ['Regina'], "only the area's world is drawn");
+
+    const all = recorder();
+    renderer.drawInto(all.canvas, cam, 800, 600, 1, theme, { titleTop: 0, workspaceLeft: 0, selection: null });
+    assert.deepEqual(names(all.calls).sort(), ['Ougzdaelzoerrgh', 'Regina'], 'no area: every world');
+
+    live.calls.length = 0;
+    renderer.draw(cam);
+    assert.deepEqual(names(live.calls).sort(), ['Ougzdaelzoerrgh', 'Regina'], 'the screen after a capture: every world');
+    const source = read('map/MapRenderer.ts');
+    assert.match(source, /onlyHexes: this\.onlyHexes,/);
+    assert.match(source, /this\.onlyHexes = live\.onlyHexes;/);
+    assert.match(read('map/capture.ts'), /only: input\.hexes/);
 });

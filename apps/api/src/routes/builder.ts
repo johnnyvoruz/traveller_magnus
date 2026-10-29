@@ -20,6 +20,9 @@ import {
     HexRestore,
     HexRevert,
     SectorHex,
+    SURFACE_BODY_KEY,
+    SURFACE_PAYLOAD_MAX,
+    SURFACE_TOO_LARGE,
     SectorGenerate,
     SectorGenerateDone,
     SectorGenerateUndo,
@@ -48,7 +51,7 @@ import { isAllowanceRefusal, releaseAllowance, takeAllowance, type AllowanceView
 import { enqueueGenerate } from '../jobs/generate_queue';
 import { ONE_SECTOR_LIMIT, sectorCount } from '../jobs/one_sector';
 import { defaultPin } from '../universe/defaults';
-import { ownedUniverse, type OwnedUniverse } from '../universe/forward';
+import { memberUniverse, ownedUniverse, type OwnedUniverse } from '../universe/forward';
 import { chartHoldsSystem, chartTree, generationSeed, hexDoorPath, HexRefusal, sectorOf, type ChartHex, type Pin } from '../universe/hexes';
 import { isQuotaFull, releaseObjectBytes, reserveObjectBytes } from '../universe/quota';
 import { resolveMadeSectors } from '../universe/sectors';
@@ -87,7 +90,7 @@ async function discardHeldObject(env: AppEnv['Bindings'], universeId: string, ke
     await releaseObjectBytes(env, universeId, reservationId, added);
 }
 
-async function door(owned: OwnedUniverse, path: string, method: string, body?: unknown): Promise<Response> {
+async function door(owned: { forward: OwnedUniverse['forward'] }, path: string, method: string, body?: unknown): Promise<Response> {
     return owned.forward(new Request(`https://universe.internal${path}`, {
         method,
         headers: body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -281,6 +284,31 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;
         return door(owned, hexDoorPath(keyOf(c)), 'GET');
+    });
+
+    route.get('/:id/builder/hexes/:sector/:local/surface/:body', async (c) => {
+        const access = await memberUniverse(c);
+        if (access instanceof Response) return access;
+        if (access.role !== 'owner' && access.role !== 'member') {
+            return fail(c, 404, 'not_found', 'No such universe.');
+        }
+        const path = surfacePath(c);
+        if (path instanceof Response) return path;
+        return door(access, path, 'GET');
+    });
+
+    route.put('/:id/builder/hexes/:sector/:local/surface/:body', async (c) => {
+        const owned = await ownedUniverse(c);
+        if (owned instanceof Response) return owned;
+        const path = surfacePath(c);
+        if (path instanceof Response) return path;
+        const raw = await c.req.text();
+        if (new TextEncoder().encode(raw).byteLength > SURFACE_PAYLOAD_MAX) {
+            return fail(c, 400, 'validation', SURFACE_TOO_LARGE);
+        }
+        let body: unknown;
+        try { body = JSON.parse(raw); } catch { return fail(c, 400, 'validation', 'That request could not be read. Try again.'); }
+        return door(owned, path, 'PUT', body);
     });
 
     route.post('/:id/hexes/:sector/:local/remove', async (c) => {
@@ -696,6 +724,17 @@ export function mountBuilderRoutes(route: Hono<AppEnv>): void {
 
 function keyOf(c: Parameters<typeof fail>[0]): string {
     return `${c.req.param('sector')}/${c.req.param('local')}`;
+}
+
+/** Door path for one body's paint. The public route keeps `builder` so it is not a hex read. */
+function surfacePath(c: Parameters<typeof fail>[0]): string | Response {
+    const sector = c.req.param('sector') ?? '';
+    const local = c.req.param('local') ?? '';
+    const body = c.req.param('body') ?? '';
+    if (!/^\d{4}$/.test(local) || !SURFACE_BODY_KEY.test(body) || sector.length === 0 || sector.includes('/')) {
+        return fail(c, 400, 'validation', 'That request could not be read. Try again.');
+    }
+    return `/hexes/${encodeURIComponent(sector)}/${local}/surface/${encodeURIComponent(body)}`;
 }
 
 function sectorDoor(id: string, action?: string): string {

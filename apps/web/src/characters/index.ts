@@ -4,6 +4,7 @@
  */
 export { bindSheet } from './sheet.ts';
 export { openCharacter } from './open.ts';
+export { openRegister } from './register.ts';
 export { claim, giveOwnership, listAccess, listInvites, makeInvite, removeAccess, revokeInvite } from './share.ts';
 export {
     answerConfirm,

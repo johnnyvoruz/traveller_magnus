@@ -171,7 +171,7 @@ export async function addImage(recordId: string, prepared: PreparedImage): Promi
 /** Drops the entry. The object stays until the bucket sweep. */
 export function removeImage(recordId: string, hash: string): void {
     const record = campaign.records[recordId];
-    if (!record || !record.images) return;
+    if (!record || record.deleted || !record.images) return;
     if (!record.images.some((image) => image.hash === hash)) return;
     const images = record.images.filter((image) => image.hash !== hash);
     writeImages(record, images.length ? images : null);
@@ -180,7 +180,7 @@ export function removeImage(recordId: string, hash: string): void {
 /** Moves this image to the front of the gallery. */
 export function makePrimary(recordId: string, hash: string): void {
     const record = campaign.records[recordId];
-    if (!record || !record.images) return;
+    if (!record || record.deleted || !record.images) return;
     const index = record.images.findIndex((image) => image.hash === hash);
     if (index <= 0) return;
     const chosen = record.images[index];
@@ -192,7 +192,7 @@ export function makePrimary(recordId: string, hash: string): void {
 /** Sets the caption on one image. A blank caption clears it. */
 export function setCaption(recordId: string, hash: string, caption: string): void {
     const record = campaign.records[recordId];
-    if (!record || !record.images) return;
+    if (!record || record.deleted || !record.images) return;
     const index = record.images.findIndex((image) => image.hash === hash);
     if (index < 0) return;
     const trimmed = caption.trim().slice(0, CAMPAIGN_LIMITS.caption);

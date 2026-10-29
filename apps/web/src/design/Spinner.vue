@@ -37,7 +37,7 @@ withDefaults(defineProps<{ size?: number }>(), { size: 13 });
   stroke-dasharray: 10 40;
   stroke-linecap: round;
   transform-origin: 8px 8px;
-  animation: ui-spin-turn 0.85s linear infinite;
+  animation: ui-spin-turn var(--t-spin) linear infinite;
 }
 
 @keyframes ui-spin-turn {

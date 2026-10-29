@@ -414,6 +414,9 @@ export type ShadeRequest = {
     scale?: number;
     /** Smaller is nearer the selected body. Omitted requests keep their batch order. */
     near?: number;
+    /** The painted hexes' texture the worker holds for this body (DW2c), and its longitude offset. Unset: none. */
+    paintKey?: string;
+    paintLon?: number;
     uTime: number;
     /** Below zero, clouds stay the baked field. A harness sets 0..1. The orbit page leaves this unset. */
     cloudForce?: number;
@@ -451,6 +454,9 @@ export type ShadeDraw = {
     diag?: number;
     cssDiameter?: number;
     cityLook?: number;
+    /** The painted hexes (DW2c): the texture, or null for none; the enhanced program alone reads it. */
+    paint?: WebGLTexture | null;
+    paintLon?: number;
 };
 
 type LinkedProgram = { prog: WebGLProgram; uniforms: Record<string, WebGLUniformLocation | null> };
@@ -469,6 +475,22 @@ export function attachShade(
 } {
     let current = program;
     let black: WebGLTexture | null = null;
+    let clearFlat: WebGLTexture | null = null;
+
+    /** A 1 × 1 clear texture for a disc with no paint, so the sampler is always bound. */
+    function clearPaint(): WebGLTexture {
+        if (clearFlat) return clearFlat;
+        const texture = gl.createTexture();
+        if (!texture) throw new Error('clear paint');
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        clearFlat = texture;
+        return texture;
+    }
 
     function blackCube(): WebGLTexture {
         if (black) return black;
@@ -496,6 +518,8 @@ export function attachShade(
         gl.deleteProgram(current.prog);
         if (black) gl.deleteTexture(black);
         black = null;
+        if (clearFlat) gl.deleteTexture(clearFlat);
+        clearFlat = null;
     }
 
     /** js/planet_gl.js:1040-1128. Ring uniforms stay stale when the request has no ring. */
@@ -509,6 +533,7 @@ export function attachShade(
         gl.uniform1i(u.uA ?? null, 0);
         gl.uniform1i(u.uB ?? null, 1);
         if (u.uC) gl.uniform1i(u.uC, 2);
+        if (u.uPaint) gl.uniform1i(u.uPaint, 3);
         for (const req of items) {
             const cube = req.cube;
             const glY = height - req.ty - req.tileSize;
@@ -520,6 +545,13 @@ export function attachShade(
             if (u.uC) {
                 gl.activeTexture(gl.TEXTURE2);
                 gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube.c ?? blackCube());
+            }
+            // The painted hexes (DW2c): the enhanced program alone declares the sampler; vanilla never binds it.
+            if (u.uPaint) {
+                gl.activeTexture(gl.TEXTURE3);
+                gl.bindTexture(gl.TEXTURE_2D, req.paint ?? clearPaint());
+                gl.uniform1f(u.uHasPaint ?? null, req.paint ? 1 : 0);
+                gl.uniform1f(u.uPaintLon ?? null, req.paintLon ?? 0);
             }
             const p = req.profile;
             const basis = axisBasis(p, req.tilt);

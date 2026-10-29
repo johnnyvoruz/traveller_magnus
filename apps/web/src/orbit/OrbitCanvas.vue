@@ -953,7 +953,22 @@ function waypoints() {
     return renderer ? renderer.waypoints() : { route: [], preview: [] };
 }
 
-defineExpose({ paint, fit, shipStatus, waypoints });
+/** The picture as it stands, for a saved image. Nothing here is drawn. */
+function shot() {
+    const current = plan.value;
+    if (!current || !(stage.size.w > 1) || !(stage.size.h > 1)) return null;
+    return {
+        plan: current,
+        days,
+        cam: { ...stage.cam },
+        size: { w: stage.size.w, h: stage.size.h },
+        layers: { ...stage.layers },
+        mode: stage.mode,
+        selected: props.selected,
+    };
+}
+
+defineExpose({ paint, fit, shipStatus, waypoints, shot });
 </script>
 
 <template>

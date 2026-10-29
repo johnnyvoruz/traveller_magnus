@@ -237,6 +237,15 @@ export type { XmlEl, MetadataXml } from './parsers/metadata_xml.ts';
 export { EXTRA_LINE_GUARD, EXTRA_LINE_MIN, extraFieldName, numberedSkillLabels, parseExtraName } from './character_extra.ts';
 export type { ExtraLineName, ExtraPart } from './character_extra.ts';
 export { PackageCover } from './schemas/package.ts';
+export {
+    SURFACE_BODY_KEY,
+    SURFACE_PAYLOAD_MAX,
+    SURFACE_TOO_LARGE,
+    SurfaceEdit,
+    SurfaceEdits,
+    SurfacePut,
+    SurfaceRead,
+} from './schemas/surface.ts';
 export { PACKAGE_KIND_FAMILIES, PackageFamily } from './schemas/package.ts';
 export { PackageContents, PackageFacet, PackageFacets, PackageFacetsQuery } from './schemas/package.ts';
 export { ChatterWhen, ChatterLine, ChatterFile } from './schemas/chatter.ts';

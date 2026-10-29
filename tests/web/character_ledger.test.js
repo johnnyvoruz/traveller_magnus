@@ -48,7 +48,7 @@ test('a bad kind, a blank memo, or an amount that is not a non-zero integer is r
         { ...base, amount: -1_000_000_001 },
         { ...base, whenDay: 1.2 },
         { ...base, whenDay: -1 },
-        { ...base, whenDay: 400_001 },
+        { ...base, whenDay: 4_000_001 },
     ]) {
         const refused = postCredit([], draft, stamp('ln_bad'));
         assert.equal(refused.ok, false);
@@ -59,9 +59,11 @@ test('a bad kind, a blank memo, or an amount that is not a non-zero integer is r
     assert.equal(edge.line.memo.length, 80);
     assert.equal(edge.line.amount, 1_000_000_000);
     assert.equal(edge.line.whenDay, 0);
-    const lastDay = posted([], { ...base, amount: -1_000_000_000, whenDay: 400_000 }, 'ln_day');
-    assert.equal(lastDay.line.whenDay, 400_000);
-    const undone = voidCredit(lastDay.lines, 'ln_day', stamp('ln_void'), 400_001);
+    const lastDay = posted([], { ...base, amount: -1_000_000_000, whenDay: 4_000_000 }, 'ln_day');
+    assert.equal(lastDay.line.whenDay, 4_000_000);
+    const milieu = posted([], { ...base, amount: 1, memo: 'Milieu', whenDay: 403_602 }, 'ln_milieu');
+    assert.equal(milieu.line.whenDay, 403_602);
+    const undone = voidCredit(lastDay.lines, 'ln_day', stamp('ln_void'), 4_000_001);
     assert.equal(undone.ok, false);
     assert.equal(undone.message, 'Invalid request.');
 });

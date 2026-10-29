@@ -51,6 +51,13 @@ test('Back returns to the earlier pane, and the first pane has none', () => {
     assert.equal(backTo(), null);
 });
 
+test('on a phone the sheet starts at the rail, clear of the world name', () => {
+    const block = panel.slice(panel.indexOf('@media (max-width: 599px)'));
+    const rule = block.slice(block.indexOf('.panel {'), block.indexOf('.panel.is-open'));
+    assert.match(rule, /left: var\(--rail-width\);/);
+    assert.doesNotMatch(rule, /left:\s*0/);
+});
+
 test('the sheet is only below 600 px, and Back sits left of Close', () => {
     assert.match(panel, /max-width: 599px/);
     assert.match(panel, /class="panel-grab"/);

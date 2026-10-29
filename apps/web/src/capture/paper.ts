@@ -72,7 +72,7 @@ export type CaptureArea =
     | { kind: 'subsector'; name: string; sector: string }
     | { kind: 'sector'; sector: string }
     | { kind: 'system'; name: string; sector: string; hex: string }
-    | { kind: 'world'; name: string; sector: string; hex: string };
+    | { kind: 'world'; name: string; sector: string; hex: string; uwp?: string };
 
 /** The area in words: "Regina subsector, Spinward Marches". */
 export function areaWords(area: CaptureArea): string {
@@ -81,7 +81,7 @@ export function areaWords(area: CaptureArea): string {
         case 'subsector': return (/^Subsector /.test(area.name) ? area.name : area.name + ' subsector') + ', ' + area.sector;
         case 'sector': return area.sector + ' sector';
         case 'system': return area.name + ' system, ' + area.sector + ' ' + area.hex;
-        case 'world': return area.name + ' surface, ' + area.sector + ' ' + area.hex;
+        case 'world': return (area.uwp ? area.name + ' ' + area.uwp : area.name) + ' surface, ' + area.sector + ' ' + area.hex;
     }
 }
 

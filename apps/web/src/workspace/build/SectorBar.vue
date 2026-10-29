@@ -42,15 +42,15 @@ function pick(id: string): void {
   <div class="build-bar sector-bar">
     <template v-if="sectorUi.moving">
       <span class="build-tag is-preview">Moving</span>
-      <span class="build-bar-word" role="status">Select an empty sector slot on the map</span>
+      <span class="build-bar-word" role="status">Select an empty sector slot on the map.</span>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" @click="cancelMove()">Cancel<kbd class="build-key">Esc</kbd></button>
     </template>
     <template v-else>
-      <button type="button" class="ui-btn" data-command="build-sector-rename" :disabled="!canRename() || sectorUi.renaming" title="Rename (F2). Press Enter to save the name, or Esc to cancel" @click="startRename()">
+      <button type="button" class="ui-btn" data-command="build-sector-rename" :disabled="!canRename() || sectorUi.renaming" title="Rename (F2). Press Enter to save the name, or Escape to cancel." @click="startRename()">
         <Icon name="pen-to-square" :size="13" />Rename<kbd class="build-key">F2</kbd>
       </button>
-      <button v-if="!subsector" type="button" class="ui-btn" data-command="build-sector-move" :disabled="!canMove()" title="Move this sector to an empty sector slot. Its hexes and names move with it" @click="startMove()">
+      <button v-if="!subsector" type="button" class="ui-btn" data-command="build-sector-move" :disabled="!canMove()" title="Move this sector to an empty sector slot. Its hexes and names move with it." @click="startMove()">
         <Icon name="up-right-and-down-left-from-center" :size="13" />Move…
       </button>
       <button

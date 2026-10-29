@@ -138,12 +138,12 @@ const menuItems = computed((): MenuItem[] => {
     if (!node) return [];
     const out: MenuItem[] = [];
     if (node.kind !== 'star') {
-        out.push({ id: 'mainworld', label: node.mainworld ? 'This is the mainworld' : 'Make mainworld', say: 'The map shows this world’s profile for the system', icon: 'location-dot', disabled: !canMainworld(id) });
+        out.push({ id: 'mainworld', label: node.mainworld ? 'This is the mainworld' : 'Make mainworld', say: "The map shows this world's profile for the system.", icon: 'location-dot', disabled: !canMainworld(id) });
     }
     out.push({
         id: 'remove',
         label: 'Remove ' + removeWords(nodes.value, id),
-        say: 'Removed when you select Keep',
+        say: 'Removed when you select Keep.',
         icon: 'trash',
         danger: true,
         disabled: !canRemoveBody(id),
@@ -216,7 +216,7 @@ function endDrag(): void {
           @dragleave="dropId === node.id && (dropId = '')"
           @drop.prevent="onDrop(node)"
         >
-          <span class="hand-grip" draggable="true" title="To change what this body orbits, drag it onto another body" aria-hidden="true" @dragstart="onDrag($event, node)" @dragend="endDrag">
+          <span class="hand-grip" draggable="true" title="To change what this body orbits, drag it onto another body." aria-hidden="true" @dragstart="onDrag($event, node)" @dragend="endDrag">
             <Icon name="grip-lines" :size="11" />
           </span>
           <button
@@ -262,10 +262,10 @@ function endDrag(): void {
         </li>
       </ul>
       <div class="hand-add" role="group" aria-label="Add a body">
-        <button v-for="item in ADD" :key="item.kind" type="button" class="ui-btn" :data-command="item.command" :disabled="!canAdd(item.kind)" :title="addWhy(item.kind) || 'Adds a body to the draft. To save it, select Keep'" @click="addBody(item.kind)">
+        <button v-for="item in ADD" :key="item.kind" type="button" class="ui-btn" :data-command="item.command" :disabled="!canAdd(item.kind)" :title="addWhy(item.kind) || 'Adds a body to the draft. To save it, select Keep.'" @click="addBody(item.kind)">
           <Icon name="plus" :size="12" />Add {{ KIND_WORD[item.kind].toLowerCase() }}
         </button>
-        <button type="button" class="ui-btn" data-command="build-add-moon" :disabled="!canAdd('moon')" :title="addWhy('moon') || 'Adds a body to the draft. To save it, select Keep'" @click="addBody('moon')">
+        <button type="button" class="ui-btn" data-command="build-add-moon" :disabled="!canAdd('moon')" :title="addWhy('moon') || 'Adds a body to the draft. To save it, select Keep.'" @click="addBody('moon')">
           <Icon name="plus" :size="12" />Add moon<span v-if="host" class="hand-add-to"> to {{ nodeTitle(host) }}</span>
         </button>
       </div>
@@ -290,7 +290,7 @@ function endDrag(): void {
           />
           <!-- "Pick orbit" stands after the orbit box it fills; the box stays typeable. -->
           <div v-if="form && field.id === pickFieldId(form, selected, nodes) && canPick(form, selected, nodes)" class="hand-pick-row">
-            <button type="button" class="ui-btn" data-command="build-body-orbit" :disabled="busy" :title="'Pick the orbit of ' + nodeTitle(selected) + ' on a picture of the system'" @click="openPicker(selected.id)">
+            <button type="button" class="ui-btn" data-command="build-body-orbit" :disabled="busy" :title="'Pick the orbit of ' + nodeTitle(selected) + ' on a picture of the system.'" @click="openPicker(selected.id)">
               <Icon name="location-crosshairs" :size="12" />Pick orbit
             </button>
           </div>

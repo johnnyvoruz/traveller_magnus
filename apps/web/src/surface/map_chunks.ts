@@ -25,12 +25,15 @@ export function createChunkedMap(
     inputs: DiamondMapInputs,
     now: () => number,
     budgetMs: number,
+    size: { width: number; height: number } = { width: MAP_WIDTH, height: MAP_HEIGHT },
 ): ChunkedMap {
+    const width = Math.max(1, Math.round(size.width));
+    const height = Math.max(1, Math.round(size.height));
     const maskWeight = typeof inputs.continentalDefinition === 'number' ? inputs.continentalDefinition : 0.55;
     const warpStrength = typeof inputs.coastlineComplexity === 'number' ? inputs.coastlineComplexity : 0.45;
     const ms = inputs.masterSeed !== undefined ? inputs.masterSeed : 'default';
     const imageSeed = inputs.imageSeed || '0000';
-    const pixels = new Uint8ClampedArray(MAP_WIDTH * MAP_HEIGHT * 4);
+    const pixels = new Uint8ClampedArray(width * height * 4);
 
     let phase: 'prep' | 'cdf' | 'paint' | 'done' = 'prep';
     let heightGrid: Float32Array | null = null;
@@ -75,14 +78,14 @@ export function createChunkedMap(
         }
 
         if (phase === 'paint' && heightGrid && seeds && samples && palette) {
-            while (py < MAP_HEIGHT) {
+            while (py < height) {
                 if (yieldNow()) break;
                 py = renderDiamond(
-                    { data: pixels, width: MAP_WIDTH, height: MAP_HEIGHT },
+                    { data: pixels, width, height },
                     heightGrid, seeds, samples, palette, maskWeight, warpStrength, py, 1, capSeed,
                 );
             }
-            if (py >= MAP_HEIGHT) phase = 'done';
+            if (py >= height) phase = 'done';
         }
 
         const elapsed = now() - started;

@@ -1,5 +1,6 @@
 /** Request and result shapes shared by both surface modes. No painter lives here. */
 import type { HybridWorld } from './hybrid/inputs.ts';
+import type { HexEdits } from './hybrid/serialize.ts';
 
 export type SurfaceMode = 'vanilla' | 'enhanced';
 
@@ -35,6 +36,8 @@ export type MapRequest = {
     readonly body: BodySnapshot;
     readonly resolution: MapResolution;
     readonly options: DrawingOptions;
+    /** A referee's painted hexes (DW2), laid over the enhanced sheet. Vanilla ignores them. */
+    readonly edits?: HexEdits | null;
 };
 
 /**
@@ -137,8 +140,8 @@ export type EnhancedSea = {
 /** Plain inputs for the enhanced sheet: the vanilla ones (the same continents) and the sea. */
 export type EnhancedPaintInputs = VanillaPaintInputs & { readonly sea: EnhancedSea };
 
-/** Plain inputs for the hybrid sheet (surface/hybrid): the world's data, read on the page. */
-export type HybridPaintInputs = { readonly world: HybridWorld };
+/** Plain inputs for the hybrid sheet (surface/hybrid): the world's data, read on the page, and the painted hexes when there are any. */
+export type HybridPaintInputs = { readonly world: HybridWorld; readonly edits?: HexEdits | null };
 
 /**
  * Hybrid sheet size. Omit it for the 800 × 400 sheet. The large map sends 1600 × 800, side 264.

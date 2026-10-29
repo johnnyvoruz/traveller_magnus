@@ -417,8 +417,11 @@ test('a token colour takes an alpha; other forms pass through', () => {
 });
 
 test('the theme reads every colour it needs from tokens.css', () => {
-    // Parse the real token file, resolving var() one level, as the browser's computed style does.
-    const css = fs.readFileSync(path.join(ROOT, 'apps/web/src/design/tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    // Parse the real token file, resolving var() one level, as the browser's computed style does
+    // when reduced motion is off. The reduced-motion block zeros the same tokens on purpose.
+    const raw = fs.readFileSync(path.join(ROOT, 'apps/web/src/design/tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const reducedAt = raw.indexOf('@media (prefers-reduced-motion: reduce)');
+    const css = reducedAt < 0 ? raw : raw.slice(0, reducedAt);
     const tokens = {};
     for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) tokens[match[1]] = match[2].trim();
     const resolve = (value) => value.replace(/var\((--[a-z0-9-]+)\)/g, (_all, name) => tokens[name] ?? '');

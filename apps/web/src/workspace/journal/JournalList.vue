@@ -19,6 +19,7 @@ import { hexKeyOf, hexWords } from '../places.ts';
 import { resolveAnchor } from '../party.ts';
 import AskModal from '../../shell/AskModal.vue';
 import { emptyKind, filterEntries, filterWord, kindCounts, KIND_ORDER, rowFace, visibleRange, type KindFilter } from './list.ts';
+import { replyWords } from './replies.ts';
 
 /** How long a search waits before the list is filtered again. */
 const SEARCH_WAIT = 150;
@@ -445,7 +446,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
     </div>
     <div v-else-if="first" class="camp-first ui-ground">
       <span class="camp-glyph is-large" aria-hidden="true"><Icon name="book-atlas" :size="22" /></span>
-      <h2>Sessions, notes, handouts and rumours land here.</h2>
+      <h2>Sessions, notes, handouts, and rumours land here.</h2>
       <p>A session takes the campaign date and where the party is. A note waits until you date it.</p>
       <div class="camp-first-starts">
         <button type="button" class="ui-btn is-primary" data-command="journal-new-session" :disabled="readOnly" @click="make('session')">
@@ -573,7 +574,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
                 <span v-if="face.author" class="jn-by">Written by <span class="ui-chip">{{ face.author }}</span></span>
               </span>
               <span v-if="face.summary" class="camp-row-sum">{{ face.summary }}</span>
-              <span class="camp-row-meta jn-meta"><span v-if="face.when" class="ui-date">{{ face.when }}</span><span v-if="face.metaRest">{{ face.metaRest }}</span></span>
+              <span class="camp-row-meta jn-meta"><span v-if="face.when" class="ui-date">{{ face.when }}</span><span v-if="face.metaRest">{{ face.metaRest }}</span><span v-if="face.replies" class="jn-replies-count">{{ replyWords(face.replies) }}</span></span>
             </span>
           </button>
           <button
@@ -672,6 +673,11 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 
 .jn-meta .ui-date {
   padding: 1px 6px 0;
+}
+
+.jn-replies-count {
+  color: var(--signal);
+  font-weight: 700;
 }
 
 .jn-pad {

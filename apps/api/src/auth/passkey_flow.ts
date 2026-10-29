@@ -3,7 +3,7 @@ import { APIError } from '@better-auth/core/error';
 import { createAuthEndpoint, getSessionFromCtx, sessionMiddleware } from 'better-auth/api';
 import type { GenericEndpointContext } from '@better-auth/core';
 import { setSessionCookie } from 'better-auth/cookies';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 import type { AuthSecretEnv } from './options';
 import {
     assertCanDeletePasskey,

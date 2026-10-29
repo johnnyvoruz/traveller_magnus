@@ -112,5 +112,10 @@ export const PublicShipCard = z.object({
      */
     course: z.array(PublicFinishedLeg).max(CAMPAIGN_LIMITS.track),
     journal: z.array(PublicJournalNote).max(PUBLIC_CARD_ENTRIES),
+    /**
+     * The ship sheet's Class box, copied when the ship was made public.
+     * Null when that box was empty. Absent on a card read before migration 0026.
+     */
+    shipClass: z.string().min(1).max(CAMPAIGN_LIMITS.name).nullable().optional(),
 }).strict();
 export type PublicShipCard = z.infer<typeof PublicShipCard>;

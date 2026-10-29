@@ -74,6 +74,8 @@ export type RowFace = {
     public: boolean;
     /** The handle on a players note, when the read names who wrote it. */
     author: string | null;
+    /** Live replies under the entry, as the last read counted them. */
+    replies: number;
 };
 
 export function kindWord(kind: CampaignEntryKind): string {
@@ -224,6 +226,7 @@ export function rowFace(
         images: entry.images ?? null,
         public: entry.visibility === 'public',
         author: writtenBy(authorName) ? (authorName ?? '').trim() : null,
+        replies: entry.replies ?? 0,
     };
 }
 

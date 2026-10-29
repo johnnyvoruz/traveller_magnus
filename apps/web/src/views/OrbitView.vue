@@ -83,6 +83,11 @@ import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
 import { commands, handleKey, registerCommand } from '../shell/registry.ts';
+import SaveImageButton from '../capture/SaveImageButton.vue';
+import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
+import { captionText, captureName, orientationFor, type CaptureArea } from '../capture/paper.ts';
+import { captureOrbit, fittedOrientation, TOO_LARGE } from '../orbit/capture.ts';
+import { printOrbitTheme, readOrbitTheme } from '../orbit/theme.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -863,12 +868,44 @@ watch(footEl, (foot) => {
 const commsEl = ref<HTMLElement | null>(null);
 const commsHeight = ref(0);
 let stopCommsSize: (() => void) | null = null;
+let stopHeadSize: (() => void) | null = null;
+let headSeen: Element | null = null;
+
+/** On a phone sheet, drop the receiver to just below the world record's header. */
+function placeComms(): void {
+    const app = document.querySelector('.app');
+    if (!(app instanceof HTMLElement)) return;
+    const view = document.defaultView;
+    const phone = view ? view.matchMedia('(max-width: 599px)').matches : false;
+    const head = document.querySelector('.panel.is-open[data-sheet="half"] .panel-head');
+    const slot = commsEl.value;
+    if (!phone || !(head instanceof HTMLElement) || !slot || !view) {
+        app.style.removeProperty('--comms-drop');
+        return;
+    }
+    if (head !== headSeen) {
+        if (stopHeadSize) stopHeadSize();
+        headSeen = head;
+        stopHeadSize = observeSize(head, placeComms);
+    }
+    const shift = new DOMMatrix(view.getComputedStyle(slot).transform).m42;
+    const natural = slot.getBoundingClientRect().top - shift;
+    const drop = Math.max(0, Math.round(head.getBoundingClientRect().bottom - natural));
+    app.style.setProperty('--comms-drop', drop + 'px');
+}
+
 watch(commsEl, (el) => {
     if (stopCommsSize) stopCommsSize();
     stopCommsSize = null;
     commsHeight.value = 0;
-    if (!el) return;
-    const measureComms = (): void => { commsHeight.value = el.offsetHeight; };
+    if (!el) {
+        placeComms();
+        return;
+    }
+    const measureComms = (): void => {
+        commsHeight.value = el.offsetHeight;
+        placeComms();
+    };
     measureComms();
     stopCommsSize = observeSize(el, measureComms);
 });
@@ -1997,6 +2034,9 @@ onBeforeUnmount(() => {
         go();
     }
     if (stopCommsSize) stopCommsSize();
+    if (stopHeadSize) stopHeadSize();
+    const app = document.querySelector('.app');
+    if (app instanceof HTMLElement) app.style.removeProperty('--comms-drop');
     for (const off of unregister) off();
     setPlaceSource(null);
     setFrame(null);
@@ -2023,6 +2063,66 @@ async function systemInfo(nextSlug: string, nextHex: string): Promise<SystemInfo
 async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[] | null> {
     if (nextSlug !== slug.value || nextHex !== hex.value || !overview.value || !overview.value.tree) return null;
     return overview.value.tree.rows;
+}
+
+// ---- Save image (streams/C.md CP2): one frame of this system, on paper or as on screen ----
+
+const saveSheet = ref(false);
+const saving = ref(false);
+const saveAreas = ref<SheetArea[]>([]);
+
+function captureSector(): string {
+    const own = refereeSector();
+    if (own) return own.name;
+    if (index.value) return index.value.name;
+    return slug.value.replace(/_/g, ' ');
+}
+
+function systemArea(): CaptureArea {
+    const named = entry.value && entry.value.name ? entry.value.name : title.value.replace(/ system$/, '');
+    return { kind: 'system', name: named, sector: captureSector(), hex: hex.value };
+}
+
+function openSaveSheet(): void {
+    const taken = stageEl.value ? stageEl.value.shot() : null;
+    if (!taken || !version.value) return;
+    saveAreas.value = [
+        { id: 'framed', label: 'What\'s on screen', orientation: orientationFor(taken.size.w, taken.size.h) },
+        { id: 'fitted', label: 'The whole system', orientation: fittedOrientation(taken.plan, taken.days, taken.layers, taken.mode) },
+    ];
+    saveSheet.value = true;
+}
+
+function closeSaveSheet(): void {
+    if (saving.value) return;
+    saveSheet.value = false;
+}
+
+/** One frame off screen at the paper's pixels, then the download. The picture on screen is not touched. */
+async function saveImage(choice: SheetChoice): Promise<void> {
+    const el = stageBox.value;
+    const taken = stageEl.value ? stageEl.value.shot() : null;
+    if (!el || !taken) return;
+    if (choice.area !== 'framed' && choice.area !== 'fitted') return;
+    saving.value = true;
+    try {
+        const theme = choice.look === 'screen' ? readOrbitTheme(el) : printOrbitTheme(el);
+        const date = campaign.status === 'ready' && campaign.clock ? stardate(campaign.clock.days).date : null;
+        const area = systemArea();
+        const ok = await captureOrbit({
+            shot: taken,
+            area: choice.area,
+            paper: choice.paper,
+            look: choice.look,
+            theme,
+            caption: captionText(area, date, version.value ? version.value : null),
+            fileName: captureName(area, choice.paper),
+        });
+        if (ok) saveSheet.value = false;
+        else showToast(TOO_LARGE);
+    } finally {
+        saving.value = false;
+    }
 }
 </script>
 
@@ -2296,16 +2396,19 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
             >
               <Icon name="radar" :size="12" />System Comms
             </button>
-            <button
-              type="button"
-              class="orbit-btn orbit-fit"
-              data-command="orbit-fit"
-              title="Fit the whole system (F, or double-click empty space)"
-              :aria-pressed="pictureFitted ? 'true' : 'false'"
-              @click="stageEl && stageEl.fit()"
-            >
-              <Icon name="expand" :size="13" />Fit
-            </button>
+            <div class="orbit-stage-fit">
+              <button
+                type="button"
+                class="orbit-btn orbit-fit"
+                data-command="orbit-fit"
+                title="Fit the whole system (F, or double-click empty space)"
+                :aria-pressed="pictureFitted ? 'true' : 'false'"
+                @click="stageEl && stageEl.fit()"
+              >
+                <Icon name="expand" :size="13" />Fit
+              </button>
+              <SaveImageButton v-if="version && state === 'ready'" title="Save an image of this system" @click="openSaveSheet" />
+            </div>
           </div>
           <div
             v-if="commsHeld"
@@ -2334,6 +2437,7 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
         </div>
       </div>
     </section>
+    <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
   </div>
 </template>
 
@@ -2440,7 +2544,8 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   .orbit-card .orbit-scrub-end,
   .orbit-card .orbit-field input,
   .orbit-card .orbit-body-card-close,
-  .orbit-card .orbit-season-help {
+  .orbit-card .orbit-season-help,
+  .orbit-card .save-img-btn {
     min-width: 44px;
     min-height: 44px;
   }
@@ -2697,6 +2802,13 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   margin: 8px 0 8px 10px;
 }
 
+/* Fit and Save image share a row, so the button stays with Fit and clear of the picture. */
+.orbit-stage-fit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .orbit-stage-chips {
   position: relative;
   flex: 1 1 auto;
@@ -2736,6 +2848,67 @@ async function systemBodies(nextSlug: string, nextHex: string): Promise<TreeRow[
   .orbit-stage > .toasts,
   .orbit-stage:not(.has-drawer) > .toasts {
     transition: none;
+  }
+}
+
+/*
+ * A phone with the dossier sheet up (599 px): the stage is only the top half, and the
+ * receiver above the foot covers the disc. Drop it into the sheet, just below the world
+ * record's header when that header has been measured, and keep the picture, the tools and
+ * one chip row in the card. With the sheet closed the shift is zero, so the receiver stays
+ * in the slot above the foot. The 1600 slot is the rule above this block.
+ */
+@media (max-width: 599px) {
+  /* The sheet is a sibling above this view. Lift the view so the shifted receiver paints on the sheet, and let presses on the empty half reach the sheet. */
+  .orbit {
+    z-index: 4;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .orbit-card,
+  .rail {
+    pointer-events: auto;
+  }
+
+  .orbit-comms {
+    pointer-events: none;
+  }
+
+  .orbit-card,
+  .orbit-stage {
+    overflow: visible;
+  }
+
+  .orbit-foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .orbit-stage-tools {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 6px 8px 0;
+  }
+
+  .orbit-stage-chips {
+    flex: 0 0 auto;
+  }
+
+  .orbit-comms {
+    transform: translateY(var(--comms-drop, var(--sheet-cover, 0px)));
+  }
+
+  /* The sheet is this world's record. The floating card would cover the only picture. */
+  .app:has(.panel.is-open[data-sheet="half"]) .orbit-cards {
+    display: none;
+  }
+
+  .orbit-stage > .orbit-drawer,
+  .orbit-card .orbit-drawer {
+    max-height: calc(100% - var(--foot-height, 0px) - max(0px, var(--comms-height, 0px) - var(--sheet-cover, 0px)) - 8px);
   }
 }
 </style>

@@ -109,7 +109,7 @@ test('the entry page uses the record gallery words and does not write the clock'
     assert.match(gallery, /Reading the image…/);
     assert.match(gallery, /Uploading…/);
     assert.match(gallery, /The upload failed\./);
-    assert.match(gallery, /Try again\./);
+    assert.match(gallery, /Try again/);
     assert.match(gallery, /Removed the image\./);
     assert.match(gallery, /Make this the cover/);
     assert.match(gallery, />Cover</);

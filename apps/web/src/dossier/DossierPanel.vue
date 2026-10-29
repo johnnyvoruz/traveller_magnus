@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { SectorHex, TreeEnvelope } from '@voyage/shared';
-import { observeSize } from '../platform/browser.ts';
+import type { SectorHex, SectorIndex, TreeEnvelope } from '@voyage/shared';
+import { observeSize, pageOrigin } from '../platform/browser.ts';
+import { rememberedVersion } from '../map/chart_version.ts';
+import { TruthClient } from '../map/truth_client.ts';
+import { chartVersion } from '../search/chart_hold.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
 import { addressPane } from '../shell/pane.ts';
@@ -45,7 +48,7 @@ import { subsolarOn, type Subsolar } from '../orbit/sun.ts';
 import { planSystem, type Plan } from '../orbit/layout.ts';
 import { bodyAngle } from '../orbit/maths.ts';
 import { seasonOnMoon, seasonOnWorld, type SeasonShown } from '../orbit/season_on.ts';
-import { bodyKeys, bodyModel, overviewModel, pickSystem, type AllegianceName } from './model.ts';
+import { addressColumn, bodyKeys, bodyModel, overviewModel, pickSystem, type AddressColumn, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
 
 const props = defineProps<{
@@ -311,6 +314,71 @@ const slotOff = computed(() => {
     return view.kind === 'sector' && parseSlot(view.sector) !== null;
 });
 
+/**
+ * A chart sector or subsector with Build off, and not one the referee made.
+ * The column names the place. A sector of theirs, and an empty slot, keep the line they had.
+ */
+const browseOff = computed((): { slug: string; letter: string | null } | null => {
+    if (!scopeOff.value || slotOff.value) return null;
+    const view = addressPane(route.path, route.query).view;
+    if (view.kind === 'sector') return isOwnSlug(view.sector) ? null : { slug: view.sector, letter: null };
+    if (view.kind === 'subsector') return isOwnSlug(view.sector) ? null : { slug: view.sector, letter: view.letter };
+    return null;
+});
+
+/** The chart index for the address, once it has arrived. The map's fetch is reused. */
+const heldIndex = ref<SectorIndex | null>(null);
+let addressClient: TruthClient | null = null;
+let stopAddress: (() => void) | null = null;
+
+function addressVersion(): string {
+    return chartVersion.value || rememberedVersion() || '';
+}
+
+function takeAddress(): void {
+    const place = browseOff.value;
+    const version = addressVersion();
+    if (!place || !version || !addressClient) return;
+    const found = addressClient.index(version, place.slug);
+    if (found) heldIndex.value = found;
+}
+
+/** Load the address's sector. A later chart version replaces the one already shown. */
+function askAddress(): void {
+    const place = browseOff.value;
+    const version = addressVersion();
+    if (!place || !version) return;
+    const held = heldIndex.value;
+    if (held && held.truthVersion === version && held.slug === place.slug) return;
+    if (!addressClient) {
+        addressClient = new TruthClient({
+            cdnBase: import.meta.env.VITE_CDN_BASE || 'https://cdn.traveller.voyage',
+            apiBase: pageOrigin(),
+            fetch,
+        });
+        stopAddress = addressClient.onArrive((slug) => {
+            if (browseOff.value && browseOff.value.slug === slug) takeAddress();
+        });
+    }
+    if (held && held.truthVersion !== version) heldIndex.value = null;
+    takeAddress();
+    if (!heldIndex.value) addressClient.want(version, [place.slug]);
+}
+
+watch(browseOff, () => {
+    heldIndex.value = null;
+    askAddress();
+}, { immediate: true });
+
+watch(chartVersion, () => { askAddress(); });
+
+const addressShown = computed((): AddressColumn | null => {
+    const place = browseOff.value;
+    const index = heldIndex.value;
+    if (!place || !index) return null;
+    return addressColumn(index, place.letter);
+});
+
 /** Signed out, Build cannot be switched on. Opens the same sign-in card as the rail's Build item. */
 function signInToBuild(): void {
     signInFrom.value = 'build';
@@ -319,7 +387,14 @@ function signInToBuild(): void {
 }
 
 const title = computed(() => {
-    if (scopeOff.value) return slotOff.value ? 'Empty slot' : props.sectorName || 'Sector';
+    if (scopeOff.value) {
+        if (slotOff.value) return 'Empty slot';
+        if (scopeOff.value === 'subsector') {
+            const named = addressShown.value && addressShown.value.kind === 'subsector' ? addressShown.value.name : '';
+            return named || props.subsectorName || 'Subsector';
+        }
+        return props.sectorName || 'Sector';
+    }
     if (buildMode.value === 'slot') return 'Empty slot';
     if (buildMode.value === 'many') return plural(build.selection.length, 'hex', 'hexes');
     if (buildMode.value === 'scope' && scope.value) return scopeTitle(scope.value, props.sectorName, (key) => placeNames(key).subsector);
@@ -331,6 +406,7 @@ const title = computed(() => {
 });
 
 const meta = computed(() => {
+    if (browseOff.value && browseOff.value.letter) return 'Subsector ' + browseOff.value.letter;
     if (buildMode.value === 'many') return spanLine(build.selection);
     if (buildMode.value === 'slot') return sectorUi.where;
     if (buildMode.value === 'scope') return scope.value && scope.value.letter ? 'Subsector ' + scope.value.letter + ' · 80 hexes' : 'Sector · 1,280 hexes';
@@ -366,6 +442,9 @@ const eyebrowTitle = computed(() => {
         const parts = [profile.value.crumbSystem];
         if (profile.value.crumbParent) parts.push(profile.value.crumbParent.name);
         return parts.join(' / ');
+    }
+    if (browseOff.value) {
+        return browseOff.value.letter ? [props.sectorName, 'Subsector'].filter((part) => part !== '').join(' / ') : 'Sector';
     }
     if (!buildMode.value) return '';
     const parts: string[] = [];
@@ -483,6 +562,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    if (stopAddress) stopAddress();
     if (stopSpan) stopSpan();
     if (stopCommands) stopCommands();
     if (stopSize) stopSize();
@@ -495,7 +575,7 @@ defineExpose({ remeasure: publish });
 <template>
   <div class="dossier-root">
     <Panel ref="panel" :open="open" :title="title" :meta="meta" :chip="chip" :span="span" :keep-chip="buildMode !== null" :eyebrow-title="eyebrowTitle" @close="$emit('close')" @span="chooseSpan">
-      <template v-if="profile || buildMode" #eyebrow>
+      <template v-if="profile || buildMode || browseOff" #eyebrow>
         <template v-if="profile && !drafting">
           <button type="button" class="doss-crumb" @click="showOverview">
             <Icon name="arrow-left" :size="10" />{{ profile.crumbSystem }}
@@ -503,6 +583,13 @@ defineExpose({ remeasure: publish });
           <template v-if="profile.crumbParent">
             <span class="doss-crumb-sep">/</span>
             <button type="button" class="doss-crumb" @click="openKey(profile.crumbParent.key)">{{ profile.crumbParent.name }}</button>
+          </template>
+        </template>
+        <template v-else-if="browseOff">
+          <span v-if="!browseOff.letter">Sector</span>
+          <template v-else>
+            <button type="button" class="doss-crumb" @click="openSector">{{ sectorName || 'Sector' }}</button>
+            <span class="doss-crumb-sep">/</span><span>Subsector</span>
           </template>
         </template>
         <template v-else>
@@ -584,7 +671,7 @@ defineExpose({ remeasure: publish });
       <SectorPane v-if="buildMode === 'slot'" />
       <template v-else-if="buildMode === 'scope' && scope">
         <p v-if="own && sectorUi.moving" class="doss-preview" role="status">
-          Pick an empty slot for {{ own.name }}: click one on the chart, or use the arrow keys and Enter. Its hexes and its names go with it. Esc cancels.
+          Pick an empty slot for {{ own.name }}. Select one on the chart, or use the arrow keys and press Enter. Its hexes and its names go with it. Press Escape to cancel.
         </p>
         <p v-if="own && sectorUi.error" class="doss-preview is-error" role="alert">{{ sectorUi.error }}</p>
         <BuildScope :slug="scope.slug" :letter="scope.letter" :span="span" @subsector="openSubsector" @open="openHex" />
@@ -592,7 +679,7 @@ defineExpose({ remeasure: publish });
       <BuildPane v-else-if="buildMode === 'many' || buildMode === 'empty' || buildMode === 'removed'" :mode="buildMode" :keys="buildKeys" :span="span" @open="openHex" />
       <PublishForm v-else-if="marketUi.open && buildMode === 'system'" class="build-pane" :keys="[hexKey]" />
       <SystemEditor v-else-if="drafting" :span="span" />
-      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" :season="seasonShown ? seasonShown.season : null" :band="seasonShown ? seasonShown.band : null" :orbit="seasonShown ? seasonShown.orbit : ''" @open="openKey">
+      <DossierBody v-else-if="profile" :model="profile" :span="span" :day-night="dayNight" :tick="tick" :live="orbit === true" :place="placeOnStrip" :restated="restated" :surface="bodySurface" :paintable="building" :sun="sunOnSurface" :now-days="nowDays" :start-days="clockDays" :season="seasonShown ? seasonShown.season : null" :band="seasonShown ? seasonShown.band : null" :orbit="seasonShown ? seasonShown.orbit : ''" @open="openKey">
         <template #records="{ open, toggle }">
           <RecordsHere
             v-if="!preview"
@@ -609,7 +696,7 @@ defineExpose({ remeasure: publish });
       </DossierBody>
       <template v-else-if="overview">
         <p v-if="preview" class="doss-preview" role="status">
-          A preview. Nothing is kept yet. {{ choiceLine(preview.choice) }}, roll {{ preview.roll + 1 }}.
+          This is a preview. Nothing is kept yet. {{ choiceLine(preview.choice) }}, roll {{ preview.roll + 1 }}.
           <b v-if="isHandHex(hexKey)">Keeping it replaces the system you designed by hand. Undo brings that back.</b>
         </p>
         <DesignAsk v-if="buildMode === 'system' && handUi.asking === hexKey" />
@@ -639,8 +726,46 @@ defineExpose({ remeasure: publish });
         <template v-if="session.user">Build is off. Switch it on to make a sector in this slot.</template>
         <template v-else><button type="button" class="doss-signin" @click="signInToBuild">Sign in</button> to build here.</template>
       </p>
+      <div v-else-if="browseOff" class="doss" :data-span="span">
+        <p v-if="!addressShown" class="doss-muted">Loading this sector.</p>
+        <section v-else-if="addressShown.kind === 'sector'" class="doss-tree doss-address" aria-label="Subsectors">
+          <h3 class="ui-heading ui-kicker">Subsectors</h3>
+          <button
+            v-for="cell in addressShown.subsectors"
+            :key="cell.letter"
+            type="button"
+            class="doss-row"
+            @click="openSubsector(cell.letter)"
+          >
+            <span class="doss-row-text">
+              <span class="doss-row-name"><span class="doss-address-letter">{{ cell.letter }}</span>{{ cell.name }}</span>
+              <small>{{ cell.countLine }}</small>
+            </span>
+          </button>
+        </section>
+        <section v-else class="doss-tree doss-address" aria-label="Worlds">
+          <h3 class="ui-heading ui-kicker">Worlds <span class="ui-count">{{ addressShown.worlds.length }}</span></h3>
+          <button
+            v-for="world in addressShown.worlds"
+            :key="world.hex"
+            type="button"
+            class="doss-row"
+            @click="openHex(slug + '/' + world.hex)"
+          >
+            <span class="doss-row-text">
+              <span class="doss-row-name">{{ world.name }}</span>
+              <small>{{ world.line }}</small>
+            </span>
+            <span v-if="world.uwp" class="doss-row-uwp">{{ world.uwp }}</span>
+          </button>
+        </section>
+        <p class="doss-muted doss-address-foot">
+          <template v-if="session.user">Build is off. Switch it on to select hexes and generate them in this {{ scopeOff }}.</template>
+          <template v-else><button type="button" class="doss-signin" @click="signInToBuild">Sign in</button> to build here.</template>
+        </p>
+      </div>
       <p v-else-if="scopeOff" class="doss-muted doss-pad">
-        <template v-if="session.user">Build is off. Switch it on to select and generate in this {{ scopeOff }}.</template>
+        <template v-if="session.user">Build is off. Switch it on to select hexes and generate them in this {{ scopeOff }}.</template>
         <template v-else><button type="button" class="doss-signin" @click="signInToBuild">Sign in</button> to build here.</template>
       </p>
       <p v-else-if="missing" class="doss-muted doss-pad">This hex has no world on the chart.</p>
@@ -667,6 +792,20 @@ defineExpose({ remeasure: publish });
 .doss-pad {
   margin: 0;
   padding: 22px 16px;
+}
+
+.doss[data-span="column"] .doss-address {
+  margin-top: 0;
+}
+
+.doss-address-letter {
+  margin-right: 8px;
+  color: var(--text-muted);
+  font: 700 12px/1 var(--font-code);
+}
+
+.doss-address-foot {
+  margin-top: 16px;
 }
 
 .doss-signin {

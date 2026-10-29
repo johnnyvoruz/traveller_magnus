@@ -3,6 +3,12 @@
  * hexes, with relief, beaches, grey mountains, sea depth, ice and painted volcanoes and
  * craters. Pure pixels, so it runs in the surface worker. Off the net is transparent.
  * The day and night overlay is a separate layer (overlay.ts); this image never changes with time.
+ *
+ * Edited hexes (DW2, design §8.1): a pixel whose nearest hex carries a referee's edit takes its
+ * water and terrain from that record, the same palette and the relief shading kept, no beach, no
+ * ice fringe and no coastline darkening: a hard edge on the hex outline. Unedited pixels blend from
+ * the generated records (`model.generated`), so a map with edits paints every other pixel as the
+ * generated map does.
  */
 import { capDetail, edgeTemp } from '../ice_edge.ts';
 import { hashString, mulberry32 } from '../vanilla/map.ts';
@@ -159,7 +165,8 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
     const { width: W, height: H } = layout;
     const sea = seaColoursOf(model.world.liquid);
     const sr = model.seaRank;
-    const hexes = model.hexes;
+    const hexes = model.generated;
+    const painted = model.edits ? model.hexes : null;
     const exotic = model.world.atm >= 10 && model.world.atm <= 12;
     const capSeed = hashString(model.world.seed + '-cap');
     const rock: RGB = exotic ? mix([132, 126, 120], sea.shallow, 0.25) : model.airless ? [150, 146, 140] : [134, 128, 122];
@@ -168,9 +175,22 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
         if (field.face[k] < 0) continue;
         const p: V3 = [field.P[k * 3], field.P[k * 3 + 1], field.P[k * 3 + 2]];
         const hN = h[k];
-        const water = sr > 0 && hN < sr;
-        const e = water ? 0 : clamp((hN - sr) / (1 - sr || 1), 0, 1);
-        const depth = water ? (sr - hN) / sr : 0;
+        const rec = painted ? painted[field.hex[k]] : null;
+        const isEdited = rec !== null && rec !== undefined && rec.edited;
+        let water = sr > 0 && hN < sr;
+        let e = water ? 0 : clamp((hN - sr) / (1 - sr || 1), 0, 1);
+        let depth = water ? (sr - hN) / sr : 0;
+        if (isEdited && rec) {
+            // The record decides. A painted ocean reads deep, painted shallows shallow, whatever the noise says.
+            water = rec.water;
+            if (water) {
+                e = 0;
+                depth = rec.terrain === 'OC' ? Math.max(depth, 0.5) : rec.terrain === 'SH' ? Math.min(depth, 0.15) : depth;
+            } else {
+                depth = 0;
+                e = clamp((hN - sr) / (1 - sr || 1), 0, 1);
+            }
+        }
         const lat = Math.asin(clamp(p[1], -1, 1)) * R2D;
         const T = model.tempAt(p, e);
         const q = k * 3;
@@ -183,14 +203,14 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
         const openLayout = model.layout !== 'frozen' && model.layout !== 'molten' && model.layout !== 'scorched';
         const distK = Math.abs(iceT - model.meltK);
         const REACH_K = 12;
-        const nearEdge = openLayout && distK < 18;
+        const nearEdge = openLayout && distK < 18 && !isEdited;
         const spec = nearEdge ? capDetail(p[0], p[1], p[2], capSeed) : 0;
         const broadCold = (model.meltK - iceT) + spec * REACH_K;
         // The fine sample only on the fringe, so the sheet stays inside the paint budget.
         const fine = nearEdge && broadCold > -10 && broadCold < 12
             ? capDetail(p[0] * 3.7 + 1.7, p[1] * 3.7, p[2] * 3.7 - 0.4, capSeed ^ 0xa5a5)
             : 0;
-        const pc = classify(model, water, T, e, m, lat, depth, iceT).terrain;
+        const pc = isEdited && rec ? rec.terrain : classify(model, water, T, e, m, lat, depth, iceT).terrain;
         let c: RGB;
         if (water) {
             const t = Math.pow(smooth(0, 0.45, depth), 0.7);
@@ -198,7 +218,7 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
                 let thick = mix(sea.iceShallow, sea.iceDeep, t * 0.6);
                 if (pc === 'IF') thick = mix(thick, [214, 224, 236], 0.5);
                 const thin = mix(mix(sea.shallow, sea.deep, t), thick, 0.4);
-                const age = clamp((model.meltK - iceT) / 18, 0, 1);
+                const age = isEdited ? 1 : clamp((model.meltK - iceT) / 18, 0, 1);
                 c = mix(thin, thick, 0.3 + 0.7 * age);
             } else if (pc === 'EV') {
                 c = mix([228, 218, 196], [206, 190, 160], t);
@@ -212,11 +232,14 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
                 if (pc === 'IC' || pc === 'FR') {
                     const thick = pc === 'IC' ? terrainRgb('IC') : mix(rock, terrainRgb('FR'), 0.75);
                     const thin = pc === 'IC' ? mix(rock, terrainRgb('IC'), 0.4) : mix(rock, terrainRgb('FR'), 0.4);
-                    const age = clamp((model.meltK - iceT) / 18, 0, 1);
+                    const age = isEdited ? 1 : clamp((model.meltK - iceT) / 18, 0, 1);
                     c = mix(thin, thick, 0.3 + 0.7 * age);
                 } else {
                     c = terrainRgb(pc);
                 }
+            } else if (isEdited) {
+                // A painted hex: its terrain's colour across the whole hex; the relief and grain below still apply.
+                c = terrainRgb(pc);
             } else {
                 let r = 0;
                 let g = 0;
@@ -266,12 +289,14 @@ function paintRow(out: Uint8ClampedArray, field: Field, model: HybridModel, h: F
 function finish(out: Uint8ClampedArray, field: Field, model: HybridModel, h: Float32Array, place: SheetLayout): void {
     const { width: W, height: H } = field.layout;
     const sr = model.seaRank;
-    // Coastline.
+    const painted = model.edits ? model.hexes : null;
+    // Coastline. Not on an edited hex: its edge is the hex outline, not the noise's shore.
     if (sr > 0) {
         for (let y = 0; y < H - 1; y += 1) {
             for (let x = 0; x < W - 1; x += 1) {
                 const k = y * W + x;
                 if (field.face[k] < 0 || field.face[k + 1] < 0 || field.face[k + W] < 0) continue;
+                if (painted && painted[field.hex[k]].edited) continue;
                 const a = h[k] < sr;
                 if (a !== (h[k + 1] < sr) || a !== (h[k + W] < sr)) {
                     for (let c = 0; c < 3; c += 1) out[k * 4 + c] *= 0.72;

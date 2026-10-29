@@ -112,15 +112,15 @@ export const HandSystem = z.object({
     const stars = new Set(system.stars.map((star) => star.id));
     const bodies = new Set(system.bodies.map((body) => body.id));
     if (stars.size !== system.stars.length || bodies.size !== system.bodies.length) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'duplicate id' });
+        ctx.addIssue({ code: 'custom', message: 'duplicate id' });
     }
     for (const id of stars) {
-        if (bodies.has(id)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'duplicate id' });
+        if (bodies.has(id)) ctx.addIssue({ code: 'custom', message: 'duplicate id' });
     }
     for (const star of system.stars) {
         if (star.parentId == null) continue;
         if (star.parentId === star.id || !stars.has(star.parentId)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['stars'], message: `${star.id} parent` });
+            ctx.addIssue({ code: 'custom', path: ['stars'], message: `${star.id} parent` });
         }
     }
     const worlds = system.bodies.filter((body) => body.kind !== 'moon');
@@ -129,34 +129,34 @@ export const HandSystem = z.object({
     for (const body of system.bodies) {
         if (body.kind === 'moon') {
             if (!worldIds.has(body.parentId)) {
-                ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} parent` });
+                ctx.addIssue({ code: 'custom', path: ['bodies'], message: `${body.id} parent` });
             }
         } else if (body.kind === 'belt') {
             const aroundBody = beltHosts.has(body.parentId) && body.parentId !== body.id;
             if (!stars.has(body.parentId) && !aroundBody) {
-                ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} parent` });
+                ctx.addIssue({ code: 'custom', path: ['bodies'], message: `${body.id} parent` });
             }
         } else if (!stars.has(body.parentId)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} parent` });
+            ctx.addIssue({ code: 'custom', path: ['bodies'], message: `${body.id} parent` });
         }
         if (body.alsoParentId) {
             const left = system.stars.find((star) => star.id === body.parentId);
             const right = system.stars.find((star) => star.id === body.alsoParentId);
             const paired = !!left && !!right && (left.parentId === right.id || right.parentId === left.id);
             if (body.kind === 'moon' || !paired) {
-                ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bodies'], message: `${body.id} pair` });
+                ctx.addIssue({ code: 'custom', path: ['bodies'], message: `${body.id} pair` });
             }
         }
     }
     if (system.bodies.filter((body) => body.mainworld).length > 1) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'one mainworld' });
+        ctx.addIssue({ code: 'custom', message: 'one mainworld' });
     }
     for (const star of system.stars) {
         const seen = new Set<string>();
         let at: string | null = star.parentId;
         while (at) {
             if (at === star.id || seen.has(at)) {
-                ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['stars'], message: `${star.id} parent` });
+                ctx.addIssue({ code: 'custom', path: ['stars'], message: `${star.id} parent` });
                 break;
             }
             seen.add(at);

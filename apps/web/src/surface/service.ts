@@ -17,6 +17,7 @@ import { SheetCache } from './cache.ts';
 import type {
     DiscBatchRequest,
     DiscContext,
+    DiscRequest,
     DrawingOptions,
     EnhancedPaintInputs,
     EnhancedSea,
@@ -39,12 +40,17 @@ import { createEnhancedMap, seaPlan } from './enhanced/map.ts';
 import { createChunkedMap } from './map_chunks.ts';
 import { HYBRID_SURFACE_VERSION, hybridWorld, worldDigest } from './hybrid/inputs.ts';
 import { LARGE_SHEET, SHEET_LAYOUT, type SheetLayout } from './hybrid/field.ts';
-import { cachedHybridModel, rememberHybridModel } from './hybrid/index.ts';
+import { cachedHybridModel, hybridModelWith, rememberHybridModel } from './hybrid/index.ts';
+import { editsDigest } from './paint_edits.ts';
 import { createHybridPaint } from './hybrid/paint.ts';
 import { modelPreparation, startHybridBuild } from './hybrid/model.ts';
 import { openDiscLink, type DiscLink } from './disc_link.ts';
 import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
-import { discShadeRequest } from './disc_shade.ts';
+import { discShadeRequest, type DiscPaint } from './disc_shade.ts';
+import { editsHeld, surfaceEdits } from './edits.ts';
+import { LOCKED_NIGHT_CENTRED_LON } from './hybrid/model.ts';
+import { discPaintTexture, resetDiscPaint, type PaintTexture } from './paint_disc.ts';
+import { COASTLINE_COMPLEXITY, CONTINENTAL_DEFINITION } from './identity.ts';
 import { disposeSoftDiscs, prepareSoftDiscs } from './soft/link.ts';
 import { webglState } from './webgl_notice.ts';
 import { discRendererVersion } from './enhanced/bake.ts';
@@ -181,9 +187,9 @@ function cacheKey(request: MapRequest, sea: EnhancedSea | null, hybrid: HybridPa
         algorithm: hybrid ? HYBRID_SURFACE_VERSION : sea ? ENHANCED_ALGORITHM : MAP_ALGORITHM,
         palette: hybrid ? HYBRID_PALETTE : sea ? ENHANCED_PALETTE : MAP_PALETTE,
         // The enhanced sheet is also a picture of the sea it was told to draw; the hybrid
-        // one of the world's data, by digest.
+        // one of the world's data, by digest, and of the painted hexes when there are any (DW2).
         options: drawingOptionsKey(request.options)
-            + (hybrid ? ';' + worldDigest(hybrid.world) : sea ? ';' + JSON.stringify(sea) : ''),
+            + (hybrid ? ';' + worldDigest(hybrid.world) + (hybrid.edits && hybrid.edits.edits.length ? ';edits=' + editsDigest(hybrid.edits) : '') : sea ? ';' + JSON.stringify(sea) : ''),
         resolution: layout.width + 'x' + layout.height,
     });
 }
@@ -292,10 +298,9 @@ function paintOnPage(job: Live): void {
     const chunk = hybrid
         ? createHybridPaint(
             () => {
-                if (cached) return cached;
-                const model = (modelBuild as NonNullable<typeof modelBuild>).model();
-                rememberHybridModel(hybrid.world, model);
-                return model;
+                const base = cached ?? (modelBuild as NonNullable<typeof modelBuild>).model();
+                if (!cached) rememberHybridModel(hybrid.world, base);
+                return hybridModelWith(base, hybrid.edits ?? null);
             },
             job.layout, clock, budget(), modelPreparation(hybrid.world), modelBuild)
         : job.enhanced
@@ -421,7 +426,7 @@ export function requestMap(request: MapRequest): MapTicket {
             // The world is read here, on the page, from the body; the painter gets plain data.
             const world = hybridInputsFor(request);
             if (!world) return unavailable(request.mode);
-            return requestSheet(request, null, { world });
+            return requestSheet(request, null, request.edits && request.edits.edits.length ? { world, edits: request.edits } : { world });
         }
     }
 }
@@ -464,14 +469,35 @@ function openDiscs(): DiscLink | null {
  * A spin resubmit keeps the generation so the tile already held stays up.
  * The worker drops an in-flight bitmap only when a later watch changes the envelope.
  */
-function discEpochOf(request: DiscBatchRequest): string {
-    const rows = request.discs.map((disc) => disc.key + ':' + String(cubeSizeFor(disc.radiusPx)));
+function discEpochOf(request: DiscBatchRequest, paints: ReadonlyMap<string, DiscPaint>): string {
+    // The painted hexes are part of a disc's picture (DW2c): a kept map is a new generation, so the tile repaints.
+    const rows = request.discs.map((disc) => disc.key + ':' + String(cubeSizeFor(disc.radiusPx)) + (paints.has(disc.key) ? ':' + (paints.get(disc.key) as DiscPaint).key : ''));
     rows.sort();
     return request.mode + '|' + (request.mode === 'enhanced' ? cityLook().id + '|' : '') + rows.join(',');
 }
 
-function advanceDiscs(request: DiscBatchRequest): DiscEnvelope {
-    const epoch = discEpochOf(request);
+/**
+ * A body's painted hexes for the WebGL disc (DW2c): read once per body (as the soft disc does), the
+ * texture built on the page when the edits are held, null until then and for a body with none. The
+ * hybrid sheet puts a locked world's star side at LOCKED_NIGHT_CENTRED_LON; the disc keeps planet +x
+ * toward the star, so the texture is turned to match (soft/link.ts says the same).
+ */
+export function discPaintFor(disc: Pick<DiscRequest, 'hexKey' | 'dossierKey' | 'body'>): (DiscPaint & { texture: PaintTexture }) | null {
+    const edits = editsHeld(disc.hexKey, disc.dossierKey);
+    if (edits === undefined) {
+        surfaceEdits(disc.hexKey, disc.dossierKey);
+        return null;
+    }
+    if (!edits || !edits.edits.length) return null;
+    const world = hybridWorld(disc.hexKey, disc.dossierKey, disc.body, { continental: CONTINENTAL_DEFINITION, coastline: COASTLINE_COMPLEXITY });
+    if (!world) return null;
+    const texture = discPaintTexture(world, edits);
+    if (!texture) return null;
+    return { key: texture.key, lon: world.locked ? LOCKED_NIGHT_CENTRED_LON * Math.PI / 180 : 0, texture };
+}
+
+function advanceDiscs(request: DiscBatchRequest, paints: ReadonlyMap<string, DiscPaint>): DiscEnvelope {
+    const epoch = discEpochOf(request, paints);
     const modeChanged = discMode !== null && discMode !== request.mode;
     if (discMode === null || modeChanged || epoch !== discEpoch) {
         discGeneration += 1;
@@ -486,11 +512,14 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     const requestId = String(++sequence);
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
     const shades: ShadeRequest[] = [];
+    const paints = new Map<string, DiscPaint & { texture: PaintTexture }>();
     for (const disc of request.discs) {
-        const shade = discShadeRequest(request.timeSeconds, disc, request.mode, devicePixelRatio());
+        const paint = request.mode === 'enhanced' ? discPaintFor(disc) : null;
+        if (paint) paints.set(disc.key, paint);
+        const shade = discShadeRequest(request.timeSeconds, disc, request.mode, devicePixelRatio(), paint);
         if (shade) shades.push(shade);
     }
-    const envelope = advanceDiscs(request);
+    const envelope = advanceDiscs(request, paints);
     const frameKeys = new Set(request.discs.map((disc) => disc.key));
     if (shades.length === 0) {
         discLink?.note(envelope, frameKeys);
@@ -512,6 +541,8 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     if (link) link.note(envelope, frameKeys);
     if (!link || link.failed()) return { status: 'unavailable', mode: request.mode, requestId };
     if (link.lost()) return { status: 'unavailable', mode: request.mode, requestId };
+    // The textures go before the watch that names them, once per key per worker.
+    for (const paint of paints.values()) link.paint(paint.key, paint.texture);
     link.submit(shades);
     retainDiscs(frameKeys);
     if (!link.ready()) return { status: 'pending', mode: request.mode, requestId };
@@ -556,6 +587,7 @@ export function disposeSurfaces(): void {
     if (discLink) discLink.dispose();
     discLink = null;
     discBroken = false;
+    resetDiscPaint();
     disposeSoftDiscs();
     discMode = null;
     discGeneration = 0;

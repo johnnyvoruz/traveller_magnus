@@ -22,6 +22,7 @@ import { VANILLA_MASTER_SEED } from '../identity.ts';
 import type { AccentCode, FeatureCode, TerrainCode } from './codes.ts';
 import { dot, gridOf, hexSpacing, norm, sphere, type Grid, type V3 } from './grid.ts';
 import type { HybridWorld } from './inputs.ts';
+import type { HexEdits } from './serialize.ts';
 import { latitudeTiltFactor } from '../tilt_latitude.ts';
 
 const D2R = Math.PI / 180;
@@ -75,6 +76,8 @@ export type HexRecord = {
     coastal: boolean;
     /** Hop distance to the nearest water hex (99 when none). */
     waterHops: number;
+    /** A referee's edit stands on this hex (serialize.ts applyEdits): the painter paints the record across it. */
+    edited: boolean;
 };
 
 export type HybridModel = {
@@ -94,6 +97,10 @@ export type HybridModel = {
     /** Half-width of a locked world's twilight ring, degrees. */
     readonly ringDeg: number;
     readonly hexes: readonly HexRecord[];
+    /** The hexes as generated: the same array as `hexes` unless edits are laid over them (surface/paint_edits.ts). */
+    readonly generated: readonly HexRecord[];
+    /** The edits laid over `hexes`, or null for the generated map. */
+    readonly edits: HexEdits | null;
     readonly height: (p: V3) => number;
     readonly iceNoise: (p: V3) => number;
     readonly texture: (p: V3) => number;
@@ -221,7 +228,7 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
             id: hexId, row: grid.row[hexId], col: grid.col[hexId], lat: grid.lat[hexId], lon: grid.lon[hexId], area: grid.area[hexId],
             height: sum / 7, heightMax: top, waterFrac, water: waterFrac >= 0.5,
             elevation: 0, depth: 0, tempK: 0, moisture: 0, ice: 'none', seasonal: false, twilight: false, theta: 0,
-            terrain: 'RK', landTerrain: 'RK', accents: [], features: [], port: null, domed: false, habitability: 0, coastal: false, waterHops: 99,
+            terrain: 'RK', landTerrain: 'RK', accents: [], features: [], port: null, domed: false, habitability: 0, coastal: false, waterHops: 99, edited: false,
         });
     };
 
@@ -358,7 +365,7 @@ export function startHybridBuild(world: HybridWorld, options: BuildOptions = {})
                 }
             }
             model = {
-                world, grid, seaRank, meltK, boilK, phaseKnown, layout, life, airless, sub, ringDeg, hexes,
+                world, grid, seaRank, meltK, boilK, phaseKnown, layout, life, airless, sub, ringDeg, hexes, generated: hexes, edits: null,
                 height, iceNoise, texture, fineGrain, tempAt, seasonalBand, seaShare, starportLon: null, starportHex: null,
             };
             id = 0;

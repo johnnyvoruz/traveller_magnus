@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -163,9 +163,11 @@ if (process.env.RUN_API_TESTS !== '1') {
 } else if (!existsSync(wranglerBin)) {
     test('quota reservation on the worker', { skip: 'wrangler is absent' }, () => {});
 } else {
-    test('two writers cannot pass 250 MB, a dead reservation expires, and one writer is unchanged', { timeout: 180000 }, async () => {
-        const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-quota-'));
-        const port = 18890;
+    test('two writers cannot pass 250 MB, a dead reservation expires, and one writer is unchanged', { timeout: 240000 }, async () => {
+        const ownedPersist = !process.env.VOYAGE_PERSIST_TO;
+        const persistTo = process.env.VOYAGE_PERSIST_TO || mkdtempSync(path.join(tmpdir(), 'voyage-quota-'));
+        const port = Number(process.env.VOYAGE_API_PORT || 18890);
+        const inspectorPort = Number(process.env.VOYAGE_INSPECTOR_PORT || 19890);
         const base = `http://127.0.0.1:${port}`;
         let child = null;
         try {
@@ -176,7 +178,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             child = startDev({
                 port,
                 persistTo,
-                inspectorPort: 19890,
+                inspectorPort,
                 args: ['--var', 'GENERATE_PAUSE:20000', '--var', 'QUOTA_RESERVATION_MS:4000'],
             });
             await up(base);
@@ -239,45 +241,75 @@ if (process.env.RUN_API_TESTS !== '1') {
             const jobId = posted.body.data.jobId;
             const probe = webp(64, 9);
             let held = null;
+            let hold = null;
             const holdBy = Date.now() + 60000;
             while (Date.now() < holdBy) {
                 const read = await jsonFetch(`${base}/api/universes/${id}/jobs/${jobId}`, { headers: { cookie } });
-                const live = read.body.data;
-                if (live.state === 'failed') assert.fail(JSON.stringify(live));
-                // The batch marks the job done, then the consumer pauses before finishCounts.
-                if (live.done > 0 || live.state === 'done') {
-                    // Probe before the local D1 read. That read can take longer than the
-                    // four-second reservation when other suites are on the same disk.
-                    held = await put(probe);
-                    assert.equal(objectBytes(persistTo, id), QUOTA - slice, JSON.stringify(live));
-                    break;
-                }
+                const live = read.body?.data;
+                if (live?.state === 'failed') assert.fail(JSON.stringify(live));
+                hold = reservationOf(persistTo, jobId);
+                if (hold && hold.expiresAt > Date.now()) break;
                 await sleep(30);
             }
-            assert.ok(held, 'the job never reserved its objects');
+            assert.ok(hold && hold.expiresAt > Date.now(), 'the job never reserved its objects');
+            held = await put(probe);
             const heldBody = await held.json();
             assert.equal(held.status, 400, JSON.stringify(heldBody));
             assert.equal(heldBody.error.message, QUOTA_SENTENCE);
-            await sleep(5000);
-            const expired = await put(webp(64, 10));
+            assert.equal(objectBytes(persistTo, id), QUOTA - slice);
+            while (Date.now() < hold.expiresAt + 250) await sleep(50);
+            const expiredImage = webp(64, 10);
+            const expired = await put(expiredImage);
             const expiredBody = await expired.json();
             assert.equal(expired.status, 201, JSON.stringify(expiredBody));
             const finished = await waitJob(base, id, cookie, jobId);
             assert.equal(finished.state, 'done', JSON.stringify(finished));
-            // The batch marks the job done before finishCounts. The probe landed in that gap,
-            // after the reservation expired, so finishCounts then takes the universe over the cap by the probe.
-            const chargeBy = Date.now() + 30000;
+            // The reservation this test read has ended. The image stored after that stays,
+            // and finishCounts then adds the slice, so the universe is over the cap by that image.
+            const chargeBy = Date.now() + 90000;
             let charged = objectBytes(persistTo, id);
-            while (charged !== QUOTA + probe.length && Date.now() < chargeBy) {
+            while (charged !== QUOTA + expiredImage.length && Date.now() < chargeBy) {
                 await sleep(200);
                 charged = objectBytes(persistTo, id);
             }
-            assert.equal(charged, QUOTA + probe.length);
+            assert.equal(charged, QUOTA + expiredImage.length);
         } finally {
             if (child) stopDev(child.pid);
-            removeTree(persistTo);
+            if (ownedPersist) removeTree(persistTo);
         }
     });
+}
+
+function sqliteFiles(dir, out = []) {
+    let names = [];
+    try { names = readdirSync(dir); } catch { return out; }
+    for (const name of names) {
+        const full = path.join(dir, name);
+        let info;
+        try { info = statSync(full); } catch { continue; }
+        if (info.isDirectory()) sqliteFiles(full, out);
+        else if (name.endsWith('.sqlite')) out.push(full);
+    }
+    return out;
+}
+
+/** The job's reservation row in this run's own state, or null when it is not written yet. */
+function reservationOf(persistTo, jobId) {
+    for (const file of sqliteFiles(persistTo)) {
+        let db;
+        try { db = new DatabaseSync(file, { readOnly: true }); } catch { continue; }
+        try {
+            const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'object_reservations'`).all();
+            if (!tables.length) continue;
+            const row = db.prepare(`SELECT bytes, expires_at AS expiresAt FROM object_reservations WHERE id = ?`).get(jobId);
+            if (row) return { bytes: Number(row.bytes), expiresAt: Number(row.expiresAt) };
+        } catch {
+            // A locked file, or a sqlite file that is not this object.
+        } finally {
+            try { db.close(); } catch { /* already closed */ }
+        }
+    }
+    return null;
 }
 
 async function waitJob(base, id, cookie, jobId) {

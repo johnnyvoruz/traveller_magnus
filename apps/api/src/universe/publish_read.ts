@@ -1,5 +1,6 @@
 import { stripRefereeBlocks } from '@voyage/shared';
 import { storedCampaignRecord, type Sql } from './campaign.ts';
+import { surfacesForHex } from './surfaces.ts';
 
 export type PublishHexSource = {
     hexKey: string;
@@ -8,6 +9,8 @@ export type PublishHexSource = {
     baseHash: string | null;
     treeHash: string | null;
     summary: unknown;
+    /** Body key to the stored paint. Empty when this hex has none. Omitted by older callers. */
+    surfaces?: Record<string, unknown>;
 };
 
 export type PublishRecordSource = {
@@ -71,9 +74,10 @@ export function readPublishSources(sql: Sql, body: unknown): PublishSources {
             `SELECT deleted, base_hash, tree_hash, summary FROM hexes WHERE hex_key = ?`,
             hexKey,
         );
+        const surfaces = surfacesForHex(sql, hexKey);
         const row = rows[0];
         if (!row) {
-            return { hexKey, found: false, deleted: false, baseHash: null, treeHash: null, summary: null };
+            return { hexKey, found: false, deleted: false, baseHash: null, treeHash: null, summary: null, surfaces };
         }
         let summary: unknown = null;
         if (typeof row.summary === 'string' && row.summary) {
@@ -90,6 +94,7 @@ export function readPublishSources(sql: Sql, body: unknown): PublishSources {
             baseHash: textOrNull(row.base_hash),
             treeHash: textOrNull(row.tree_hash),
             summary,
+            surfaces,
         };
     });
     const records = asList(input.recordIds).filter((item): item is string => typeof item === 'string').map((id) => {

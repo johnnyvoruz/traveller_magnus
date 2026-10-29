@@ -1,7 +1,7 @@
 /**
  * The campaign in the command palette (stream N4), offered while someone is signed in: "New
  * person" and the rest, one per record type; "Find a record…"; "Open the journal"; "Open the
- * timeline"; "Go to the party". The line that calls this is in shell/registry.ts.
+ * timeline"; "Go to the party"; "Start a session" (DU1). The line that calls this is in shell/registry.ts.
  *
  * A new record, the search and the timeline need the open campaign: the command opens the
  * records list and leaves its ask in `campaignAsk`, which the Campaign panel carries out once
@@ -10,16 +10,19 @@
 import { reactive, watch } from 'vue';
 import type { CampaignRecordType } from '@voyage/shared';
 import { session } from '../account/session.ts';
+import { campaign } from '../campaign/store.ts';
 import { currentRoute, pushRoute } from '../shell/go.ts';
 import { atPane, type Pane } from '../shell/pane.ts';
 import type { Command } from '../shell/registry.ts';
 import { RECORD_TYPES } from './records.ts';
 
 /** What the palette asked the Campaign panel to do, and it has not done yet. */
-export const campaignAsk = reactive<{ create: CampaignRecordType | null; find: boolean; timeline: boolean }>({
+export const campaignAsk = reactive<{ create: CampaignRecordType | null; find: boolean; timeline: boolean; session: boolean }>({
     create: null,
     find: false,
     timeline: false,
+    /** "Start a session": the board starts one once the campaign is open (session/SessionBoard.vue). */
+    session: false,
 });
 
 /** The store has no Campaign panel: from there the campaign opens over the map. */
@@ -61,6 +64,16 @@ export function campaignCommands(): Command[] {
             },
         },
         { id: 'campaign-party', name: 'Go to the party', run: () => goPane({ kind: 'party' }) },
+        {
+            id: 'campaign-session',
+            name: 'Start a session',
+            // The referee's: a player's palette shows it disabled (the board is the referee's).
+            runnable: () => campaign.role !== 'player',
+            run: () => {
+                campaignAsk.session = true;
+                goPane({ kind: 'session' });
+            },
+        },
     );
     return list;
 }

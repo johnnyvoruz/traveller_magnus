@@ -32,7 +32,9 @@ export type Pane =
     /** The referee's proposals (SI3): the batches, or one batch's cards. */
     | { kind: 'proposals'; batch: string | null }
     /** The account (DU11): sign-in, the passkeys, the recovery codes, Agent access. /account redirects here. */
-    | { kind: 'account' };
+    | { kind: 'account' }
+    /** The session board (DU1): the table's clock, the party, the dice and the session entry, in the Campaign panel. */
+    | { kind: 'session' };
 
 export type PaneAddress = { view: PaneView; pane: Pane };
 
@@ -114,6 +116,7 @@ function paneFromQuery(view: PaneView, query: Query): Pane {
     if (panel === 'party') return { kind: 'party' };
     if (panel === 'campaigns') return { kind: 'campaigns' };
     if (panel === 'web') return { kind: 'web' };
+    if (panel === 'session') return { kind: 'session' };
     if (panel === 'account') return { kind: 'account' };
     if (panel === 'proposals') {
         const batch = first(query.batch);
@@ -177,6 +180,7 @@ export function paneChanges(pane: Pane): Query {
     if (pane.kind === 'party') return { ...cleared, panel: 'party' };
     if (pane.kind === 'campaigns') return { ...cleared, panel: 'campaigns' };
     if (pane.kind === 'web') return { ...cleared, panel: 'web' };
+    if (pane.kind === 'session') return { ...cleared, panel: 'session' };
     if (pane.kind === 'account') return { ...cleared, panel: 'account' };
     if (pane.kind === 'proposals') return { ...cleared, panel: 'proposals', batch: pane.batch };
     if (pane.kind === 'journal') return { ...cleared, panel: 'journal', entry: pane.entry };
@@ -193,9 +197,9 @@ export function paneChanges(pane: Pane): Query {
     return { ...cleared, panel: 'campaign', record: pane.record };
 }
 
-/** The Campaign panel is on screen: the records, a record, the party, the journal, the timeline, the web, or the proposals. */
+/** The Campaign panel is on screen: the records, a record, the party, the journal, the timeline, the web, the proposals, or the session board. */
 export function hostsCampaign(pane: Pane): boolean {
-    return pane.kind === 'campaign' || pane.kind === 'party' || pane.kind === 'journal' || pane.kind === 'timeline' || pane.kind === 'web' || pane.kind === 'proposals';
+    return pane.kind === 'campaign' || pane.kind === 'party' || pane.kind === 'journal' || pane.kind === 'timeline' || pane.kind === 'web' || pane.kind === 'proposals' || pane.kind === 'session';
 }
 
 /** The current path with the pane written through withQuery. */
@@ -217,7 +221,7 @@ export function escapePane(path: string, query: Query = {}): { path: string; que
         return atPane(path, query, { kind: 'timeline', type: pane.type, ship: pane.ship, row: null });
     }
     if (pane.kind === 'proposals' && pane.batch) return atPane(path, query, { kind: 'proposals', batch: null });
-    if (pane.kind === 'timeline' || pane.kind === 'web' || pane.kind === 'proposals') return atPane(path, query, { kind: 'campaign', record: null });
+    if (pane.kind === 'timeline' || pane.kind === 'web' || pane.kind === 'proposals' || pane.kind === 'session') return atPane(path, query, { kind: 'campaign', record: null });
     if (pane.kind === 'party' || pane.kind === 'campaign' || pane.kind === 'journal' || pane.kind === 'characters' || pane.kind === 'campaigns' || pane.kind === 'account') {
         return atPane(path, query, { kind: 'shut' });
     }
@@ -308,7 +312,7 @@ export function focusTarget(previous: Pane | null, next: Pane): FocusTarget {
     if (next.kind === 'characters' && next.character) return 'leave';
     if (previous.kind === 'characters' && previous.character && next.kind === 'characters') return 'leave';
     if (next.kind === 'characters') return 'list-search';
-    if (next.kind === 'timeline' || next.kind === 'web' || next.kind === 'proposals') return 'leave';
+    if (next.kind === 'timeline' || next.kind === 'web' || next.kind === 'proposals' || next.kind === 'session') return 'leave';
     // The Campaigns panel puts focus on its own first card; the account panel on its heading.
     if (next.kind === 'campaigns' || next.kind === 'account') return 'leave';
     if (next.kind === 'dossier') return 'dossier-heading';

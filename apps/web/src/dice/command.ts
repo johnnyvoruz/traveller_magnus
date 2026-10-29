@@ -3,14 +3,27 @@
  * The line that calls offerDice is in shell/registry.ts. The last 20 rolls stay here
  * for the page, not stored. Boon and Bane follow Johnny, 2026-10-17 15:15
  * (directives/streams/A.md): "Boon rolls 3D keeps best two, bane keeps worst two."
+ *
+ * Dice at the table (streams/D.md DU8; backlog U8): a roll may come from a box on the character
+ * sheet. It is 2D with the DM that box says, and the roll keeps the box's name. Nothing is read
+ * into it: no target number, no effect (campaign_manager_plan.md §10 Q6: plain dice, no
+ * interpretation). Roll again throws the last roll's dice once more.
  */
 import { reactive } from 'vue';
 import type { Command } from '../shell/registry.ts';
 import { cryptoFace, roll3dd, rollD3, rollD66, rollSix, type DiceCount, type RollMode, type Rolled } from './roll.ts';
 
 const KEPT = 20;
+/** The strip shows the last eight. */
+export const HISTORY = 8;
+/** assets/dice_conventions.txt lines 14 to 18 give the DM; the roller's range is −6 to +6. */
+const DM_RANGE = 6;
 
-export type KeptRoll = Rolled & { id: number };
+export type KeptRoll = Rolled & {
+    id: number;
+    /** The box this roll came from ("Strength", "Pilot (spacecraft)"); null for a roll from the roller. */
+    from: string | null;
+};
 
 let nextId = 1;
 
@@ -49,8 +62,8 @@ function withDm(rolled: Rolled): Rolled {
     return { ...rolled, dm: diceAsk.dm };
 }
 
-function keep(rolled: Rolled): Rolled {
-    diceAsk.rolls.unshift({ ...rolled, kept: [...rolled.kept], dice: [...rolled.dice], id: nextId });
+function keep(rolled: Rolled, from: string | null = null): Rolled {
+    diceAsk.rolls.unshift({ ...rolled, kept: [...rolled.kept], dice: [...rolled.dice], id: nextId, from });
     nextId += 1;
     if (diceAsk.rolls.length > KEPT) diceAsk.rolls.pop();
     diceAsk.played += 1;
@@ -116,6 +129,62 @@ export function setMode(mode: 'boon' | 'bane'): void {
 export function chooseMode(mode: 'boon' | 'bane'): void {
     diceAsk.mode = mode;
     diceAsk.count = 2;
+}
+
+/** The last eight rolls, newest first: the strip. */
+export function recentRolls(): KeptRoll[] {
+    return diceAsk.rolls.slice(0, HISTORY);
+}
+
+/**
+ * A DM as a box on the sheet holds it: "+1", "-2", "0", "2", with spaces around. Anything else
+ * (empty, "1/2", a word) is null: the roll then takes no DM. The sheet stores text and computes
+ * nothing; this reads a number the person typed and nothing more.
+ */
+export function parseDm(text: string | boolean | null | undefined): number | null {
+    if (typeof text !== 'string') return null;
+    const found = /^\s*([+\-−]?)\s*(\d{1,2})\s*$/.exec(text);
+    if (!found) return null;
+    const value = Number(found[2]);
+    return found[1] === '-' || found[1] === '−' ? -value : value;
+}
+
+/**
+ * A roll from a box on the sheet: 2D, the DM that box says (within the roller's range, else 0),
+ * the box's name on the roll. The roller opens on it. It interprets nothing (Q6).
+ */
+export function rollFrom(from: string, dm: number | null, face: () => number = cryptoFace): Rolled {
+    openRoller();
+    diceAsk.mode = 'plain';
+    diceAsk.count = 2;
+    diceAsk.dm = dm !== null && Math.abs(dm) <= DM_RANGE ? dm : 0;
+    const name = from.replace(/\s+/g, ' ').trim();
+    return keep(withDm(rollSix(2, 'plain', face)), name || null);
+}
+
+/** Throws the last roll's dice once more: the same count, mode, DM and origin. Null when nothing has been rolled. */
+export function rollAgain(face: () => number = cryptoFace): Rolled | null {
+    const last = diceAsk.rolls[0];
+    if (!last) return null;
+    diceAsk.mode = last.mode;
+    if (last.mode !== 'd66' && last.mode !== '3dd') diceAsk.dm = last.dm;
+    if (last.mode === 'd66') return keep(rollD66(face), last.from);
+    if (last.mode === '3dd') return keep(roll3dd(face), last.from);
+    if (last.mode === 'd3') return keep(withDm(rollD3(1, face)), last.from);
+    if (last.mode === '2d3') return keep(withDm(rollD3(2, face)), last.from);
+    const count = (last.mode === 'plain' ? last.dice.length : 2) as DiceCount;
+    diceAsk.count = count;
+    return keep(withDm(rollSix(count, last.mode, face)), last.from);
+}
+
+/** One roll in a few characters: "2D+1 = 9", "Boon 8", "D66 34", "3DD 120", "2D3 4". */
+export function rollLine(roll: Rolled): string {
+    if (roll.mode === 'd66') return 'D66 ' + roll.total;
+    if (roll.mode === '3dd') return '3DD ' + roll.total;
+    const name = roll.mode === 'boon' ? 'Boon' : roll.mode === 'bane' ? 'Bane' : roll.mode === 'd3' ? 'D3' : roll.mode === '2d3' ? '2D3' : roll.dice.length + 'D';
+    if (roll.dm === 0) return name + ' ' + roll.total;
+    const sign = roll.dm > 0 ? '+' : '−';
+    return name + sign + Math.abs(roll.dm) + ' = ' + (roll.total + roll.dm);
 }
 
 /** The palette and the R key: 2D at once, or Boon or Bane when that toggle is on. */

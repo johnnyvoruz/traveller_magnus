@@ -13,6 +13,8 @@ import type { DiscBatchRequest, DiscRequest, SurfaceMode } from '../contracts.ts
 import type { DiscEnvelope } from '../enhanced/delivery.ts';
 import { settleDiscDelivery } from '../enhanced/delivery.ts';
 import { hybridWorld, worldDigest } from '../hybrid/inputs.ts';
+import { editsHeld, surfaceEdits } from '../edits.ts';
+import { editsDigest } from '../paint_edits.ts';
 import { LOCKED_NIGHT_CENTRED_LON } from '../hybrid/model.ts';
 import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, VANILLA_MASTER_SEED, diamondMapSpec } from '../identity.ts';
 import type { WorkerState, WorkerTiles } from '../vanilla/gl_messages.ts';
@@ -82,7 +84,14 @@ function open(): WorkerLike | null {
 /** The sheet a disc's globe is painted from, or null when the body has none. */
 export function globeRecipe(mode: SurfaceMode, disc: DiscRequest, profile: Profile): Recipe | null {
     const body = disc.body as Record<string, any>;
-    const slot = mode + '|' + disc.hexKey + '|' + disc.dossierKey;
+    // The painted hexes (DW2): read once per body; the slot and the key change with them, so a kept map repaints the globe.
+    let edits = mode === 'enhanced' ? editsHeld(disc.hexKey, disc.dossierKey) : null;
+    if (edits === undefined) {
+        surfaceEdits(disc.hexKey, disc.dossierKey);
+        edits = null;
+    }
+    const paintKey = edits && edits.edits.length ? editsDigest(edits) : '';
+    const slot = mode + '|' + disc.hexKey + '|' + disc.dossierKey + (paintKey ? '|' + paintKey : '');
     let rows = recipes.get(body);
     if (rows?.has(slot)) return rows.get(slot) ?? null;
     let found: Recipe | null = null;
@@ -100,8 +109,8 @@ export function globeRecipe(mode: SurfaceMode, disc: DiscRequest, profile: Profi
         const world = hybridWorld(disc.hexKey, disc.dossierKey, body, { continental: CONTINENTAL_DEFINITION, coastline: COASTLINE_COMPLEXITY });
         if (world) {
             found = {
-                key: 'h|' + world.seed + '|' + worldDigest(world),
-                recipe: { kind: 'hybrid', world },
+                key: 'h|' + world.seed + '|' + worldDigest(world) + (paintKey ? '|' + paintKey : ''),
+                recipe: paintKey && edits ? { kind: 'hybrid', world, edits } : { kind: 'hybrid', world },
                 // The hybrid sheet puts a locked world's star side at this longitude; the disc keeps
                 // planet +x toward the star (disc_batch.ts turnOf), so the sheet is turned to match.
                 lonOffset: world.locked ? LOCKED_NIGHT_CENTRED_LON * Math.PI / 180 : 0,

@@ -350,7 +350,9 @@ test('the list, a duplicate, a rename, and a delete that asks first', async () =
 
     const cancelled = deleteCharacter(ID);
     assert.equal(confirm.open, true);
-    assert.match(confirm.message, /Aria/);
+    assert.equal(confirm.title, 'Delete Aria?');
+    assert.equal(confirm.message, 'Its sheet and its share links go with it. This cannot be undone.');
+    assert.equal(confirm.no, 'Keep it');
     answerConfirm(false);
     assert.equal(await cancelled, false);
     assert.equal(env.server.deletes.length, 0);

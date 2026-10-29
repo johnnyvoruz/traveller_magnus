@@ -25,6 +25,8 @@ import { showToast } from '../shell/toast.ts';
 import { saveRecord } from './actions.ts';
 import { CHARACTER_RULES, characterDoc, characterSheetWith, otherKeys, type SlotName } from './character_sheet.ts';
 import CharacterSheet from './CharacterSheet.vue';
+import { cashTyped, readoutsFor } from './credit_register.ts';
+import CreditRegister from './CreditRegister.vue';
 // The Characters store registers itself behind the seam (the one hookup file).
 import './character_wiring.ts';
 import { characterFolded } from './list_state.ts';
@@ -140,6 +142,16 @@ const liveDoc = computed((): SheetDoc | null => {
 const livePresence = computed(() => (handle.value && source ? presenceMap(handle.value.who, source.tone) : {}));
 const liveEditable = computed(() => !!handle.value && handle.value.role !== null && handle.value.status !== 'gone');
 const others = computed(() => (handle.value ? handle.value.who : []));
+// The credit register (DT1c), when the store offers one. The referee who cannot see it still adds a pending line.
+const register = computed(() => (handle.value && characterId.value && source && source.register ? source.register(characterId.value) : null));
+const campaignDay = computed(() => (campaign.status === 'ready' && campaign.clock ? campaign.clock.days : null));
+const readouts = computed(() => readoutsFor(register.value));
+
+function liveChange(name: string, value: string | boolean): void {
+    if (!handle.value) return;
+    cashTyped(register.value, name, value, campaignDay.value);
+    handle.value.setField(name, value);
+}
 
 function attach(id: string): void {
     if (props.readOnly || !record.value) return;
@@ -263,6 +275,14 @@ function openLink(id: string): void {
         </ul>
         <p v-if="!source" class="psheet-note">Characters are not available in this build. The reference is kept.</p>
         <p v-else-if="handle && handle.status === 'gone'" class="psheet-note">This Character is no longer shared with you. Detach to keep a copy of the sheet as you last saw it.</p>
+        <CreditRegister
+          v-if="register && handle && handle.status === 'gone' && !readOnly"
+          :register="register"
+          :you="null"
+          :access="false"
+          :can-post="true"
+          :day="campaignDay"
+        />
       </section>
       <CharacterSheet
         v-if="liveDoc && handle"
@@ -272,12 +292,24 @@ function openLink(id: string): void {
         :homeworld="home"
         :links="links"
         :folded="folded"
-        @change="(name, value) => handle && handle.setField(name, value)"
+        :readouts="readouts"
+        @change="liveChange"
         @enter="(name) => handle && handle.focusField(name)"
         @leave="() => handle && handle.focusField(null)"
         @homeworld="onHomeworld"
         @open-link="openLink"
-      />
+      >
+        <template #finances>
+          <CreditRegister
+            v-if="register"
+            :register="register"
+            :you="handle.you ? handle.you.id : null"
+            :access="liveEditable"
+            :can-post="liveEditable"
+            :day="campaignDay"
+          />
+        </template>
+      </CharacterSheet>
     </template>
     <CharacterSheet
       v-else-if="doc"

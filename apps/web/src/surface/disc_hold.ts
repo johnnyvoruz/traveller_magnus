@@ -26,6 +26,11 @@ export function rememberDisc(key: string, tile: HeldDisc): void {
     if (previous && previous.image !== tile.image) closeBitmap(previous.image);
 }
 
+/** The keys with a tile held (tests and the browser probes). */
+export function heldDiscKeys(): string[] {
+    return [...held.keys()];
+}
+
 export function discHeld(key: string): HeldDisc | undefined {
     return held.get(key);
 }

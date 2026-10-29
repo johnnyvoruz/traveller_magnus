@@ -11,7 +11,8 @@ import {
     type CampaignPage,
     type CampaignRecord,
 } from '@voyage/shared';
-import { courseReady, detectPublicCards, detectPublicShips, publicCardsReady, publicShipsReady } from '../auth/public_schema';
+import { courseReady, detectPublicCards, detectPublicShips, publicCardsReady, publicShipsReady, shipClassReady } from '../auth/public_schema';
+import { vesselShipClass } from './ship_class';
 import type { Env } from '../env';
 
 const PLACE_TABLES = new Set(['records', 'settings', 'clock', 'journal']);
@@ -100,12 +101,21 @@ export async function writePublicMark(env: Env, universeId: string, truthVersion
         const journal = meta ? publicCardJournal(document.journal) : [];
         const storeCourse = await courseReady(env.DB);
         const showCourse = storeCourse ? await readShowCourse(env, universeId) : true;
+        const storeClass = await shipClassReady(env.DB);
         for (const ship of ships) {
             const mark = await publicMarkId(universeId, ship.vesselId);
-            statements.push(env.DB.prepare(
-                `INSERT INTO public_ships (mark_id, universe_id, truth_version, sector_slug, local_hex, ship_name, aboard_names, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            ).bind(mark, universeId, truthVersion, ship.hex.sector, ship.hex.localHex, ship.name, JSON.stringify(ship.aboard), now));
+            if (storeClass) {
+                const shipClass = vesselShipClass(recordMap[ship.vesselId]);
+                statements.push(env.DB.prepare(
+                    `INSERT INTO public_ships (mark_id, universe_id, truth_version, sector_slug, local_hex, ship_name, ship_class, aboard_names, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                ).bind(mark, universeId, truthVersion, ship.hex.sector, ship.hex.localHex, ship.name, shipClass, JSON.stringify(ship.aboard), now));
+            } else {
+                statements.push(env.DB.prepare(
+                    `INSERT INTO public_ships (mark_id, universe_id, truth_version, sector_slug, local_hex, ship_name, aboard_names, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                ).bind(mark, universeId, truthVersion, ship.hex.sector, ship.hex.localHex, ship.name, JSON.stringify(ship.aboard), now));
+            }
             if (meta) {
                 const vessel = recordMap[ship.vesselId];
                 const legs = vessel ? publicFinishedLegs(vessel, recordMap, days) : [];

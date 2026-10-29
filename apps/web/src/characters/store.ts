@@ -1,7 +1,7 @@
 /**
  * The account's characters: mine and those shared with me.
  * Deleting is soft on the server and nothing brings one back, so it asks in the
- * screen's own confirm (confirm / answerConfirm) and then says so in a toast.
+ * app's one confirm (confirm / answerConfirm; the screen draws it) and then says so in a toast.
  * There is no Undo. Signed out, the list is empty and nothing is said.
  */
 import { reactive } from 'vue';
@@ -24,7 +24,7 @@ export const confirm = reactive({
     title: 'Delete this character?',
     message: '',
     yes: 'Delete',
-    no: 'Keep',
+    no: 'Keep it',
 });
 
 let confirmWait: ((yes: boolean) => void) | null = null;
@@ -88,12 +88,15 @@ export function answerConfirm(yes: boolean): void {
     if (wait) wait(yes);
 }
 
-function askConfirm(message: string): Promise<boolean> {
+/** What goes with a deleted character, under its title (DU23b, as the campaign delete's words). */
+export const DELETE_WHAT = 'Its sheet and its share links go with it. This cannot be undone.';
+
+function askConfirm(title: string, message: string): Promise<boolean> {
     if (confirmWait) return Promise.resolve(false);
-    confirm.title = 'Delete this character?';
+    confirm.title = title;
     confirm.message = message;
     confirm.yes = 'Delete';
-    confirm.no = 'Keep';
+    confirm.no = 'Keep it';
     confirm.open = true;
     return new Promise((resolve) => {
         confirmWait = resolve;
@@ -194,7 +197,7 @@ export async function deleteCharacter(id: string): Promise<boolean> {
     characters.error = '';
     const item = characters.items.find((row) => row.character.id === id);
     const name = item ? item.character.name : 'this character';
-    const yes = await askConfirm('Delete ' + name + '? It leaves your list for good.');
+    const yes = await askConfirm('Delete ' + name + '?', DELETE_WHAT);
     if (!yes) return false;
     const res = await request('/api/characters/' + encodeURIComponent(id), { method: 'DELETE' });
     if (res.status === 401) {

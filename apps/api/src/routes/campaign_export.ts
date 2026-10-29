@@ -48,6 +48,7 @@ export function mountCampaignExport(route: Hono<AppEnv>): void {
             const url = new URL('https://universe.internal/campaign');
             url.searchParams.set('after', String(after));
             url.searchParams.set('limit', String(PAGE));
+            url.searchParams.set('replies', 'all');
             const response = await owned.forward(new Request(url));
             const body = await response.json().catch(() => null) as { ok?: boolean; data?: CampaignPageBody } | null;
             if (!response.ok || !body?.ok || !body.data) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, listCampaigns, openCampaign, setCampaignDate, switchCampaign } from '../../apps/web/src/campaign/store.ts';
+import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, deleteCampaign, listCampaigns, markMembershipGone, noteUnauthorized, openCampaign, pinTruthVersion, renameCampaign, resetCampaignState, setCampaignDate, switchCampaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { commit, flushCampaign, lastError, newRecordId, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { recordsAtHex } from '../../apps/web/src/campaign/index.ts';
 import { toasts } from '../../apps/web/src/shell/toast.ts';
@@ -85,6 +85,10 @@ function harness(seed = []) {
         universes: seed.map((row) => universeRow(row)),
         posts: [],
         patches: [],
+        renames: [],
+        deletes: [],
+        renameStatus: 0,
+        deleteStatus: 0,
         pages: {},
         failPatch: false,
         failPost: false,
@@ -179,6 +183,34 @@ function harness(seed = []) {
                 });
             }
             return jsonResponse(200, { ok: true, data: { applied, conflicts: [] } });
+        }
+        const universeOne = target.match(/^\/api\/universes\/([^/]+)$/);
+        if (universeOne && method === 'PATCH') {
+            const id = decodeURIComponent(universeOne[1]);
+            const body = JSON.parse(init.body);
+            server.renames.push({ id, name: body.name });
+            if (server.renameStatus) {
+                const status = server.renameStatus;
+                server.renameStatus = 0;
+                return jsonResponse(status, { ok: false, error: { code: 'refused', message: 'no' } });
+            }
+            if (!body.name) return jsonResponse(400, { ok: false, error: { code: 'invalid', message: 'no' } });
+            const index = server.universes.findIndex((row) => row.id === id);
+            const current = index >= 0 ? server.universes[index] : universeRow({ id });
+            const updated = { ...current, name: body.name, slug: 'renamed', later: 'drop-me' };
+            if (index >= 0) server.universes[index] = updated;
+            return jsonResponse(200, { ok: true, data: updated });
+        }
+        if (universeOne && method === 'DELETE') {
+            const id = decodeURIComponent(universeOne[1]);
+            server.deletes.push(id);
+            if (server.deleteStatus) {
+                const status = server.deleteStatus;
+                server.deleteStatus = 0;
+                return jsonResponse(status, { ok: false, error: { code: 'refused', message: 'no' } });
+            }
+            server.universes = server.universes.filter((row) => row.id !== id);
+            return jsonResponse(200, { ok: true });
         }
         throw new Error('unexpected ' + method + ' ' + target);
     };
@@ -531,4 +563,177 @@ test('a journal commit flushes, takes the applied rev, conflicts, and a failed s
     assert.equal(campaign.journal[JOURNAL].rev, 5);
     assert.equal(lastError.value, '');
     assert.equal(pending.value, false);
+});
+
+test('resetCampaignState drops the open campaign, the pin, and a create that has not landed', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1', name: 'Alpha game' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([record()], 1, true) }];
+    await open(box, 'uni-1');
+    pinTruthVersion('v10');
+    box.server.failPost = true;
+    const failed = await createCampaign('Held');
+    assert.equal(failed, null);
+    const heldId = box.server.posts[0].id;
+    assert.equal(box.server.posts[0].truthVersion, 'v10');
+    resetCampaignState();
+    assert.equal(campaign.status, 'signed-out');
+    assert.equal(campaign.role, null);
+    assert.equal(campaign.universeId, null);
+    assert.equal(campaign.records[VESSEL], undefined);
+    assert.deepEqual(campaign.universes, []);
+    assert.equal(transport.fetch, fetch);
+    await open(box, 'uni-1');
+    const created = await createCampaign('After');
+    const again = box.server.posts[box.server.posts.length - 1];
+    assert.notEqual(again.id, heldId);
+    assert.equal(again.truthVersion, 'v5');
+    assert.equal(created && created.id, again.id);
+    assert.equal(campaign.status, 'ready');
+});
+
+test('pinTruthVersion is what the next new campaign stores, until an open replaces it', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 1, true) }];
+    await open(box, 'uni-1');
+    pinTruthVersion('v10');
+    await createCampaign('Pinned');
+    assert.equal(box.server.posts[0].truthVersion, 'v10');
+    pinTruthVersion(null);
+    await createCampaign('Unpinned');
+    assert.equal(box.server.posts[1].truthVersion, null);
+    await open(box, 'uni-1');
+    await createCampaign('Opened');
+    assert.equal(box.server.posts[2].truthVersion, 'v5');
+});
+
+test('noteUnauthorized signs the store out, and markMembershipGone keeps the campaign list', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1', name: 'Alpha game' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: { ...page([record()], 1, true), journal: [entry()] } }];
+    await open(box, 'uni-1');
+    campaign.playing = [{ universeId: 'uni-1', name: 'Alpha game' }];
+    noteUnauthorized();
+    assert.equal(campaign.status, 'signed-out');
+    assert.equal(campaign.role, null);
+    assert.equal(campaign.universeId, null);
+    assert.deepEqual(campaign.universes, []);
+    assert.deepEqual(campaign.playing, []);
+    assert.equal(campaign.records[VESSEL], undefined);
+    assert.equal(campaign.journal[JOURNAL], undefined);
+
+    await open(box, 'uni-1');
+    campaign.playing = [{ universeId: 'uni-1', name: 'Alpha game' }];
+    markMembershipGone();
+    assert.equal(campaign.status, 'gone');
+    assert.equal(campaign.role, 'player');
+    assert.equal(campaign.universeId, null);
+    assert.equal(campaign.settings, null);
+    assert.equal(campaign.clock, null);
+    assert.equal(campaign.records[VESSEL], undefined);
+    assert.equal(campaign.journal[JOURNAL], undefined);
+    assert.deepEqual(campaign.universes.map((row) => row.id), ['uni-1']);
+    assert.equal(campaign.playing.length, 1);
+});
+
+test('renameCampaign stores the server row, drops an unknown key, and a refusal leaves the name', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1', name: 'Alpha game' })]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([record()], 1, true) }];
+    await open(box, 'uni-1');
+    await renameCampaign('uni-1', 'Beta game');
+    assert.equal(campaign.universes[0].name, 'Beta game');
+    assert.equal(campaign.universes[0].slug, 'renamed');
+    assert.equal(campaign.universes[0].later, undefined);
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.equal(campaign.records[VESSEL].name, 'Beowulf');
+    await renameCampaign('uni/odd', 'Odd game');
+    assert.deepEqual(box.server.renames[1], { id: 'uni/odd', name: 'Odd game' });
+    assert.equal(campaign.universes[campaign.universes.length - 1].id, 'uni/odd');
+    assert.equal(campaign.universes[campaign.universes.length - 1].later, undefined);
+    await assert.rejects(() => renameCampaign('uni-1', ''), /could not be renamed/);
+    assert.equal(campaign.universes[0].name, 'Beta game');
+    assert.equal(box.server.renames[2].name, '');
+    box.server.renameStatus = 500;
+    await assert.rejects(() => renameCampaign('uni-1', 'Gamma'), /could not be renamed/);
+    assert.equal(campaign.universes[0].name, 'Beta game');
+    assert.equal(campaign.status, 'ready');
+    box.server.renameStatus = 401;
+    await renameCampaign('uni-1', 'Gone');
+    assert.equal(campaign.status, 'signed-out');
+    assert.deepEqual(campaign.universes, []);
+    assert.equal(campaign.universeId, null);
+});
+
+test('deleteCampaign drops a closed campaign, then the open one, and clears the device key', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([
+        universeRow({ id: 'uni-1', name: 'Alpha' }),
+        universeRow({ id: 'uni-2', name: 'Beta' }),
+        universeRow({ id: 'ab/cd', name: 'Slash' }),
+    ]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([record()], 1, true) }];
+    box.server.pages['uni-2'] = [{ after: 0, body: page([record({ id: PERSON, type: 'person', name: 'Voss', anchor: null })], 1, true) }];
+    await open(box, 'uni-1');
+    await deleteCampaign('uni-1');
+    assert.equal(campaign.universeId, 'uni-2');
+    assert.equal(campaign.records[PERSON].name, 'Voss');
+    assert.equal(campaign.records[VESSEL], undefined);
+    assert.equal(campaign.status, 'ready');
+    assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), 'uni-2');
+    memory.set(CAMPAIGN_UNIVERSE_KEY, 'ab/cd');
+    await deleteCampaign('ab/cd');
+    assert.deepEqual(box.server.deletes, ['uni-1', 'ab/cd']);
+    assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), '');
+    assert.equal(campaign.universeId, 'uni-2');
+    assert.equal(campaign.records[PERSON].name, 'Voss');
+    await deleteCampaign('uni-2');
+    assert.equal(campaign.universeId, null);
+    assert.deepEqual(campaign.records, {});
+    assert.equal(campaign.status, 'ready');
+    assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), '');
+    assert.deepEqual(campaign.universes, []);
+});
+
+test('deleteCampaign leaves an unsaved open campaign, and a refusal does not remove it', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([
+        universeRow({ id: 'uni-1', name: 'Alpha' }),
+        universeRow({ id: 'uni-2', name: 'Beta' }),
+    ]);
+    box.server.pages['uni-1'] = [{ after: 0, body: page([], 1, true) }];
+    box.server.pages['uni-2'] = [{ after: 0, body: page([], 1, true) }];
+    await open(box, 'uni-1');
+    commit({ records: [{ ...record({ id: OTHER, name: 'Queued', rev: 0, anchor: null }), baseRev: 0 }] });
+    box.server.failPatch = true;
+    await deleteCampaign('uni-1');
+    assert.deepEqual(box.server.deletes, []);
+    assert.equal(pending.value, true);
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.equal(campaign.records[OTHER].name, 'Queued');
+    await deleteCampaign('uni-2');
+    assert.deepEqual(box.server.deletes, ['uni-2']);
+    assert.equal(pending.value, true);
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.equal(campaign.records[OTHER].name, 'Queued');
+    await flushCampaign();
+    assert.equal(pending.value, false);
+    box.server.deleteStatus = 500;
+    await assert.rejects(() => deleteCampaign('uni-1'), /could not be deleted/);
+    assert.equal(campaign.status, 'ready');
+    assert.equal(campaign.universeId, 'uni-1');
+    assert.deepEqual(campaign.universes.map((row) => row.id), ['uni-1']);
+    box.server.deleteStatus = 401;
+    await deleteCampaign('uni-1');
+    assert.equal(campaign.status, 'signed-out');
+    assert.equal(campaign.universeId, null);
+    assert.deepEqual(campaign.universes, []);
+    assert.equal(box.server.deletes[box.server.deletes.length - 1], 'uni-1');
 });

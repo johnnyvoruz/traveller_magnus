@@ -448,7 +448,8 @@ function onGrabClick(): void {
 @media (max-width: 599px) {
   .panel {
     top: auto;
-    left: 0;
+    /* The rail paints over a sheet that starts at the screen edge, and the world's name sits under it. */
+    left: var(--rail-width);
     right: 0;
     height: 50%;
     padding: 0;

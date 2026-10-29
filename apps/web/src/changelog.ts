@@ -17,16 +17,34 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.3',
+        date: '2026-10-28',
+        title: 'Paint your own world maps',
+        story: [
+            'Paint, on the large world map in Build, colours any hex so a world can match the map in your books, and everyone in the campaign sees it.',
+            'Start a session turns the Campaign panel into a live board for the table, players and the referee reply under journal entries, and every skill has a die beside it.',
+        ],
+        items: [
+            'Paint, on the large world map with Build on, colours the hex under the pointer with one of the 19 terrains, 3 accents, or the features. Drag to paint a run, Shift-click to paint a straight line, Clear hex or Clear map to take paint back. Keep saves the map for the campaign, and players see it on the world map and in the orbit view. The UWP never changes.',
+            'Reply under a journal entry. Players and the referee write replies, one level under a reply, and the entry shows its count. The referee can delete any reply, a player their own. Deleting an entry takes its replies with it.',
+            'A die beside every characteristic and skill on a character sheet rolls 2D with the number typed in its DM box and names the box on the card. Roll again repeats the last roll, and the last eight rolls sit under the picks.',
+            'Finances on a character sheet is a credits register: Simple keeps a balance, Detailed keeps a line per change, dated by the campaign day. Only the campaign\'s referee posts to a player\'s register.',
+            'Start a session, on the Campaign panel, opens a live board for the referee: the clock large with +1 hour, +1 day, and +1 week, the party and who is aboard each ship, the dice, the current world\'s records and the markets nearby, and the session entry open for typing. The clock moves what you look at, not the campaign date. End the session asks once whether to advance the campaign date to the clock.',
+            'Smaller: Save image is on the system map and on the world map, at 300 dpi, as on the chart. An invite link or a public ship unfurls as a card in Discord, with the ship\'s class when its sheet names one. A sector or subsector address, signed out, lists its places. Reduced motion in your system settings stops every animation. The account menu has a checklist for a new campaign. The chart\'s first paint on a slow phone is back to where 1.3.0 was.',
+        ],
+    },
+    {
         version: '1.3.2',
         date: '2026-10-27',
         title: 'Save the chart as a print image',
         story: [
-            'Save image makes a 300 dpi picture of the subsector, the sector, or what is on screen, on paper or in full colour.',
+            'Save image makes a 300 dpi picture of what\'s on screen, the subsector, or the sector, on paper or in full colour.',
             'A published package now leaves out what players cannot see, and an orbit address opens at once.',
         ],
+        picture: '/changes/1.3.2.png',
         items: [
-            'Save image, at the bottom right of the chart and on the right-click menu, saves a PNG at 300 dpi on A4, Letter, A3 or Tabloid. Choose the subsector, the sector, or what is on screen, and On paper or Full colour. The file is named for the place, the paper, and the resolution.',
-            'A published package leaves out a referee-only record\'s text, player notes and sheet, and strips referee-only passages from every record. The publish form says what goes out and what stays.',
+            'Save image, at the bottom right of the chart and on the right-click menu, saves a PNG at 300 dpi on A4, Letter, A3, or Tabloid. Choose What\'s on screen, the subsector, or the sector, and On paper or Full colour. The file is named for the place, the paper, and the resolution.',
+            'A published package sends a referee-only record\'s name, kind, and tags. Its text, player notes, and sheet stay with you, and referee-only passages are left out of every record. The publish form says what goes out and what stays.',
             'An orbit address opens at once on the chart version you last used, then switches if a newer one is released.',
             'The Simple or Detailed choice on a character\'s credits is kept.',
         ],

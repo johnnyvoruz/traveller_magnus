@@ -61,7 +61,7 @@ export const TruthBuild = z.object({
     transform: z.literal('reconcile-environment').optional(),
 }).superRefine((value, ctx) => {
     if (value.transform && !value.from) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['from'], message: 'transform requires from' });
+        ctx.addIssue({ code: 'custom', path: ['from'], message: 'transform requires from' });
     }
 });
 export type TruthBuild = z.infer<typeof TruthBuild>;

@@ -183,32 +183,43 @@ function asSummary(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
 }
 
+function withSurfaces(hex: Record<string, unknown>, surfaces: Record<string, unknown> | undefined): Record<string, unknown> {
+    if (!surfaces || Object.keys(surfaces).length === 0) return hex;
+    return { ...hex, surfaces };
+}
+
 function oneHex(source: PublishSources['hexes'][number], chart: unknown): { hex: HexRow; tree: string | null } {
+    const surfaces = source.surfaces;
     if (source.found && source.deleted) {
         return {
-            hex: PackageHex.parse({
+            hex: PackageHex.parse(withSurfaces({
                 baseHash: ownSectorKey(source.hexKey) ? null : source.baseHash,
                 deleted: true,
-            }),
+            }, surfaces)),
             tree: null,
         };
     }
     if (source.found) {
         const summary = asSummary(source.summary);
-        const hex: HexRow = { baseHash: ownSectorKey(source.hexKey) ? null : source.baseHash };
+        const hex: Record<string, unknown> = { baseHash: ownSectorKey(source.hexKey) ? null : source.baseHash };
         if (source.treeHash) hex.treeHash = source.treeHash;
         if (summary) hex.summary = summary;
-        return { hex: PackageHex.parse(hex), tree: source.treeHash };
+        return { hex: PackageHex.parse(withSurfaces(hex, surfaces)), tree: source.treeHash };
     }
     if (chart && typeof chart === 'object') {
         const tree = chartTree(chart);
         const summary = asSummary(chart);
-        const hex: HexRow = { baseHash: tree };
+        const hex: Record<string, unknown> = { baseHash: tree };
         if (tree) hex.treeHash = tree;
         if (summary) hex.summary = summary;
-        return { hex: PackageHex.parse(hex), tree };
+        return { hex: PackageHex.parse(withSurfaces(hex, surfaces)), tree };
     }
     throw new PublishRefusal('A hex is not in this universe.', { hexKey: source.hexKey });
+}
+
+/** The hex object a package stores. Paint rides along. A hex with no row and no chart is still refused. */
+export function publishedHex(source: PublishSources['hexes'][number], chart: unknown): HexRow {
+    return oneHex(source, chart).hex;
 }
 
 function imageHashesOf(record: unknown): string[] {

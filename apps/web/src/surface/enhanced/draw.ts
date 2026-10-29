@@ -95,7 +95,10 @@ uniform float uCityOn;
 uniform float uDiag;
 uniform float uCssDiameter;
 uniform float uLook;
-uniform float uPop;`;
+uniform float uPop;
+uniform sampler2D uPaint;
+uniform float uHasPaint;
+uniform float uPaintLon;`;
 
 const ACCUM = `    vec3 albedo = vec3(0.0);
     vec4 props = vec4(0.0);
@@ -251,6 +254,22 @@ const DAY_C = `    float urban = smoothstep(0.015, 0.3, density) * 0.95;
         albedo = mix(albedo, day, urban);
     }`;
 
+/**
+ * A referee's painted hexes (DW2c): the page's texture, the palette's colour where a hex is painted
+ * and clear elsewhere (premultiplied), laid over the albedo before the light. Planet space has z
+ * north and longitude uPaintLon - atan(y, x), as the soft disc reads its globe (soft/disc_paint.ts);
+ * the texel grid is the soft globe's (texelLat, texelLon). A gas giant has no hexes.
+ */
+const PAINT_AT = '    float density = props.g;';
+const PAINT_C = `    float density = props.g;
+    if (uHasPaint > 0.5 && uGas < 0.5) {
+        float plon = uPaintLon - atan(qc.y, qc.x);
+        plon -= floor((plon + 3.14159265) / 6.28318531) * 6.28318531;
+        vec2 puv = vec2((plon + 3.14159265) / 6.28318531, (1.57079633 - asin(clamp(qc.z, -1.0, 1.0))) / 3.14159265);
+        vec4 paint = texture(uPaint, puv);
+        albedo = albedo * (1.0 - paint.a) + paint.rgb;
+    }`;
+
 const CLAMP = '    color = clamp(color, 0.0, 1.0);';
 const CLAMP_C = `    if (uDiag > 1.5) color = vec3(cityCore);
     else if (uDiag > 0.5) color = cityMat;
@@ -276,6 +295,7 @@ export function enhancedDrawSource(vanilla: string): string {
     source = once(source, CITY_AND_PORT, GATED_CITY, 'direct city light');
     source = once(source, PORT, GATED_PORT, 'downport');
     source = once(source, CLAMP, CLAMP_C, 'city diagnostic');
+    source = once(source, PAINT_AT, PAINT_C, 'painted hexes');
     return source;
 }
 

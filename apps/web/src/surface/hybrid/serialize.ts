@@ -6,15 +6,30 @@
  * (the generator is deterministic) and the edits are laid over it; the generated payload is
  * a record for checking and export, not the source of truth.
  *
- * Storage: there is no server endpoint for surface edits yet (UniverseDO has none). HexEditStore
- * is the client-side interface; memoryEditStore is the one implementation. A server-backed store
- * implements the same three calls.
+ * Storage: HexEditStore is the client-side interface; memoryEditStore is the in-page implementation
+ * and the server-backed one (platform/surface_store.ts, Lane B's BW1 route) implements the same
+ * three calls. The edits carry the world's digest and the painter's version (DW2), so the app can
+ * say when the world changed under a painted map and refuse edits made on another grid side.
  */
 import { isSurfaceCode, TERRAIN_CODES, type SurfaceCode, type TerrainCode } from './codes.ts';
 import { HYBRID_SURFACE_VERSION } from './inputs.ts';
 import type { HexRecord, HybridModel } from './model.ts';
 
 export const HEX_DATA_FORMAT = 1;
+
+/** Terrains that make a hex water when painted. */
+export const WATER_TERRAINS: ReadonlySet<string> = new Set(['OC', 'SH', 'SI', 'IF']);
+
+/** The ice a painted terrain carries. */
+export function iceOfTerrain(terrain: TerrainCode): HexRecord['ice'] {
+    switch (terrain) {
+        case 'SI': return 'seaIce';
+        case 'IF': return 'iceField';
+        case 'IC': return 'iceCap';
+        case 'FR': return 'frost';
+        default: return 'none';
+    }
+}
 
 /** One hex, compact. Field order is fixed: see HEX_FIELDS. */
 export type PackedHex = [
@@ -87,12 +102,16 @@ export type HexEdits = {
     readonly format: typeof HEX_EDITS_FORMAT;
     /** Grid side the edits were made on; edits for another side are not applied. */
     readonly n: number;
+    /** worldDigest of the world the edits were made on; '' when unknown (older data). */
+    readonly digest: string;
+    /** HYBRID_SURFACE_VERSION when the edits were made; '' when unknown. */
+    readonly surface: string;
     readonly edits: readonly HexEdit[];
 };
 
-export function serializeEdits(n: number, edits: readonly HexEdit[]): string {
+export function serializeEdits(n: number, edits: readonly HexEdit[], stamp: { readonly digest?: string; readonly surface?: string } = {}): string {
     const sorted = [...edits].sort((a, b) => a.row - b.row || a.col - b.col);
-    return JSON.stringify({ format: HEX_EDITS_FORMAT, n, edits: sorted } satisfies HexEdits);
+    return JSON.stringify({ format: HEX_EDITS_FORMAT, n, digest: stamp.digest ?? '', surface: stamp.surface ?? HYBRID_SURFACE_VERSION, edits: sorted } satisfies HexEdits);
 }
 
 export function parseEdits(text: string): HexEdits {
@@ -109,10 +128,20 @@ export function parseEdits(text: string): HexEdits {
         ...(Array.isArray(e.accents) ? { accents: e.accents.filter((c: unknown): c is SurfaceCode => typeof c === 'string' && isSurfaceCode(c)) } : {}),
         ...(typeof e.note === 'string' ? { note: e.note } : {}),
     }));
-    return { format: HEX_EDITS_FORMAT, n: raw.n, edits };
+    return {
+        format: HEX_EDITS_FORMAT,
+        n: raw.n,
+        digest: typeof raw.digest === 'string' ? raw.digest : '',
+        surface: typeof raw.surface === 'string' ? raw.surface : '',
+        edits,
+    };
 }
 
-/** The model's hexes with edits laid over them (a copy; the model is not changed). */
+/**
+ * The model's hexes with edits laid over them (a copy; the model is not changed). A painted
+ * terrain sets terrain, landTerrain, water and ice; any edit marks the hex `edited`, which the
+ * painter reads (paint.ts) to paint the record across the whole hex.
+ */
 export function applyEdits(model: HybridModel, edits: HexEdits | null): HexRecord[] {
     const hexes = model.hexes.map((h) => ({ ...h, accents: [...h.accents], features: [...h.features] }));
     if (!edits || edits.n !== model.grid.n) return hexes;
@@ -125,10 +154,19 @@ export function applyEdits(model: HybridModel, edits: HexEdits | null): HexRecor
         const h = hexes[id];
         if (e.terrain) {
             h.terrain = e.terrain;
-            h.water = e.terrain === 'OC' || e.terrain === 'SH' || e.terrain === 'SI' || e.terrain === 'IF';
+            h.landTerrain = e.terrain;
+            h.water = WATER_TERRAINS.has(e.terrain);
+            h.ice = iceOfTerrain(e.terrain);
+            h.edited = true;
         }
-        if (e.features) h.features = e.features.filter((c) => c !== 'MT' && c !== 'VO' && c !== 'CR') as HexRecord['features'];
-        if (e.accents) h.accents = e.accents.filter((c) => c === 'MT' || c === 'VO' || c === 'CR') as HexRecord['accents'];
+        if (e.features) {
+            h.features = e.features.filter((c) => c !== 'MT' && c !== 'VO' && c !== 'CR') as HexRecord['features'];
+            h.edited = true;
+        }
+        if (e.accents) {
+            h.accents = e.accents.filter((c) => c === 'MT' || c === 'VO' || c === 'CR') as HexRecord['accents'];
+            h.edited = true;
+        }
     }
     return hexes;
 }
@@ -150,7 +188,7 @@ export function memoryEditStore(): HexEditStore {
             return text ? parseEdits(text) : null;
         },
         async save(hexKey, dossierKey, edits) {
-            held.set(key(hexKey, dossierKey), serializeEdits(edits.n, edits.edits));
+            held.set(key(hexKey, dossierKey), serializeEdits(edits.n, edits.edits, edits));
         },
         async clear(hexKey, dossierKey) {
             held.delete(key(hexKey, dossierKey));

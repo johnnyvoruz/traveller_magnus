@@ -23,6 +23,7 @@ import {
     type LinkedProgram,
 } from './gl_bake.ts';
 import { bestCubeSize, FRAME_BAKE_MS, HALO, packAtlas, planFrame, tileSide } from './gl_plan.ts';
+import type { PaintImage } from './gl_messages.ts';
 import { attachShade, DRAW_FRAG, shadePort, type ShadeDraw, type ShadeRequest } from './gl_shade.ts';
 import { BAKE_FRAG, BAKE_FRAG_TILT, STATS_FRAG, VERT } from './gl_shaders.ts';
 import { gasStats, STATS_BATCH, thresholdsFromStats, type DecodedThresholds } from './gl_stats.ts';
@@ -131,6 +132,11 @@ export type DiscBaker = {
     bindDraw: (program: LinkedProgram) => void;
     /** Enhanced installs cube C. Vanilla leaves this null and allocates A and B only. */
     setCityPass: (pass: CityBakePass | null) => void;
+    /**
+     * A body's painted hexes (DW2c), kept by key as pixels and uploaded when a draw first asks for
+     * the key, so a lost context costs nothing but the upload. Null forgets the key.
+     */
+    setPaint: (key: string, image: PaintImage | null) => void;
 };
 
 function publishThresholds(stats: WorldStats): PublicThresholds | null {
@@ -242,6 +248,9 @@ export function createDiscBaker(
     const worlds = new Map<string, World>();
     let tiles = new Map<string, DiscTile>();
     let cityPass: CityBakePass | null = null;
+    /** The painted hexes by key: the pixels, and the texture once uploaded (dropped with the context). */
+    const paints = new Map<string, { image: PaintImage; texture: WebGLTexture | null }>();
+    const PAINTS_MAX = 6;
     let programState: 'idle' | 'pending' | 'ready' = 'idle';
     let parallel: ParallelCompile | null = null;
     let opened: OpenProgram[] = [];
@@ -263,7 +272,40 @@ export function createDiscBaker(
         blockingAt = 0;
         programState = 'idle';
         shade = null;
+        for (const paint of paints.values()) paint.texture = null;
         hooks?.onLost?.();
+    }
+
+    function setPaint(key: string, image: PaintImage | null): void {
+        const have = paints.get(key);
+        if (have && gl && have.texture && !lost) gl.deleteTexture(have.texture);
+        paints.delete(key);
+        if (!image) return;
+        if (paints.size >= PAINTS_MAX) {
+            const oldest = paints.keys().next().value;
+            if (oldest !== undefined) setPaint(oldest, null);
+        }
+        paints.set(key, { image, texture: null });
+    }
+
+    /** The texture for a paint key, uploaded on first use. Null when the key is not held. */
+    function paintTexture(key: string | undefined): WebGLTexture | null {
+        if (!key || !gl) return null;
+        const have = paints.get(key);
+        if (!have) return null;
+        if (have.texture) return have.texture;
+        const texture = gl.createTexture();
+        if (!texture) return null;
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, have.image.width, have.image.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, have.image.pixels);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        have.texture = texture;
+        return texture;
     }
 
     function mountPrograms(linked: LinkedProgram[]): void {
@@ -617,8 +659,10 @@ export function createDiscBaker(
         if (gl && ops && !lost && !broken) {
             clear();
             shade?.dispose();
+            for (const paint of paints.values()) if (paint.texture) gl.deleteTexture(paint.texture);
             ops.disposeGpu();
         }
+        paints.clear();
         worlds.clear();
         tiles = new Map();
         loseExt?.loseContext();
@@ -776,6 +820,8 @@ export function createDiscBaker(
                 diag: item.req.diag,
                 cssDiameter: item.req.cssDiameter,
                 cityLook: item.req.cityLook,
+                paint: paintTexture(item.req.paintKey),
+                paintLon: item.req.paintLon ?? 0,
             });
         }
         const gpu = requireOps();
@@ -971,6 +1017,7 @@ export function createDiscBaker(
         gl: () => gl,
         bindDraw,
         setCityPass,
+        setPaint,
         loseForTest: () => {
             if (!loseExt) return false;
             loseExt.loseContext();

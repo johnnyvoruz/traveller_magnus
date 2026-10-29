@@ -6,14 +6,18 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { session } from '../../account/session.ts';
+import { campaign } from '../../campaign/store.ts';
 import Icon from '../../design/Icon.vue';
 import { observeSize } from '../../platform/browser.ts';
 import { atPane, addressPane } from '../../shell/pane.ts';
 import Panel from '../../shell/Panel.vue';
 import { onSpan, readSpan, writeSpan, type PanelSpan } from '../../shell/panel_state.ts';
 import { registerCommand } from '../../shell/registry.ts';
+import AskModal from '../../shell/AskModal.vue';
 import { showToast } from '../../shell/toast.ts';
 import CharacterSheet from '../../workspace/CharacterSheet.vue';
+import { cashTyped, readoutsFor } from '../../workspace/credit_register.ts';
+import CreditRegister from '../../workspace/CreditRegister.vue';
 import EditableText from '../../workspace/EditableText.vue';
 import SignInCard from '../../workspace/SignInCard.vue';
 import {
@@ -29,6 +33,7 @@ import {
     loadCharacters,
     makeInvite,
     openCharacter,
+    openRegister,
     removeAccess,
     renameCharacter,
     revokeInvite,
@@ -90,6 +95,16 @@ function matches(face: RowFace): boolean {
 const mine = computed(() => groups.value.mine.filter(matches));
 const shared = computed(() => groups.value.shared.filter(matches));
 const sheet = computed(() => (live.value ? bindSheet(live.value) : null));
+// The credit register (DT1c): read with the sheet; Cash on Hand shows its balance once it is read.
+const register = computed(() => (live.value ? openRegister(live.value.id) : null));
+const campaignDay = computed(() => (campaign.status === 'ready' && campaign.clock ? campaign.clock.days : null));
+const readouts = computed(() => readoutsFor(register.value));
+
+function onSheetChange(name: string, value: string | boolean): void {
+    if (!sheet.value) return;
+    cashTyped(register.value, name, value, campaignDay.value);
+    sheet.value.change(name, value);
+}
 const share = computed(() => shareFace({
     role: live.value?.role === 'owner' ? 'owner' : 'editor',
     people: people.value,
@@ -103,9 +118,9 @@ function canOwn(): boolean {
 }
 
 function quiet(handle: CharacterHandle): string {
-    if (handle.status === 'connecting') return 'Connecting';
-    if (handle.status === 'live') return 'Live';
-    if (handle.status === 'offline') return 'Offline. Changes are sent when they can be.';
+    if (handle.status === 'connecting') return 'Connecting.';
+    if (handle.status === 'live') return 'Connected.';
+    if (handle.status === 'offline') return 'You are offline. Changes are sent when you are back online.';
     return handle.notice || 'This character is no longer open.';
 }
 
@@ -192,7 +207,7 @@ async function duplicateOf(id: string, name: string): Promise<void> {
 
 async function duplicateOpen(): Promise<void> {
     if (!live.value || live.value.role !== 'owner') {
-        showToast('Open one of yours, then Duplicate.');
+        showToast('Open one of your characters, then select Duplicate.');
         return;
     }
     await duplicateOf(live.value.id, live.value.character?.name ?? '');
@@ -226,7 +241,7 @@ async function rename(text: string): Promise<void> {
     const name = text.trim();
     if (!name || name === (live.value.character?.name ?? '')) return;
     const ok = await renameCharacter(live.value.id, name);
-    if (!ok) showToast(characters.error || 'The name was not saved.');
+    if (!ok) showToast(characters.error || 'The name could not be saved.');
 }
 
 async function refreshShare(id: string): Promise<void> {
@@ -454,7 +469,7 @@ onBeforeUnmount(() => {
           </div>
           <template v-else>
             <h2 class="ui-heading ui-kicker">Mine</h2>
-            <p v-if="mine.length === 0" class="ch-empty">{{ query.trim() ? 'No character matches.' : EMPTY_MINE }}</p>
+            <p v-if="mine.length === 0" class="ch-empty">{{ query.trim() ? 'No characters match.' : EMPTY_MINE }}</p>
             <ul v-else class="ch-rows">
               <li v-for="face in mine" :key="face.id">
                 <button type="button" class="ch-row" :data-id="face.id" @click="go(face.id)">
@@ -466,7 +481,7 @@ onBeforeUnmount(() => {
               </li>
             </ul>
             <h2 class="ui-heading ui-kicker">Shared with me</h2>
-            <p v-if="shared.length === 0" class="ch-empty">{{ query.trim() ? 'No character matches.' : EMPTY_SHARED }}</p>
+            <p v-if="shared.length === 0" class="ch-empty">{{ query.trim() ? 'No characters match.' : EMPTY_SHARED }}</p>
             <ul v-else class="ch-rows">
               <li v-for="face in shared" :key="face.id">
                 <button type="button" class="ch-row" :data-id="face.id" @click="go(face.id)">
@@ -495,7 +510,7 @@ onBeforeUnmount(() => {
                 @save="rename"
               />
             </div>
-            <p class="ch-owner">{{ live.role === 'owner' ? 'You own this' : 'Owned by ' + (live.ownerName || 'someone') }}</p>
+            <p class="ch-owner">{{ live.role === 'owner' ? 'You own this character.' : 'Owned by ' + (live.ownerName || 'someone') + '.' }}</p>
             <p class="ch-status" role="status">{{ quiet(live) }}</p>
             <ul v-if="others.length" class="ch-marks">
               <li
@@ -513,13 +528,25 @@ onBeforeUnmount(() => {
             :doc="sheet.doc"
             :editable="sheet.editable"
             :presence="sheet.presence"
-            @change="sheet.change"
+            :readouts="readouts"
+            @change="onSheetChange"
             @enter="sheet.enter"
             @leave="sheet.leave"
-          />
+          >
+            <template #finances>
+              <CreditRegister
+                v-if="register"
+                :register="register"
+                :you="live.you ? live.you.id : null"
+                :access="sheet.editable"
+                :can-post="sheet.editable"
+                :day="campaignDay"
+              />
+            </template>
+          </CharacterSheet>
           <section v-if="live.status !== 'gone'" class="ch-share" :aria-label="share.readOnly ? 'Who has access' : 'Share'">
             <h2 class="ui-heading ui-kicker">{{ share.readOnly ? 'Who has access' : 'Share' }}</h2>
-            <p v-if="share.readOnly" class="ch-empty">You can edit the sheet. You cannot change who else can.</p>
+            <p v-if="share.readOnly" class="ch-empty">You can edit the sheet. You cannot change who else can open it.</p>
             <div v-if="share.canInvite" class="ch-acts">
               <button type="button" class="ui-btn" data-command="character-share" @click="makeLink">Share by link</button>
               <button type="button" class="ui-btn" data-command="character-duplicate" :disabled="busy" @click="duplicateOpen">Duplicate</button>
@@ -550,18 +577,23 @@ onBeforeUnmount(() => {
                 </button>
               </li>
             </ul>
-            <p v-if="share.readOnly && share.people.length === 0" class="ch-empty">No one else is listed.</p>
+            <p v-if="share.readOnly && share.people.length === 0" class="ch-empty">Nobody else has access.</p>
             <div v-if="share.canInvite" class="ch-acts">
               <button type="button" class="ui-btn" data-command="character-delete" @click="removeCharacter">
                 <Icon name="trash" :size="12" />Delete
               </button>
             </div>
-            <div v-if="confirm.open" class="ch-ask" role="alertdialog" aria-labelledby="ch-ask-title">
-              <p id="ch-ask-title">{{ confirm.title }}</p>
-              <p>{{ confirm.message }}</p>
-              <button type="button" class="ui-btn" data-command="character-delete-yes" @click="answerConfirm(true)">{{ confirm.yes }}</button>
-              <button type="button" class="ui-btn" @click="answerConfirm(false)">{{ confirm.no }}</button>
-            </div>
+            <!-- The one confirm (DU23b): as deleting a campaign asks. The store holds the words and the answer. -->
+            <AskModal
+              v-if="confirm.open"
+              :title="confirm.title"
+              :text="confirm.message"
+              :confirm="confirm.yes"
+              :cancel-label="confirm.no"
+              danger
+              @confirm="answerConfirm(true)"
+              @cancel="answerConfirm(false)"
+            />
           </section>
         </template>
       </div>
@@ -818,19 +850,5 @@ onBeforeUnmount(() => {
 
 .ch-share {
   margin-top: 16px;
-}
-
-.ch-ask {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--danger);
-  border-radius: var(--r-2);
-  background: var(--bg-1);
-}
-
-.ch-ask p {
-  margin: 0 0 8px;
-  color: var(--text-0);
-  font: 400 14px/1.45 var(--font-text);
 }
 </style>

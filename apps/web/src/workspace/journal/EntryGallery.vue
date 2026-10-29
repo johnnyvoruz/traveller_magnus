@@ -88,7 +88,7 @@ async function send(prepared: PreparedImage, file: string, front = false): Promi
     }
     const latest = campaign.journal[props.id];
     if (!latest || latest.deleted) {
-        fail('That entry is not open.', file, prepared, front);
+        fail('This entry is not in the journal.', file, prepared, front);
         return false;
     }
     const added = withEntryImage(latest.images, toImage(prepared), front);
@@ -267,7 +267,7 @@ watch(() => props.id, () => { closeLightbox(); });
       {{ upload.stage === 'reading' ? 'Reading the image…' : 'Uploading…' }}
     </p>
     <p v-else-if="upload" class="rec-avatar-status" role="alert">
-      {{ upload.message }} <button v-if="retry" type="button" @click="tryAgain">Try again.</button>
+      {{ upload.message }} <button v-if="retry" type="button" @click="tryAgain">Try again</button>
     </p>
   </div>
 
@@ -285,7 +285,7 @@ watch(() => props.id, () => { closeLightbox(); });
     <input ref="fileEl" class="vplan-file" type="file" accept="image/*" multiple tabindex="-1" aria-hidden="true" @change="onFiles">
     <div class="img-strip" role="list" aria-label="Images">
       <div v-for="(image, index) in images" :key="image.hash" role="listitem" class="img-thumb" :class="{ 'is-primary': index === 0 }">
-        <button type="button" class="img-thumb-open" :title="(image.caption || imageWords(image)) + (index === 0 ? ' · primary' : '')" @click="openLightbox(id, index)">
+        <button type="button" class="img-thumb-open" :title="(image.caption || imageWords(image)) + (index === 0 ? ' · cover' : '')" @click="openLightbox(id, index)">
           <img :src="url(image.thumbHash)" :alt="image.caption || face?.name + ', image ' + (index + 1)" loading="lazy">
         </button>
         <span v-if="index === 0" class="img-primary-tag">Cover</span>
@@ -298,7 +298,7 @@ watch(() => props.id, () => { closeLightbox(); });
           </button>
         </span>
       </div>
-      <button v-if="!hideAdds" type="button" class="img-add" :disabled="readOnly || full || !!upload && upload.stage !== 'failed'" :title="full ? ENTRY_FULL : 'Add an image: choose a file, drop one here, or paste one'" @click="pick">
+      <button v-if="!hideAdds" type="button" class="img-add" :disabled="readOnly || full || !!upload && upload.stage !== 'failed'" :title="full ? ENTRY_FULL : 'Add an image: choose a file, drop one here, or paste one.'" @click="pick">
         <Icon name="plus" :size="14" />
         <span>{{ images.length ? 'Add' : 'Add an image' }}</span>
       </button>

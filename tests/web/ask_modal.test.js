@@ -78,6 +78,7 @@ test('who uses the one confirm; the store\'s copy is gone', () => {
         'workspace/market/ImportsList.vue': 1,
         'workspace/journal/JournalList.vue': 1,
         'workspace/CampaignsPanel.vue': 1,
+        'characters/screens/CharactersPanel.vue': 1,
     };
     for (const [file, count] of Object.entries(users)) {
         const source = read(file);
@@ -87,6 +88,10 @@ test('who uses the one confirm; the store\'s copy is gone', () => {
     assert.equal(fs.existsSync(path.join(webRoot, 'src', 'workspace', 'market', 'MarketAsk.vue')), false);
     assert.doesNotMatch(read('workspace/journal/JournalList.vue'), /class="jn-ask"/);
     assert.doesNotMatch(read('workspace/CampaignsPanel.vue'), /cps-delete-q/);
+    // DU23b: the Characters pane's own strip is gone; the store's words are the campaign delete's shape.
+    assert.doesNotMatch(read('characters/screens/CharactersPanel.vue'), /ch-ask/);
+    assert.match(read('characters/store.ts'), /askConfirm\('Delete ' \+ name \+ '\?', DELETE_WHAT\)/);
+    assert.match(read('characters/store.ts'), /no: 'Keep it'/);
 });
 
 test('toasts never stack past two: a third replaces the oldest', () => {

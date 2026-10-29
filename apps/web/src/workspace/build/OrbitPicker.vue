@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
         <div class="pick-bar">
           <b class="pick-title">Pick orbit for {{ name }}</b>
           <span class="pick-hint">Point to an orbit, then select it. To fine-tune, use the arrow keys.</span>
-          <button type="button" class="ui-btn is-icon" aria-label="Close" title="Close (Esc)" @click="closePicker()">
+          <button type="button" class="ui-btn is-icon" aria-label="Close" title="Close (Escape)" @click="closePicker()">
             <Icon name="xmark" :size="14" />
           </button>
         </div>

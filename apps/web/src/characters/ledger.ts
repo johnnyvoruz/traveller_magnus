@@ -64,10 +64,10 @@ export type RunningCredit = {
 
 const INVALID: CreditRefusal = { ok: false, code: 'validation', message: 'Invalid request.' };
 
-/** Decided 16:09 (B BT1b): memo 1 to 80, amount within ±1,000,000,000, whenDay 0 to 400,000. */
+/** Decided 16:09 (B BT1b), bound raised 2026-10-27 (AF8): memo 1 to 80, amount within ±1,000,000,000, whenDay 0 to 4,000,000. */
 const MEMO_MAX = 80;
 const AMOUNT_MAX = 1_000_000_000;
-const DAY_MAX = 400_000;
+const DAY_MAX = 4_000_000;
 
 function memoOk(memo: unknown): memo is string {
     return typeof memo === 'string' && memo.trim() !== '' && memo.length >= 1 && memo.length <= MEMO_MAX;

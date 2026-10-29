@@ -52,8 +52,8 @@ export const CharacterListItem = z.object({
 }).strict();
 
 export const CharacterDoc = z.object({
-    fields: z.record(CharacterFieldValue),
-    revs: z.record(z.number().int().positive()),
+    fields: z.record(z.string(), CharacterFieldValue),
+    revs: z.record(z.string(), z.number().int().positive()),
     seq: z.number().int().nonnegative(),
 }).strict();
 
@@ -92,7 +92,7 @@ export const CharacterCreate = z.object({
     from: CharacterId.optional(),
 }).strict().superRefine((value, ctx) => {
     if (!value.from && !value.name) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: 'name is required' });
+        ctx.addIssue({ code: 'custom', path: ['name'], message: 'name is required' });
     }
 });
 
@@ -105,7 +105,7 @@ export const CharacterPatch = z.object({
 
 function refineBox(value: { field: string; value: string | boolean }, ctx: z.RefinementCtx): void {
     if (typeof value.value === 'string' && value.value.length > characterBoxLimit(value.field)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['value'], message: 'too long' });
+        ctx.addIssue({ code: 'custom', path: ['value'], message: 'too long' });
     }
 }
 

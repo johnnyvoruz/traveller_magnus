@@ -31,7 +31,7 @@ export const OverlayDoc = z.object({
 }).superRefine((doc, ctx) => {
     for (const key of Object.keys(doc.hexes)) {
         if (!HEX_KEY.test(key)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: `hex key ${key} is not <slug>/<hhhh>`, path: ['hexes', key] });
+            ctx.addIssue({ code: 'custom', message: `hex key ${key} is not <slug>/<hhhh>`, path: ['hexes', key] });
         }
     }
 });

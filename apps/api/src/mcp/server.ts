@@ -1,7 +1,5 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
-// The API workspace's `zod` is 3.25, whose `zod/v4` is not the Zod 4 the MCP SDK wraps.
-// `zod4` is the package alias `npm:zod@4.6.5`.
-import { z } from 'zod4';
+import { z } from 'zod';
 import type { AppContext } from '../auth/session';
 import {
     agentAccessOn,

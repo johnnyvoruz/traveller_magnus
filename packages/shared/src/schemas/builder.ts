@@ -115,10 +115,10 @@ export const BuilderGenerate = z.object({
     baseRev: z.number().int().nonnegative().optional(),
 }).strict().superRefine((value, ctx) => {
     if (new Set(value.hexKeys).size !== value.hexKeys.length) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hexKeys'], message: 'duplicate hex key' });
+        ctx.addIssue({ code: 'custom', path: ['hexKeys'], message: 'duplicate hex key' });
     }
     if (value.hexKeys.length === 1 && value.baseRev === undefined) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['baseRev'], message: 'baseRev is required for one hex' });
+        ctx.addIssue({ code: 'custom', path: ['baseRev'], message: 'baseRev is required for one hex' });
     }
 });
 export type BuilderGenerate = z.infer<typeof BuilderGenerate>;

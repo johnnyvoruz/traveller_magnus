@@ -68,10 +68,20 @@ function received(value: unknown): string {
     return typeof value;
 }
 
-function faultOf(prefix: string, issues: { path: (string | number)[]; message: string }[]): string {
+/** Zod 4 prefixes a type miss with "Invalid input: ". The words after it are the Zod 3 sentence. */
+function checkerMessage(message: string): string {
+    const literal = /^Invalid input: expected (.+)$/i.exec(message);
+    if (literal && !/received /i.test(message)) return `Invalid literal value, expected ${literal[1]}`;
+    const stripped = message.replace(/^Invalid input:\s*/i, '');
+    if (stripped === message) return message;
+    return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
+function faultOf(prefix: string, issues: { path: PropertyKey[]; message: string }[]): string {
     const issue = issues[0];
     const path = [prefix, ...issue.path.map(String)].filter((part) => part !== '').join('.');
-    return path ? `${path}: ${issue.message}` : issue.message;
+    const message = checkerMessage(issue.message);
+    return path ? `${path}: ${message}` : message;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {

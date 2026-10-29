@@ -20,9 +20,9 @@ test('one "New …" per record type, then the four ways in, each with its own id
     assert.equal(list.filter((command) => command.id.startsWith('campaign-new-')).length, CAMPAIGN_RECORD_TYPES.length);
     assert.ok(names.includes('New person'));
     assert.ok(names.includes('New vessel'));
-    for (const name of ['Find a record…', 'Open the journal', 'Open the timeline', 'Go to the party']) assert.ok(names.includes(name), name);
+    for (const name of ['Find a record…', 'Open the journal', 'Open the timeline', 'Go to the party', 'Start a session']) assert.ok(names.includes(name), name);
     assert.equal(new Set(list.map((command) => command.id)).size, list.length);
-    assert.deepEqual({ ...campaignAsk }, { create: null, find: false, timeline: false });
+    assert.deepEqual({ ...campaignAsk }, { create: null, find: false, timeline: false, session: false });
 });
 
 test('registered by one line in the registry; the panel carries out the asks once the campaign is ready', () => {

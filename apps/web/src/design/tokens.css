@@ -164,6 +164,19 @@
   --t-sweep: 8000ms;      /* one turn of the scan sweep (system_viewer.js:2099) */
   --t-ripple: 6000ms;     /* news ripples: one play of the scrubber, day 0 to the horizon (spec_xboat_ripples.md §3.3, Lane D) */
   --t-news-day: 333ms;    /* news ripples: one day of Play, about 3 days a second (60 days in 20 s); replaces --t-ripple (DF16) */
+  --t-cut: 0ms;           /* a visibility change with no wait */
+  --t-spin: 850ms;        /* one turn of the waiting spinner */
+  --t-tumble: 1100ms;     /* the dice toss, and the card that follows */
+  --t-march: 900ms;       /* a build mark marching while a hex is generated */
+  --t-comms-in: 620ms;    /* the receiver materialising */
+  --t-comms: 440ms;       /* a receiver reveal */
+  --t-comms-tick: 245ms;  /* a receiver status tick */
+  --t-comms-word: 230ms;  /* one word arriving */
+  --t-comms-caret: 830ms; /* the caret blink */
+  --t-comms-tower: 3900ms; /* one tower send */
+  --t-comms-sweep: 13000ms; /* one edge sweep */
+  --t-comms-ping-b: -1300ms; /* the second tower ping, offset into the sweep */
+  --t-comms-ping-c: -2600ms; /* the third tower ping */
 
   /* layout of the floating chrome (legacy #map-chrome and #system-inspector) */
   --chrome-inset: 10px;   /* viewport edge to chrome */
@@ -356,6 +369,41 @@
   --comms-theme-out: 900ms;
 }
 
+/* One switch for every duration above. A component keeps its var(--t-*) and becomes a cut. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-chevron: 0ms;
+    --t-stagger: 0ms;
+    --t-base: 0ms;
+    --t-slow: 0ms;
+    --t-long: 0ms;
+    --t-scan: 0ms;
+    --t-rail: 0ms;
+    --t-lock: 0ms;
+    --t-pulse: 0ms;
+    --t-lineup: 0ms;
+    --t-sweep: 0ms;
+    --t-ripple: 0ms;
+    --t-news-day: 0ms;
+    --t-cut: 0ms;
+    --t-spin: 0ms;
+    --t-tumble: 0ms;
+    --t-march: 0ms;
+    --t-comms-in: 0ms;
+    --t-comms: 0ms;
+    --t-comms-tick: 0ms;
+    --t-comms-word: 0ms;
+    --t-comms-caret: 0ms;
+    --t-comms-tower: 0ms;
+    --t-comms-sweep: 0ms;
+    --t-comms-ping-b: 0ms;
+    --t-comms-ping-c: 0ms;
+    --comms-theme-in: 0ms;
+    --comms-theme-out: 0ms;
+  }
+}
+
 body {
   margin: 0;
   background: var(--bg-0);
@@ -410,4 +458,37 @@ body {
   --print-chart-route-juru: #1f6fb2;
   --print-chart-route-core-route: #6b21a8;
   --print-chart-fill: 0.55;          /* polity and region fills on paper: this share of their screen alpha */
+
+  /* The system map on paper (CP2, Lane C): ink on --print-paper, read by orbit/theme.ts
+     printOrbitTheme(). Checked against the paper in tests/web/contrast.test.js. Names and the
+     caption use the text pair; discs, orbits, the zone and the jump circle are marks. */
+  --print-orbit-text: #16181c;       /* body names, the star's name, the legend */
+  --print-orbit-text-muted: #5b6168; /* the caption, a companion's separation */
+  --print-orbit-star: #7a2e0e;       /* the star's disc */
+  --print-orbit-path: #3a4150;       /* orbit lines */
+  --print-orbit-hz: #146c2e;         /* the habitable zone */
+  --print-orbit-jump: #164e78;       /* the 100D circle */
+  --print-orbit-world: #16181c;      /* a world's disc */
+  --print-orbit-moon: #3f4754;       /* a moon */
+  --print-orbit-belt: #4b5563;       /* a belt */
+  --print-orbit-gas-large: #1e3a5f;  /* a large gas giant */
+  --print-orbit-gas-medium: #24506e; /* a medium gas giant */
+  --print-orbit-gas-small: #1a4a52;  /* a small gas giant */
+  --print-orbit-ring: #4b5563;       /* a world's rings */
+  --print-orbit-night: #1c2128;      /* the night half of a flat disc */
+  --print-orbit-rock: #4b5563;       /* belt rocks in a line-up */
+  --print-orbit-signal: #0a4c56;     /* the selection lock */
+
+  /* The surface map on paper (CS11, Lane C): ink on --print-paper, read by surface/print_theme.ts.
+     Checked against the paper in tests/web/contrast.test.js. Names and the caption use the text
+     pair; the terrain, the coast and the light hex grid are marks. */
+  --print-surface-text: #16181c;     /* the world name, the key */
+  --print-surface-muted: #5b6168;    /* the caption */
+  --print-surface-sea: #1e3a5f;      /* deep water */
+  --print-surface-shallow: #24506e;  /* shallows */
+  --print-surface-ice: #5b6168;      /* ice and frost */
+  --print-surface-land: #4b5563;     /* dry ground */
+  --print-surface-high: #3a4150;     /* mountains */
+  --print-surface-grid: #8a8f98;     /* the hex grid, light on purpose */
+  --print-surface-coast: #16181c;    /* the coastline */
 }

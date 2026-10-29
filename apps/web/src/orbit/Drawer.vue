@@ -70,13 +70,13 @@ function onKey(event: KeyboardEvent): void {
   box-shadow: var(--shadow-chrome);
   backdrop-filter: blur(8px);
   clip-path: inset(0 0 100% 0);
-  transition: clip-path var(--t-fast) var(--ease-out), visibility 0s linear var(--t-fast);
+  transition: clip-path var(--t-fast) var(--ease-out), visibility var(--t-cut) linear var(--t-fast);
 }
 
 .orbit-drawer.is-open {
   visibility: visible;
   clip-path: inset(0);
-  transition: clip-path var(--t-base) var(--ease-out), visibility 0s;
+  transition: clip-path var(--t-base) var(--ease-out), visibility var(--t-cut);
 }
 
 .orbit-drawer-body {
@@ -139,7 +139,7 @@ function onKey(event: KeyboardEvent): void {
   .orbit-drawer-group,
   .orbit-drawer.is-open .orbit-drawer-group {
     transition: none;
-    transition-delay: 0s;
+    transition-delay: var(--t-cut);
   }
 
   .orbit-drawer-group {

@@ -53,6 +53,8 @@ import ExampleBar from './ExampleBar.vue';
 import { example } from './example_campaign.ts';
 import CampaignMenu from './proposals/CampaignMenu.vue';
 import ProposalsSection from './proposals/ProposalsSection.vue';
+import SessionBoard from './session/SessionBoard.vue';
+import { liveFor } from './session/live.ts';
 import './campaign_touch.css';
 
 const props = defineProps<{
@@ -94,6 +96,10 @@ const proposalsPane = computed(() => {
     return pane.kind === 'proposals' && props.tab === 'records' && !props.recordId && !props.entryId ? pane : null;
 });
 const onProposals = computed(() => proposalsPane.value !== null);
+/** The session board (DU1): panel=session. */
+const onSession = computed(() => addressPane(route.path, route.query).pane.kind === 'session' && props.tab === 'records' && !props.recordId && !props.entryId);
+/** A session is live in this campaign on this device: the head's button carries the mark. */
+const sessionLive = computed(() => liveFor(campaign.universeId) !== null);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -212,6 +218,7 @@ const crumb = computed(() => {
         return campaignCrumb({ level: 'web', beside: false, middle: 'Relationships', pageName: 'Relationships' });
     }
     if (onProposals.value) return [{ label: 'Campaign', go: 'campaign' as const }, { label: 'Proposals', go: null }];
+    if (onSession.value) return [{ label: 'Campaign', go: 'campaign' as const }, { label: 'Session', go: null }];
     if (props.entryId) {
         const name = entryName(props.entryId);
         const many = journalFilter.value === 'all' ? 'Journal' : filterWord(journalFilter.value);
@@ -323,6 +330,17 @@ function openProposals(): void {
     pushPane({ kind: 'proposals', batch: null });
 }
 
+/** The session board takes the panel's width: it opens at Full, the choice not kept (as a pick steps down to a column). */
+function openSession(): void {
+    pushPane({ kind: 'session' });
+}
+
+watch(onSession, (on) => {
+    if (!on || span.value === 'full') return;
+    span.value = 'full';
+    void nextTick(publish);
+}, { immediate: true });
+
 function goEntry(id: string | null): void {
     pushPane({ kind: 'journal', entry: id });
 }
@@ -341,7 +359,7 @@ function create(type: CampaignRecordType): void {
 
 /** The list is on screen: not the party, the journal, the timeline, the web, or a record page at column width. */
 const showFirstRun = computed(() => {
-    if (status.value !== 'ready' || isPlayer.value || props.tab !== 'records' || onTimeline.value || onWeb.value || onProposals.value || props.entryId) return false;
+    if (status.value !== 'ready' || isPlayer.value || props.tab !== 'records' || onTimeline.value || onWeb.value || onProposals.value || onSession.value || props.entryId) return false;
     if (props.recordId && span.value !== 'full') return false;
     const card = vesselHasPlace(campaign.records) && dateIsSet(campaign.clock);
     return !card;
@@ -380,7 +398,7 @@ function onKey(event: KeyboardEvent): void {
             go(null);
             return;
         }
-        if (onTimeline.value || onWeb.value || onProposals.value) {
+        if (onTimeline.value || onWeb.value || onProposals.value || onSession.value) {
             event.preventDefault();
             event.stopPropagation();
             pushPane({ kind: 'campaign', record: null });
@@ -540,7 +558,7 @@ defineExpose({ remeasure: publish });
         <CampaignCrumb :parts="crumb" @go="onCrumb" />
       </template>
       <template v-else-if="eyebrow" #eyebrow>{{ eyebrow }}</template>
-      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : onWeb ? 'web' : onProposals ? 'proposals' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
+      <div class="camp" :data-span="span" :data-status="status" :data-view="entryId ? 'entry' : recordId ? 'record' : onTimeline ? 'timeline' : onWeb ? 'web' : onProposals ? 'proposals' : onSession ? 'session' : tab === 'party' ? 'party' : tab === 'journal' ? 'journal' : 'list'">
         <SignInCard v-if="!signedIn && !example.on" />
         <template v-else>
           <ExampleBar v-if="example.on && status === 'ready'" />
@@ -559,6 +577,7 @@ defineExpose({ remeasure: publish });
           </div>
             <button type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
             <button type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
+            <button v-if="isReferee" type="button" class="camp-timeline camp-session" :class="{ 'is-live': sessionLive }" :aria-pressed="onSession ? 'true' : 'false'" data-open-session @click="openSession"><i v-if="sessionLive" class="camp-live" aria-hidden="true"></i>Session</button>
             <CampaignMenu v-if="isReferee" @proposals="openProposals" />
           </div>
           <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="ro" />
@@ -586,6 +605,7 @@ defineExpose({ remeasure: publish });
           />
           <RelationshipWeb v-else-if="onWeb" @open="go" @map="showMap" />
           <ProposalsSection v-else-if="onProposals && isReferee" :batch-id="proposalsPane ? proposalsPane.batch : null" :read-only="!online" @open="go" />
+          <SessionBoard v-else-if="onSession && isReferee" :read-only="!online" @map="showMap" @journal="goEntry" @open="go" />
           <PlayerParty v-else-if="tab === 'party' && !recordId && isPlayer" @open="go" @map="showMap" />
           <PartyPanel v-else-if="tab === 'party' && !recordId" :read-only="!online" @map="showMap" />
           <div v-else-if="span === 'full' && tab === 'journal'" class="camp-split">
@@ -675,6 +695,23 @@ defineExpose({ remeasure: publish });
 
 .camp-timeline[aria-pressed="true"] {
   border-bottom-color: var(--signal);
+}
+
+/* The Session button carries the live mark while a session runs on this device (DU1). */
+.camp-session {
+  gap: 7px;
+}
+
+.camp-session.is-live {
+  color: var(--signal);
+}
+
+.camp-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
 }
 
 .camp-tab {

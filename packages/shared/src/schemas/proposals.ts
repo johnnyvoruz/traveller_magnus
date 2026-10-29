@@ -90,10 +90,10 @@ export const EntryDraft = z.object({
     anchor: CampaignAnchor,
 }).strict().superRefine((entry, ctx) => {
     if (entry.kind === 'session' && entry.sequence == null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a session has a sequence', path: ['sequence'] });
+        ctx.addIssue({ code: 'custom', message: 'a session has a sequence', path: ['sequence'] });
     }
     if (entry.kind !== 'session' && entry.sequence != null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'only a session has a sequence', path: ['sequence'] });
+        ctx.addIssue({ code: 'custom', message: 'only a session has a sequence', path: ['sequence'] });
     }
 });
 
@@ -120,7 +120,7 @@ export const Proposal = z.discriminatedUnion('op', [
     // An update names something to change. Kept here, not on the option: a discriminated
     // union takes plain objects only.
     if (p.op === 'record.update' && p.set === undefined && p.append === undefined) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'nothing to change', path: ['set'] });
+        ctx.addIssue({ code: 'custom', message: 'nothing to change', path: ['set'] });
     }
 });
 export type Proposal = z.infer<typeof Proposal>;
@@ -144,21 +144,21 @@ export const ProposalBatchSubmit = z.object({
     const created = new Set<string>();
     batch.proposals.forEach((p, i) => {
         if (p.ref !== undefined) {
-            if (seen.has(p.ref)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ref used twice', path: ['proposals', i, 'ref'] });
+            if (seen.has(p.ref)) ctx.addIssue({ code: 'custom', message: 'ref used twice', path: ['proposals', i, 'ref'] });
             seen.add(p.ref);
         }
         if (p.op === 'link.create') {
             for (const end of ['from', 'to'] as const) {
                 const t = p.link[end];
                 if ('ref' in t && !created.has(t.ref)) {
-                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'ref names no earlier record.create', path: ['proposals', i, 'link', end] });
+                    ctx.addIssue({ code: 'custom', message: 'ref names no earlier record.create', path: ['proposals', i, 'link', end] });
                 }
             }
         }
         if (p.op === 'record.create') created.add(p.ref);
     });
     if (new TextEncoder().encode(JSON.stringify(batch)).length > PROPOSAL_LIMITS.batchBytes) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too_large', path: [] });
+        ctx.addIssue({ code: 'custom', message: 'too_large', path: [] });
     }
 });
 export type ProposalBatchSubmit = z.infer<typeof ProposalBatchSubmit>;

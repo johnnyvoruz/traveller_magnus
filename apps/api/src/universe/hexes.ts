@@ -971,6 +971,20 @@ export async function respondBuilder(sql: Sql, request: Request, now: string): P
             const { respondSectors } = await import('./sectors.ts');
             return respondSectors(sql, request, now, pin);
         }
+        const surface = /^\/hexes\/([^/]+)\/(\d{4})\/surface\/([^/]+)$/.exec(path);
+        if (surface && (request.method === 'GET' || request.method === 'PUT')) {
+            const { readSurface, writeSurface } = await import('./surfaces.ts');
+            let hexKey: string;
+            let bodyKey: string;
+            try {
+                hexKey = `${decodeURIComponent(surface[1])}/${surface[2]}`;
+                bodyKey = decodeURIComponent(surface[3]);
+            } catch {
+                throw new HexRefusal('validation', 'That request could not be read. Try again.');
+            }
+            if (request.method === 'GET') return json(readSurface(sql, hexKey, bodyKey));
+            return json(writeSurface(sql, hexKey, bodyKey, await bodyOf(request), now));
+        }
         if (!pin && (path.startsWith('/hex') || path.startsWith('/job'))) {
             throw new HexRefusal('validation', 'Open this campaign again, then try again.');
         }

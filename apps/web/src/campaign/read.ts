@@ -1,8 +1,9 @@
 /** Sent on campaign reads and campaign saves. The server then returns stored `public`. */
 export const JOURNAL_PUBLIC_HEADERS = { 'X-Voyage-Journal': 'public' } as const;
 
-/** The bits of a schema this reader walks. Structural so a Zod 3 schema type-checks in the web app. */
+/** The bits of a schema this reader walks. Structural, so this file does not import zod. */
 type LooseSchema = {
+    type?: string;
     parse: (data: unknown) => unknown;
     safeParse: (data: unknown) => { success: boolean };
     unwrap: () => LooseSchema;
@@ -11,14 +12,27 @@ type LooseSchema = {
     options: LooseSchema[];
     optionsMap: Map<unknown, LooseSchema>;
     discriminator: string;
-    _def: {
-        typeName?: string;
-        effect?: { type?: string; transform?: (value: unknown, ctx: { addIssue: () => void; path: unknown[] }) => unknown };
-        schema?: LooseSchema;
-        innerType?: LooseSchema;
-        valueType?: LooseSchema;
-        unknownKeys?: string;
-    };
+    def?: LooseDef;
+    _def: LooseDef;
+};
+
+type LooseDef = {
+    type?: string;
+    typeName?: string;
+    effect?: { type?: string; transform?: (value: unknown, ctx: { addIssue: () => void; path: unknown[] }) => unknown };
+    schema?: LooseSchema;
+    innerType?: LooseSchema;
+    valueType?: LooseSchema;
+    unknownKeys?: string;
+    catchall?: { type?: string };
+    in?: LooseSchema;
+    out?: LooseSchema;
+    options?: LooseSchema[];
+    discriminator?: string;
+    transform?: (value: unknown) => unknown;
+    element?: LooseSchema;
+    values?: unknown[];
+    value?: unknown;
 };
 
 /**
@@ -30,13 +44,30 @@ export function parseRead<T>(schema: { parse(data: unknown): T }, value: unknown
 }
 
 function kind(schema: LooseSchema): string {
-    return schema._def?.typeName ?? '';
+    if (schema.type) return schema.type;
+    const name = schema._def?.typeName ?? '';
+    if (name === 'ZodObject') return 'object';
+    if (name === 'ZodOptional') return 'optional';
+    if (name === 'ZodNullable') return 'nullable';
+    if (name === 'ZodDefault') return 'default';
+    if (name === 'ZodArray') return 'array';
+    if (name === 'ZodRecord') return 'record';
+    if (name === 'ZodUnion') return 'union';
+    if (name === 'ZodDiscriminatedUnion') return 'union';
+    if (name === 'ZodEffects') return 'effects';
+    if (name === 'ZodPipe') return 'pipe';
+    return name;
+}
+
+function defOf(schema: LooseSchema): LooseDef {
+    return schema.def ?? schema._def ?? {};
 }
 
 function dropUnknown(schema: LooseSchema, value: unknown): unknown {
     const name = kind(schema);
-    if (name === 'ZodEffects') {
-        const effect = schema._def.effect as { type?: string; transform?: (value: unknown, ctx: { addIssue: () => void; path: unknown[] }) => unknown };
+    const def = defOf(schema);
+    if (name === 'effects') {
+        const effect = def.effect;
         if (effect?.type === 'preprocess' && effect.transform) {
             let processed = value;
             try {
@@ -44,34 +75,55 @@ function dropUnknown(schema: LooseSchema, value: unknown): unknown {
             } catch {
                 processed = value;
             }
-            return dropUnknown(schema._def.schema as LooseSchema, processed);
+            return dropUnknown(def.schema as LooseSchema, processed);
         }
-        return dropUnknown(schema._def.schema as LooseSchema, value);
+        return dropUnknown(def.schema as LooseSchema, value);
     }
-    if (name === 'ZodOptional' || name === 'ZodNullable') {
+    if (name === 'pipe') {
+        const incoming = def.in;
+        const outgoing = def.out;
+        if (incoming && kind(incoming) === 'transform') {
+            let processed = value;
+            try {
+                const transform = defOf(incoming).transform;
+                if (transform) processed = transform(value);
+            } catch {
+                processed = value;
+            }
+            return outgoing ? dropUnknown(outgoing, processed) : value;
+        }
+        return incoming ? dropUnknown(incoming, value) : value;
+    }
+    if (name === 'optional' || name === 'nullable') {
         if (value === undefined || value === null) return value;
-        return dropUnknown(schema.unwrap(), value);
+        const inner = typeof schema.unwrap === 'function' ? schema.unwrap() : def.innerType;
+        return inner ? dropUnknown(inner, value) : value;
     }
-    if (name === 'ZodDefault') {
+    if (name === 'default') {
         if (value === undefined) return value;
-        return dropUnknown(schema._def.innerType as LooseSchema, value);
+        const inner = def.innerType;
+        return inner ? dropUnknown(inner, value) : value;
     }
-    if (name === 'ZodArray') {
+    if (name === 'array') {
         if (!Array.isArray(value)) return value;
-        return value.map((item) => dropUnknown(schema.element, item));
+        const element = schema.element ?? def.element;
+        if (!element) return value;
+        return value.map((item) => dropUnknown(element, item));
     }
-    if (name === 'ZodRecord') {
+    if (name === 'record') {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
         const source = value as Record<string, unknown>;
+        const valueType = def.valueType;
         const out: Record<string, unknown> = {};
-        for (const key of Object.keys(source)) out[key] = dropUnknown(schema._def.valueType as LooseSchema, source[key]);
+        for (const key of Object.keys(source)) out[key] = valueType ? dropUnknown(valueType, source[key]) : source[key];
         return out;
     }
-    if (name === 'ZodObject') {
+    if (name === 'object') {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
         const source = value as Record<string, unknown>;
         const shape = schema.shape;
-        if (schema._def.unknownKeys === 'passthrough') {
+        const keep = def.unknownKeys === 'passthrough' || def.catchall?.type === 'unknown';
+        if (keep) {
             const out: Record<string, unknown> = { ...source };
             for (const key of Object.keys(shape)) {
                 if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = dropUnknown(shape[key]!, source[key]);
@@ -84,21 +136,35 @@ function dropUnknown(schema: LooseSchema, value: unknown): unknown {
         }
         return out;
     }
-    if (name === 'ZodDiscriminatedUnion') {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-        const key = (value as Record<string, unknown>)[schema.discriminator];
-        const option = schema.optionsMap.get(key as never);
-        if (!option) return value;
-        return dropUnknown(option, value);
-    }
-    if (name === 'ZodUnion') {
-        for (const option of schema.options) {
+    if (name === 'union') {
+        const disc = schema.discriminator || def.discriminator;
+        if (disc) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+            const key = (value as Record<string, unknown>)[disc];
+            const mapped = schema.optionsMap?.get(key as never);
+            const option = mapped ?? unionOption(schema, disc, key);
+            if (!option) return value;
+            return dropUnknown(option, value);
+        }
+        const options = schema.options ?? def.options ?? [];
+        for (const option of options) {
             const dropped = dropUnknown(option, value);
             if (option.safeParse(dropped).success) return dropped;
         }
         return value;
     }
     return value;
+}
+
+function unionOption(schema: LooseSchema, disc: string, key: unknown): LooseSchema | undefined {
+    const options = schema.options ?? defOf(schema).options ?? [];
+    for (const option of options) {
+        const field = option.shape?.[disc];
+        const values = field ? defOf(field).values : undefined;
+        if (Array.isArray(values) && values.includes(key)) return option;
+        if (field && defOf(field).value === key) return option;
+    }
+    return undefined;
 }
 
 /**

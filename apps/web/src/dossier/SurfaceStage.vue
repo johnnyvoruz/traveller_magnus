@@ -41,7 +41,7 @@ import type { HybridModel } from '../surface/hybrid/model.ts';
 import { createDayNightLayer, type DayNightLayer, type LayerCtx, type LayerHost } from '../surface/hybrid/daynight_layer.ts';
 import { frameDue } from '../surface/hybrid/motion.ts';
 import { mapSun, netClipPath, netOutline } from '../surface/hybrid/stage.ts';
-import { CODE_TABLE, type SurfaceCode } from '../surface/hybrid/codes.ts';
+import { CODE_TABLE, terrainRgb, type SurfaceCode } from '../surface/hybrid/codes.ts';
 import { drawMarks, drawSymbols, symbolOf } from '../surface/hybrid/symbols.ts';
 import { FIT_VIEW, hexCssPx, hexGridCss, maxZoom, panBy, zoomAbout, ZOOM_KEY, ZOOM_NOTCH_PX, ZOOM_WHEEL, type MapView } from '../surface/hybrid/view.ts';
 import { clockDays, clockJumps, offerStart, simClock, subscribeSimClock } from '../orbit/sim_clock.ts';
@@ -50,6 +50,20 @@ import { wrapFocus } from '../workspace/focus_trap.ts';
 import SurfaceKey from './SurfaceKey.vue';
 import SurfaceTimeBar from './SurfaceTimeBar.vue';
 import { lightingOf } from './world_panel.ts';
+import SaveImageButton from '../capture/SaveImageButton.vue';
+import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
+import { captionText, captureName, type CaptureArea } from '../capture/paper.ts';
+import { captureSurface, projectionAspect, TOO_LARGE, type SurfaceShot } from '../surface/capture.ts';
+import { printSurfaceInk, screenGround, screenText, surfaceFont } from '../surface/print_theme.ts';
+import { rememberedVersion } from '../map/chart_version.ts';
+import { campaign } from '../campaign/store.ts';
+import { stardate } from '../workspace/stardate.ts';
+import { showToast } from '../shell/toast.ts';
+import AskModal from '../shell/AskModal.vue';
+import PaintRail from '../surface/PaintRail.vue';
+import { saveSurfaceEdits, surfaceEdits } from '../surface/edits.ts';
+import { STALE_WORDS, clearAll, editsStatus, editsText, emptyEdits, paintHex, paintedCount, paintedWords, runBetween, seaLine, tidyEdits, type Swatch } from '../surface/paint_edits.ts';
+import type { HexEdits } from '../surface/hybrid/serialize.ts';
 
 export type SurfaceTarget = {
     /** The full released hex key, `Spinward_Marches/1910`. */
@@ -68,6 +82,8 @@ const props = defineProps<{
     nowDays?: number;
     /** Where the shared clock starts when nothing has set it yet: the view's date. */
     startDays?: number;
+    /** Build is on for this universe and this is the map's panel: the large map offers Paint (DW2). */
+    paintable?: boolean;
 }>();
 
 /** waiting: the worker is painting. ready: painted, the beam finishing its pass. revealing: fading in. full: shown. */
@@ -159,6 +175,39 @@ const worldName = computed(() => {
     const name = props.target ? props.target.body.name : '';
     return typeof name === 'string' && name.trim() ? name.trim() : 'this world';
 });
+
+// ---- Paint (DW2): the referee's painted hexes ---------------------------------------------------
+
+/** What the store holds for this body, read once per body (surface/edits.ts). */
+const saved = computed(() => (props.target ? surfaceEdits(props.target.hexKey, props.target.dossierKey) : null));
+const savedEdits = computed(() => (saved.value ? saved.value.edits : null));
+/** The referee's working copy while Paint is on; null when nothing has been painted this time. */
+const draft = shallowRef<HexEdits | null>(null);
+const painting = ref(false);
+const swatch = ref<Swatch>({ kind: 'terrain', code: 'OC' });
+const paintBusy = ref(false);
+/** Asked before painted hexes are lost (Paint off, the map closed): what to do once answered. */
+const paintAsk = ref<null | { go: () => void }>(null);
+/** The edits the map shows: the draft while painting, else what is kept. */
+const shownEdits = computed(() => draft.value ?? savedEdits.value);
+const paintDirty = computed(() => draft.value !== null && editsText(draft.value) !== editsText(savedEdits.value));
+const paintCount = computed(() => paintedCount(shownEdits.value));
+const paintSea = computed(() => (model.value ? seaLine(model.value) : ''));
+const paintNote = computed(() => {
+    const store = saved.value;
+    if (store && store.error) return store.error;
+    const m = model.value;
+    return m && m.edits && editsStatus(m.edits, m.world) === 'stale' ? STALE_WORDS : '';
+});
+/** Paint is offered: Build on, the map's panel, the large enhanced map. */
+const canPaint = computed(() => props.paintable === true && large.value && hybrid.value);
+const askText = computed(() => paintedWords(paintCount.value) + ' on the map, not kept yet. To keep them, go back and select Keep.');
+/** The edits the sheet on screen was painted with: painted hexes are filled over it until it catches up. */
+let sheetEditsText = '';
+/** The last hex painted, for a Shift run. */
+let lastPainted: number | null = null;
+let stroke: { pointerId: number; last: number } | null = null;
+const rings = new Map<string, [number, number][]>();
 
 let token = 0;
 let requestId: string | null = null;
@@ -370,6 +419,27 @@ function drawLayers(): void {
     const fontPx = 12 * oneCss;
     const gap = 16 * oneCss;
     drawMarks(ctx, m, layout, { graticule: false, ring: false, scale: false, font: fontPx + 'px sans-serif', labelGap: gap });
+    if (painting.value && m.edits) {
+        // Painted hexes: outlined while Paint is on; filled with their colour until the sheet behind has caught up.
+        const behind = editsText(m.edits) !== sheetEditsText;
+        ctx.lineWidth = Math.max(1.5, hexGridCss(hexCss) * 1.5) * oneCss;
+        ctx.strokeStyle = iconPaint('--surface-pick');
+        ctx.lineJoin = 'miter';
+        for (const hex of m.hexes) {
+            if (!hex.edited) continue;
+            const ring = ringOf(hex.id);
+            if (ring.length < 3) continue;
+            ctx.beginPath();
+            ring.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+            ctx.closePath();
+            if (behind) {
+                const rgb = terrainRgb(hex.terrain);
+                ctx.fillStyle = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.85)';
+                ctx.fill();
+            }
+            ctx.stroke();
+        }
+    }
     if (dayNight.value) {
         const sub = props.sun ? props.sun(nowDays.value) : null;
         const pose = mapSun(m, sub, simClock.playing, simClock.rate);
@@ -660,6 +730,15 @@ function start(): void {
     const width = activeLayout.value.width;
     if (same(target, shown) && shownMode === mode.value && shownWidth === width && requestId !== null) return;
     drop();
+    if (!same(target, shown)) {
+        // Another body: an unkept draft does not follow it.
+        if (paintDirty.value) showToast('Discarded your unkept paint on ' + nameOf(shown) + '.');
+        draft.value = null;
+        painting.value = false;
+        stroke = null;
+        lastPainted = null;
+        rings.clear();
+    }
     shown = target;
     shownMode = mode.value;
     shownWidth = width;
@@ -677,7 +756,7 @@ function start(): void {
     const options = { continentalDefinition: CONTINENTAL_DEFINITION, coastlineComplexity: COASTLINE_COMPLEXITY, flags: enhancedFlags() };
     if (mode.value === 'enhanced') {
         const world = hybridInputsFor({ hexKey: target.hexKey, dossierKey: target.dossierKey, body: target.body, options });
-        model.value = world ? hybridModel(world) : null;
+        model.value = world ? hybridModel(world, shownEdits.value) : null;
     } else {
         model.value = null;
     }
@@ -689,6 +768,7 @@ function start(): void {
         if (mode.value === 'enhanced') drawBlankNet(blankEl.value);
         else renderDiamondBlank(blankEl.value, worldMapData(target.body));
     }
+    const requested = editsText(shownEdits.value);
     const ticket = requestMap({
         mode: mode.value,
         hexKey: target.hexKey,
@@ -696,11 +776,13 @@ function start(): void {
         body: target.body,
         resolution: { width: activeLayout.value.width, height: activeLayout.value.height },
         options,
+        edits: shownEdits.value,
     });
     requestId = ticket.requestId;
     if (ticket.status === 'sheet' && ticket.pixels) {
         // Seen before: straight from the cache, no scan.
         if (paint(ticket.pixels, target.body)) {
+            sheetEditsText = requested;
             state.value = 'full';
             lastArrival = lastArrival === 'arrive-a' ? 'arrive-b' : 'arrive-a';
             arrival.value = lastArrival;
@@ -717,6 +799,7 @@ function start(): void {
         // A late answer for a body the visitor has left is dropped here as well as in the service.
         if (mine !== token || !sheet) return;
         if (!paint(sheet.pixels, target.body)) return;
+        sheetEditsText = requested;
         timing.value = {
             sheet: sheet.sheetMs.toFixed(1),
             worker: sheet.workerStartMs === null ? '' : sheet.workerStartMs.toFixed(1),
@@ -728,6 +811,176 @@ function start(): void {
         if (state.value === 'full') sharp?.note('step');
         scheduleIconWarm();
     });
+}
+
+function nameOf(target: SurfaceTarget | null): string {
+    const name = target ? target.body.name : '';
+    return typeof name === 'string' && name.trim() ? name.trim() : 'this world';
+}
+
+/** The edits changed: the model (symbols, outlines, the sharp windows) follows at once. */
+function syncModel(): void {
+    const target = props.target;
+    if (!target || mode.value !== 'enhanced' || !mappable.value) return;
+    const options = { continentalDefinition: CONTINENTAL_DEFINITION, coastlineComplexity: COASTLINE_COMPLEXITY, flags: enhancedFlags() };
+    const world = hybridInputsFor({ hexKey: target.hexKey, dossierKey: target.dossierKey, body: target.body, options });
+    const next = world ? hybridModel(world, shownEdits.value) : null;
+    if (next === model.value) return;
+    model.value = next;
+    drawLayers();
+    sharp?.note('step');
+}
+
+/** The sheet painted again with the edits shown, behind the map: no scan, the old pixels stay until the new land. */
+function repaintSheet(): void {
+    const target = props.target;
+    if (!target || mode.value !== 'enhanced' || !mappable.value || !model.value) return;
+    const requested = editsText(shownEdits.value);
+    if (requested === sheetEditsText && requestId !== null) return;
+    const options = { continentalDefinition: CONTINENTAL_DEFINITION, coastlineComplexity: COASTLINE_COMPLEXITY, flags: enhancedFlags() };
+    const mine = token;
+    const ticket = requestMap({
+        mode: mode.value,
+        hexKey: target.hexKey,
+        dossierKey: target.dossierKey,
+        body: target.body,
+        resolution: { width: activeLayout.value.width, height: activeLayout.value.height },
+        options,
+        edits: shownEdits.value,
+    });
+    requestId = ticket.requestId;
+    const landed = (pixels: Uint8ClampedArray): void => {
+        if (!paint(pixels, target.body)) return;
+        sheetEditsText = requested;
+        if (state.value !== 'full') state.value = prefersReducedMotion() ? 'full' : 'ready';
+        drawLayers();
+        sharp?.note('step');
+    };
+    if (ticket.status === 'sheet' && ticket.pixels) {
+        landed(ticket.pixels);
+        return;
+    }
+    void ticket.done.then((sheet) => {
+        if (mine !== token || !sheet) return;
+        landed(sheet.pixels);
+    });
+}
+
+watch(shownEdits, () => {
+    syncModel();
+    if (!stroke) repaintSheet();
+});
+
+/** The outline of a hex on the sheet, made once per hex and sheet size. */
+function ringOf(id: number): [number, number][] {
+    const m = model.value;
+    if (!m) return [];
+    const layout = activeLayout.value;
+    const key = layout.side + ':' + id;
+    let ring = rings.get(key);
+    if (!ring) {
+        ring = hybridOutline(m.grid, layout, id);
+        rings.set(key, ring);
+    }
+    return ring;
+}
+
+/** One swatch on the hexes from `from` to `to` (a Shift run), or on `to` alone. */
+function paintRun(from: number | null, to: number): void {
+    const m = model.value;
+    if (!m) return;
+    const ids = from === null || from === to ? [to] : runBetween(m.grid, from, to);
+    let next = draft.value ?? savedEdits.value ?? emptyEdits(m.world);
+    for (const id of ids) {
+        const hex = m.generated[id];
+        if (hex) next = paintHex(next, hex, swatch.value, hex);
+    }
+    if (next !== draft.value) draft.value = next;
+    lastPainted = to;
+}
+
+function endStroke(pointerId: number): void {
+    const stage = stageEl.value;
+    if (stage?.hasPointerCapture(pointerId)) stage.releasePointerCapture(pointerId);
+    stroke = null;
+    repaintSheet();
+}
+
+function togglePaint(): void {
+    if (!canPaint.value) return;
+    if (!painting.value) {
+        painting.value = true;
+        drawLayers();
+        return;
+    }
+    askLeave(() => {
+        painting.value = false;
+        stroke = null;
+        drawLayers();
+    });
+}
+
+/** Goes on when nothing would be lost; otherwise asks first, and goes on only if the referee discards. */
+function askLeave(go: () => void): void {
+    if (!paintDirty.value) {
+        if (draft.value !== null && !paintDirty.value) draft.value = null;
+        go();
+        return;
+    }
+    paintAsk.value = { go };
+}
+
+function answerAsk(discard: boolean): void {
+    const ask = paintAsk.value;
+    paintAsk.value = null;
+    if (!ask || !discard) return;
+    discardPaint();
+    ask.go();
+}
+
+function discardPaint(): void {
+    const lost = paintDirty.value;
+    draft.value = null;
+    stroke = null;
+    if (lost) showToast('Discarded your changes to the painted map of ' + worldName.value + '.');
+}
+
+function clearMap(): void {
+    const before = shownEdits.value;
+    if (!before || before.edits.length === 0) return;
+    const n = before.edits.length;
+    draft.value = clearAll(before);
+    showToast('Cleared ' + n + (n === 1 ? ' painted hex.' : ' painted hexes.') + ' Select Keep to keep the map this way.', {
+        action: { label: 'Undo', run: () => { draft.value = before; } },
+    });
+}
+
+async function keepPaint(): Promise<boolean> {
+    const target = props.target;
+    const next = draft.value;
+    const before = savedEdits.value;
+    if (!target || !next || paintBusy.value) return false;
+    const name = worldName.value;
+    const { hexKey, dossierKey } = target;
+    paintBusy.value = true;
+    try {
+        const tidy = tidyEdits(next);
+        await saveSurfaceEdits(hexKey, dossierKey, tidy);
+        draft.value = null;
+        const again = (): void => {
+            void saveSurfaceEdits(hexKey, dossierKey, before).then(
+                () => { showToast('Put back the map of ' + name + ' as it was kept before.'); },
+                (err: unknown) => { showToast(err instanceof Error && err.message ? err.message : 'Undo failed. Try again.'); },
+            );
+        };
+        showToast('Kept the painted map of ' + name + '.', { action: { label: 'Undo', run: again } });
+        return true;
+    } catch (err) {
+        showToast(err instanceof Error && err.message ? err.message : 'The map wasn’t kept. Try again.');
+        return false;
+    } finally {
+        paintBusy.value = false;
+    }
 }
 
 /** One pass of the beam has ended: reveal a sheet that is ready, or turn round and sweep again. */
@@ -830,6 +1083,17 @@ function stepCursor(dLat: number, dLon: number): void {
 
 function onStageKey(event: KeyboardEvent): void {
     if (!large.value || event.target !== stageEl.value) return;
+    if (canPaint.value && (event.key === 'p' || event.key === 'P') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        togglePaint();
+        return;
+    }
+    if (painting.value && (event.key === 'Enter' || event.key === ' ') && cursorId.value !== null) {
+        event.preventDefault();
+        paintRun(event.shiftKey ? lastPainted : null, cursorId.value);
+        repaintSheet();
+        return;
+    }
     const box = stageBox();
     const pan = !event.shiftKey && mapView.value.zoom > 1;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -878,6 +1142,16 @@ function onStageDown(event: PointerEvent): void {
     const target = event.target;
     if (target instanceof Element && target.closest('button')) return;
     const point = localPoint(event);
+    if (painting.value && canPaint.value && pointers.size === 0) {
+        const hit = hitAt(point.x, point.y);
+        if (hit && hit.id != null) {
+            stroke = { pointerId: event.pointerId, last: hit.id };
+            stageEl.value?.setPointerCapture(event.pointerId);
+            paintRun(event.shiftKey ? lastPainted : null, hit.id);
+            press = null;
+            return;
+        }
+    }
     press = { x: point.x, y: point.y, pointerId: event.pointerId };
     if (!large.value) return;
     pointers.set(event.pointerId, point);
@@ -895,6 +1169,19 @@ function onStageDown(event: PointerEvent): void {
 
 function onStageMove(event: PointerEvent): void {
     const point = localPoint(event);
+    if (stroke && stroke.pointerId === event.pointerId) {
+        if (event.buttons === 0) {
+            endStroke(event.pointerId);
+            return;
+        }
+        const hit = hitAt(point.x, point.y);
+        if (hit && hit.id != null && hit.id !== stroke.last) {
+            paintRun(stroke.last, hit.id);
+            stroke.last = hit.id;
+        }
+        if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
+        return;
+    }
     if (!large.value) {
         if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
         return;
@@ -932,6 +1219,11 @@ function onStageMove(event: PointerEvent): void {
 
 function onStageUp(event: PointerEvent): void {
     const point = localPoint(event);
+    if (stroke && stroke.pointerId === event.pointerId) {
+        endStroke(event.pointerId);
+        if (event.pointerType !== 'touch') queuePointer(point.x, point.y);
+        return;
+    }
     const start = press && press.pointerId === event.pointerId ? press : null;
     if (start) press = null;
     const wasPinch = pointers.size >= 2;
@@ -976,6 +1268,13 @@ function openLarge(): void {
 
 function closeLarge(): void {
     if (!large.value) return;
+    askLeave(leaveLarge);
+}
+
+function leaveLarge(): void {
+    if (!large.value) return;
+    painting.value = false;
+    stroke = null;
     large.value = false;
     mapView.value = FIT_VIEW;
     sharp?.note('step');
@@ -1061,6 +1360,76 @@ onBeforeUnmount(() => {
     drop();
 });
 watch(highlight, () => drawLayers());
+
+const saveSheet = ref(false);
+const saving = ref(false);
+const saveAreas: SheetArea[] = [];
+
+function worldArea(): CaptureArea | null {
+    const target = props.target;
+    if (!target) return null;
+    const rawName = target.body.name;
+    const rawUwp = target.body.uwp;
+    const name = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : worldName.value;
+    const uwp = typeof rawUwp === 'string' && rawUwp.trim() ? rawUwp.trim() : undefined;
+    const slash = target.hexKey.lastIndexOf('/');
+    const sector = (slash >= 0 ? target.hexKey.slice(0, slash) : target.hexKey).replace(/_/g, ' ');
+    const hex = slash >= 0 ? target.hexKey.slice(slash + 1) : '';
+    return { kind: 'world', name, sector, hex, ...(uwp ? { uwp } : {}) };
+}
+
+function openSaveSheet(): void {
+    if (state.value !== 'full' || !props.target) return;
+    saveAreas.splice(0, saveAreas.length, {
+        id: 'surface',
+        label: 'The whole surface',
+        orientation: projectionAspect(mode.value) > 1 ? 'landscape' : 'portrait',
+    });
+    saveSheet.value = true;
+}
+
+function closeSaveSheet(): void {
+    if (saving.value) return;
+    saveSheet.value = false;
+}
+
+/** One frame off screen at the paper's pixels. The sheet on screen is not resized. */
+async function saveImage(choice: SheetChoice): Promise<void> {
+    const target = props.target;
+    const el = figureEl.value;
+    const area = worldArea();
+    if (!target || !el || !area || choice.area !== 'surface') return;
+    const shot: SurfaceShot = {
+        mode: mode.value,
+        model: model.value,
+        iconSet: iconSet.value,
+        body: target.body,
+        hexKey: target.hexKey,
+        symbols: style.value === 'symbols',
+        worldName: worldName.value,
+    };
+    if (shot.mode === 'enhanced' && !shot.model) return;
+    saving.value = true;
+    try {
+        const date = campaign.status === 'ready' && campaign.clock ? stardate(campaign.clock.days).date : null;
+        const ok = await captureSurface({
+            shot,
+            paper: choice.paper,
+            look: choice.look,
+            ink: printSurfaceInk(el),
+            ground: screenGround(el),
+            screenText: screenText(el),
+            font: surfaceFont(el),
+            caption: captionText(area, date, rememberedVersion()),
+            fileName: captureName(area, choice.paper),
+            wait: () => new Promise((resolve) => { nextFrame(() => resolve()); }),
+        });
+        if (ok) saveSheet.value = false;
+        else showToast(TOO_LARGE);
+    } finally {
+        saving.value = false;
+    }
+}
 
 /**
  * The stage is rebuilt whenever the body shown stops being mappable and becomes mappable again (a gas
@@ -1164,6 +1533,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
         <span v-if="scaleText" class="doss-scale-bar" :style="{ width: hexBar + 'px' }" aria-hidden="true"></span>
         <span v-if="scaleText">{{ scaleText }}</span>
         <span v-if="picked" class="doss-pick">{{ picked }}</span>
+        <span v-if="painting && paintSea" class="doss-pick doss-paint-sea" data-paint-sea>{{ paintSea }}</span>
       </p>
       <div v-if="hybrid" class="doss-toggles" role="group" aria-label="Map layers">
         <button
@@ -1191,6 +1561,19 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
           <span class="doss-pip" aria-hidden="true"></span>
         </button>
       </div>
+      <button
+        v-if="canPaint"
+        type="button"
+        class="ui-btn doss-paint"
+        :class="{ 'is-primary': painting }"
+        data-paint-toggle
+        :aria-pressed="painting ? 'true' : 'false'"
+        :title="painting ? 'Paint is on. Select to stop painting (P)' : 'Paint the surface hex by hex (P)'"
+        @click="togglePaint"
+      >
+        <Icon name="table-cells" :size="13" />Paint<kbd class="doss-paint-key">P</kbd>
+      </button>
+      <SaveImageButton v-if="state === 'full'" title="Save an image of this surface" @click="openSaveSheet" />
       <button type="button" class="ui-btn is-icon" :title="infoLabel" :aria-label="infoLabel">
         <Icon name="circle-question" :size="13" />
       </button>
@@ -1214,6 +1597,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
       :averaged="averagedShown"
     />
   </figure>
+  <PaintRail v-if="canPaint && painting" :swatch="swatch" :count="paintCount" :dirty="paintDirty" :busy="paintBusy" :note="paintNote" @pick="swatch = $event" @clear="clearMap" @keep="keepPaint" @discard="discardPaint" />
   <SurfaceKey v-if="hybrid && large" :model="model" :icon-set="iconSet" :active="highlight" @highlight="highlight = $event" />
   </div>
   <button
@@ -1230,6 +1614,8 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
   </div>
   </div>
   </Teleport>
+  <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
+  <AskModal v-if="paintAsk" title="Discard the painted hexes?" :text="askText" confirm="Discard" cancel-label="Keep painting" danger @confirm="answerAsk(true)" @cancel="answerAsk(false)" />
   </div>
 </template>
 
@@ -1653,6 +2039,43 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
   flex: 1 1 auto;
   margin: 0;
   overflow: hidden;
+}
+
+/* Paint (DW2): Build's button look, with its key hint. */
+.doss-paint {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.doss-paint-key {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-1);
+  color: var(--text-muted);
+  font: 400 11px/1.3 var(--font-code);
+}
+
+.doss-paint.is-primary .doss-paint-key {
+  color: inherit;
+  border-color: currentColor;
+}
+
+.doss-paint-sea {
+  margin-left: var(--sp-2);
+}
+
+@media (max-width: 600px) {
+  .doss-paint-key {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .doss-toolbar .save-img-btn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .doss-light {

@@ -21,6 +21,8 @@ const props = defineProps<{
     restated?: Record<string, { value: string; notes: string[] }[]>;
     /** The body whose surface map leads the profile, or null. */
     surface?: SurfaceTarget | null;
+    /** Build is on for this universe and this is the map's panel: the large map offers Paint (DW2). */
+    paintable?: boolean;
     /** The day and night cycle (orbit/daynight.ts), or null when the document gives no solar day. */
     dayNight?: DayNightFigure | null;
     /** The starport's local time on that strip, or null when the world has no day. */
@@ -71,7 +73,7 @@ const folded = computed(() => props.model.sideSections.flatMap((block) => {
 <template>
   <div class="doss-body" :data-span="span">
     <div class="doss-main">
-      <SurfaceStage :target="surface ?? null" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
+      <SurfaceStage :target="surface ?? null" :paintable="paintable === true" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" :twilight="twilight" />
       <p v-if="season" class="doss-season">

@@ -42,4 +42,31 @@ export default defineConfig({
     fs: { allow: [repoRoot] },
     proxy,
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // CP3. The map route was shipping one file per shared module (most of them
+        // under 5 KB), and the first chart frame waited on that many requests.
+        // The static graph of the entry is one chunk. A lazy route keeps its own
+        // modules, and modules that only that route shares stay with it.
+        codeSplitting: {
+          groups: [
+            // One file for the whole static graph is over the 450 kB entry check, and
+            // a size cap splits that graph across a cycle and the chart never mounts.
+            // Vue, the map, and the engines each stay in their own file. A lazy
+            // route's modules are not in this set.
+            { name: 'vendor', test: /[\\/]node_modules[\\/]/, tags: ['$initial'], priority: 30 },
+            { name: 'chart', test: /[\\/](map|engines)[\\/]/, tags: ['$initial'], priority: 25 },
+            { name: 'index', tags: ['$initial'], priority: 20 },
+            {
+              name: 'route',
+              priority: 0,
+              entriesAware: true,
+              entriesAwareMergeThreshold: 20000,
+            },
+          ],
+        },
+      },
+    },
+  },
 })

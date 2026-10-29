@@ -4,6 +4,8 @@
  * js/system_inspector.js. Components render these values and do not decide them.
  */
 import type { SectorHex, TreeEnvelope } from '@voyage/shared';
+import { SUBSECTOR_LETTERS } from '@voyage/shared/sector_core';
+import { subsectorHexes } from '../builder/address.ts';
 import { formatKelvin, formatTempFull } from '../design/units.ts';
 import { formatDisplayNumber, formatTradeCodes, formatUwpDigit, toEHex } from './labels.ts';
 
@@ -1051,4 +1053,75 @@ export function bodyModel(tree: TreeEnvelope, bodyKey: string): BodyModel | null
         prev: at > 0 ? keys[at - 1] : null,
         next: at >= 0 && at < keys.length - 1 ? keys[at + 1] : null,
     };
+}
+
+/** One chart hex, as the address column needs it. The index may carry more. */
+export type AddressHex = { name?: string; uwp?: string; zone?: string };
+
+export type AddressWorld = {
+    hex: string;
+    name: string;
+    uwp: string;
+    /** The starport digit with the name the UWP tables already give it. */
+    starport: string;
+    /** Amber, Red or Green, the same words as the travel-zone row. Empty when the chart has none. */
+    zone: string;
+    /** Hex, starport and zone, joined for the row's second line. */
+    line: string;
+};
+
+export type AddressSubsector = {
+    letter: string;
+    name: string;
+    worlds: number;
+    countLine: string;
+};
+
+export type AddressColumn =
+    | { kind: 'sector'; name: string; subsectors: AddressSubsector[] }
+    | { kind: 'subsector'; name: string; letter: string; worlds: AddressWorld[] };
+
+/** "1 world", or a count and "worlds". */
+export function worldCountLine(count: number): string {
+    return count === 1 ? '1 world' : count + ' worlds';
+}
+
+function addressZone(zone: string): string {
+    const key = zone.trim().toLowerCase();
+    if (key === 'a' || key === 'amber') return 'Amber';
+    if (key === 'r' || key === 'red') return 'Red';
+    if (key === 'g' || key === 'green') return 'Green';
+    return '';
+}
+
+/**
+ * What a sector or subsector address names, from the chart index.
+ * `letter` null is the sector: sixteen subsectors, each with its world count.
+ * A letter is that subsector's worlds, in hex order. Null when the letter is not A to P.
+ */
+export function addressColumn(
+    index: { name: string; hexes: Record<string, AddressHex>; metadata: { names: Record<string, string> } },
+    letter: string | null,
+): AddressColumn | null {
+    const names = index.metadata.names || {};
+    const titled = (item: string): string => (names[item] || '').trim() || 'Subsector ' + item;
+    if (letter === null) {
+        const subsectors = SUBSECTOR_LETTERS.map((item) => {
+            const worlds = subsectorHexes(item).filter((hex) => index.hexes[hex]).length;
+            return { letter: item, name: titled(item), worlds, countLine: worldCountLine(worlds) };
+        });
+        return { kind: 'sector', name: index.name, subsectors };
+    }
+    if (subsectorHexes(letter).length === 0) return null;
+    const worlds = subsectorHexes(letter).flatMap((hex) => {
+        const row = index.hexes[hex];
+        if (!row) return [];
+        const uwp = (row.uwp || '').trim();
+        const digit = uwp.charAt(0);
+        const starport = digit ? formatUwpDigit('starport', digit) : '';
+        const zone = addressZone(row.zone || '');
+        const name = (row.name || '').trim() || hex;
+        return [{ hex, name, uwp, starport, zone, line: [hex, starport, zone].filter((part) => part !== '').join(' · ') }];
+    });
+    return { kind: 'subsector', name: titled(letter), letter, worlds };
 }

@@ -107,10 +107,10 @@ export const SectorGenerate = z.object({
     makeSectors: z.array(SectorSeed).min(1).max(BUILDER_LIMITS.hexesPerJob),
 }).strict().superRefine((value, ctx) => {
     if (new Set(value.hexKeys).size !== value.hexKeys.length) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hexKeys'], message: 'duplicate hex key' });
+        ctx.addIssue({ code: 'custom', path: ['hexKeys'], message: 'duplicate hex key' });
     }
     if (value.hexKeys.length === 1 && value.baseRev === undefined) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['baseRev'], message: 'baseRev is required for one hex' });
+        ctx.addIssue({ code: 'custom', path: ['baseRev'], message: 'baseRev is required for one hex' });
     }
 });
 export type SectorGenerate = z.infer<typeof SectorGenerate>;

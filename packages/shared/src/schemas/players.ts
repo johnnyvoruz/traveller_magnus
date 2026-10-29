@@ -13,23 +13,23 @@ import {
  */
 const PlayersEntry = z.unknown().superRefine((value, ctx) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid request.' });
+        ctx.addIssue({ code: 'custom', message: 'Invalid request.' });
         return;
     }
     const raw = value as Record<string, unknown>;
     if ('authorId' in raw || 'provenance' in raw) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid request.' });
+        ctx.addIssue({ code: 'custom', message: 'Invalid request.' });
         return;
     }
     if (raw.authorName !== undefined && typeof raw.authorName !== 'string') {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid request.' });
+        ctx.addIssue({ code: 'custom', message: 'Invalid request.' });
         return;
     }
     const rev = raw.rev === undefined ? 0 : raw.rev;
     const rest = { ...raw };
     delete rest.authorName;
     if (!CampaignEntry.safeParse({ ...rest, rev }).success) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid request.' });
+        ctx.addIssue({ code: 'custom', message: 'Invalid request.' });
     }
 });
 

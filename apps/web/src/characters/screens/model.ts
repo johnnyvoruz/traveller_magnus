@@ -58,9 +58,9 @@ export const PREGEN_MAX = 12;
 
 export const LINK_NOTE = 'One person can claim this link. They can edit the sheet. It lasts 14 days.';
 
-export const EMPTY_ALL = 'A Character is a sheet you own, with or without a campaign, and you can share it by a link.';
+export const EMPTY_ALL = 'A character is a sheet you own, with or without a campaign, and you can share it by a link.';
 export const EMPTY_MINE = 'You have not made a character yet.';
-export const EMPTY_SHARED = 'Characters other people share with you are listed here.';
+export const EMPTY_SHARED = 'Characters that other people share with you are listed here.';
 
 /** The screen's mark for a presence colour. The same token the sheet's adapter uses. */
 export function presenceTone(colour: number): string {
@@ -117,7 +117,7 @@ export function pregenName(name: string, n: number): string {
 
 function when(expiresAt: string): string {
     const at = Date.parse(expiresAt);
-    if (!Number.isFinite(at)) return 'Outstanding';
+    if (!Number.isFinite(at)) return 'No expiry date.';
     const day = new Date(at).toISOString().slice(0, 10);
     return 'Expires ' + day;
 }

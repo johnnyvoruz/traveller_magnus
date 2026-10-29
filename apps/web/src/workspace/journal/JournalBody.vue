@@ -294,7 +294,7 @@ defineExpose({ edit, view });
         @choose="choose"
         @hover="active = $event"
       />
-      <p class="edit-hint"><span>@ names a record · Ctrl+Enter saves · Esc puts it back</span></p>
+      <p class="edit-hint"><span>@ names a record · Ctrl+Enter saves · Escape puts it back</span></p>
     </template>
     <div
       v-else

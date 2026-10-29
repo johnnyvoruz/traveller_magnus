@@ -4,7 +4,8 @@
  * a client id. Another person's set waits while this client still has an unsent set
  * for that box, then the later one stands. A refusal puts the box back and says why.
  * Reconnect waits, with jitter, and sends the unsent sets again in order. A page
- * that was hidden for a while reconnects when it is shown.
+ * that was hidden for a while reconnects when it is shown. A `ledger` frame (the credit
+ * register's, contract b_player_credits.md) is handed to `onLedger` and parsed nowhere else.
  */
 import type { CharacterDoc, CharacterState, FieldValue } from './types.ts';
 import { characterBoxLimit, parseCharacter, parseDoc, parseRole, parseServerMessage } from './types.ts';
@@ -46,7 +47,11 @@ function liveUrl(id: string): string {
  * One room's connection. `state` is the reactive sheet. `onMeta` updates the list
  * when a rename arrives.
  */
-export function attachLive(state: CharacterState, onMeta: (name: string, summary: string) => void): LiveController {
+export function attachLive(
+    state: CharacterState,
+    onMeta: (name: string, summary: string) => void,
+    onLedger: (frame: unknown) => void = () => {},
+): LiveController {
     let mode: 'socket' | 'poll' = 'socket';
     let stopped = false;
     let terminal = false;
@@ -355,6 +360,10 @@ export function attachLive(state: CharacterState, onMeta: (name: string, summary
         try {
             body = JSON.parse(data) as unknown;
         } catch {
+            return;
+        }
+        if (body && typeof body === 'object' && (body as { t?: unknown }).t === 'ledger') {
+            onLedger(body);
             return;
         }
         const message = parseServerMessage(body);

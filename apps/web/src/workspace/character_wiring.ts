@@ -5,7 +5,7 @@
  * knows both and holds no logic of its own. Presence colours are the store's (its
  * `toneFor`), so a person is the same colour here as in the Characters pane.
  */
-import { characters, createCharacter, loadCharacters, openCharacter, toneFor } from '../characters/index.ts';
+import { characters, createCharacter, loadCharacters, openCharacter, openRegister, toneFor } from '../characters/index.ts';
 import { setCharacterSource } from './person_character.ts';
 
 setCharacterSource({
@@ -17,4 +17,5 @@ setCharacterSource({
     },
     open: (id) => openCharacter(id),
     tone: toneFor,
+    register: (id) => openRegister(id),
 });

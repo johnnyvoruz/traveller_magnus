@@ -4,7 +4,8 @@
  * in it is the account menu, the person's own things (DU10, U10): who, Campaigns… (the Campaigns
  * panel, where the campaigns are opened, made, renamed, deleted, exported and imported, and their
  * switches set), Characters, My packages, Account and sign-in, Help, this device's quiet, Sign out,
- * then About and What's new. It opens over the map and nothing waits on it; a click anywhere else,
+ * then About and What's new. The referee of an open campaign sees the onboarding checklist (DU9)
+ * between who and the items until its seven lines are done. It opens over the map and nothing waits on it; a click anywhere else,
  * or Esc, closes it and focus goes back to the rail's button.
  */
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -21,6 +22,7 @@ import { HELP_PATH } from './help_command.ts';
 import { forgetOpening } from './opening.ts';
 import { MY_PACKAGES_PATH } from './market/command.ts';
 import LivingSettings from './LivingSettings.vue';
+import OnboardingList from './OnboardingList.vue';
 import SignInCard from './SignInCard.vue';
 import { noteReturn, RECOVERY_PATH } from './passkey/recovery.ts';
 import { APP_VERSION } from '../version.ts';
@@ -204,6 +206,8 @@ watch(() => props.open, (open) => {
           <span v-if="line">{{ line }}</span>
         </div>
       </div>
+      <!-- Set up this campaign (DU9): seven lines, each a button; gone at 7 of 7. -->
+      <OnboardingList @close="$emit('close')" />
       <div ref="menu" class="account-items" role="menu" aria-label="Account" @keydown="onMenuKey">
         <button type="button" role="menuitem" class="account-campaigns" data-command="campaigns" @click="openCampaigns">
           <Icon name="book-sparkles" :size="15" /><span>Campaigns…</span><em v-if="openName">{{ openName }}</em>

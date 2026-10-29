@@ -348,6 +348,8 @@ universesRoute.get('/:id/campaign', async (c) => {
         const door = new URL('https://universe.local/campaign/players');
         door.searchParams.set('after', String(page.after));
         door.searchParams.set('limit', String(page.limit));
+        const parent = new URL(c.req.url).searchParams.get('parent');
+        if (parent != null) door.searchParams.set('parent', parent);
         return privateNoStore(await access.forward(new Request(door), {
             'x-voyage-member': access.actor.id,
             'x-voyage-handles': JSON.stringify(handles),

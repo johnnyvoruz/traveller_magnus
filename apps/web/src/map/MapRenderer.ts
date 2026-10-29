@@ -150,6 +150,10 @@ type TitleState = {
     out: { label: string; pill: TitlePill; alpha: number } | null;
 };
 
+/** Half a column and half a row: from a hex column's or row's centre to the boundary with the next (DF19). */
+const BOUNDARY_X = 0.5;
+const BOUNDARY_Y = ROW_STEP / 2;
+
 type DrawSector = {
     slug: string;
     name: string;
@@ -297,6 +301,8 @@ export class MapRenderer {
     private readonly dotTiles = new Map<string, DotTile>();
     private lastDotPpp = -1;
     private selected: Selection | null = null;
+    /** The worlds a capture keeps (DF20), as "q,r"; null draws every world. Set for one drawInto frame only. */
+    private onlyHexes: Set<string> | null = null;
     /** Left inset for subsector titles, in CSS pixels. 0 keeps titles at the viewport edge. */
     private workspaceLeft = 0;
     /** Subsector titles stick below this y, in CSS pixels: below the floating controls at the top (DS5). */
@@ -534,7 +540,7 @@ export class MapRenderer {
         height: number,
         dpr: number,
         theme: MapTheme,
-        opts: { titleTop: number; workspaceLeft: number; selection: Selection | null },
+        opts: { titleTop: number; workspaceLeft: number; selection: Selection | null; only?: readonly { q: number; r: number }[] },
     ): { tier: Tier; tracks: readonly TrafficTrack[] } | null {
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
@@ -554,6 +560,7 @@ export class MapRenderer {
             partyShips: this.partyShips,
             selectedKey: this.selectedKey,
             titleTime: this.titleTime,
+            onlyHexes: this.onlyHexes,
             titles: [...this.titleStates].map(([key, state]): [string, TitleState] => [key, { ...state, out: state.out ? { ...state.out } : null }]),
         };
         try {
@@ -563,6 +570,8 @@ export class MapRenderer {
             this.titleTop = opts.titleTop > TITLE_TOP ? opts.titleTop : TITLE_TOP;
             this.workspaceLeft = opts.workspaceLeft > 0 ? opts.workspaceLeft : 0;
             this.selected = opts.selection;
+            // DF20: a capture with an area draws only its own worlds, so no name from outside crosses its edge.
+            this.onlyHexes = opts.only && opts.only.length > 0 ? new Set(opts.only.map((hex) => hex.q + ',' + hex.r)) : null;
             this.dotTiles.clear();
             this.lastDotPpp = -1;
             this.resize(width, height, dpr);
@@ -584,6 +593,7 @@ export class MapRenderer {
             this.partyShips = live.partyShips;
             this.selectedKey = live.selectedKey;
             this.titleTime = live.titleTime;
+            this.onlyHexes = live.onlyHexes;
             this.titleStates.clear();
             for (const [key, state] of live.titles) this.titleStates.set(key, state);
             this.dotTiles.clear();
@@ -1012,6 +1022,12 @@ export class MapRenderer {
         return Math.hypot(x, y);
     }
 
+    /**
+     * The sector's border (DF19). `rect.x0` is column 1's centre and `rect.y0` row 1's (geometry.ts
+     * sectorRect, hexCentre), so the boundary with the next sector is half a column left and half a
+     * row up: where the legacy chart drew it ((i * 8 - 0.5) * widthStep). The rect itself stays as it
+     * is for the fit, the titles and the tiles.
+     */
     private strokeRects(sectors: DrawSector[], cam: Camera, vp: Viewport, style: string): void {
         if (!sectors.length) return;
         const ctx = this.ctx;
@@ -1019,8 +1035,8 @@ export class MapRenderer {
         ctx.strokeStyle = style;
         ctx.lineWidth = 1;
         for (const sector of sectors) {
-            const a = toScreen(cam, vp, sector.rect.x0, sector.rect.y0);
-            const b = toScreen(cam, vp, sector.rect.x1, sector.rect.y1);
+            const a = toScreen(cam, vp, sector.rect.x0 - BOUNDARY_X, sector.rect.y0 - BOUNDARY_Y);
+            const b = toScreen(cam, vp, sector.rect.x1 - BOUNDARY_X, sector.rect.y1 - BOUNDARY_Y);
             ctx.rect(a.sx, a.sy, b.sx - a.sx, b.sy - a.sy);
         }
         ctx.stroke();
@@ -1213,6 +1229,7 @@ export class MapRenderer {
                 const local = parseHex(hhhh);
                 if (!local) continue;
                 const global = toGlobal(item.sector.x, item.sector.y, local.col, local.row);
+                if (this.onlyHexes && !this.onlyHexes.has(global.q + ',' + global.r)) continue;
                 const centre = hexCentre(global.q, global.r);
                 const screen = toScreen(cam, vp, centre.x, centre.y);
                 marks.push(markOf(screen.sx, screen.sy, hhhh, entry));
@@ -1399,6 +1416,7 @@ export class MapRenderer {
         }
     }
 
+    /** The subsector lines, on the boundary between columns 8 and 9 (16|17, 24|25) and rows 10 and 11 (20|21, 30|31): DF19, as strokeRects. */
     private subsectorLines(sectors: DrawSector[], cam: Camera, vp: Viewport): void {
         if (!sectors.length) return;
         const ctx = this.ctx;
@@ -1406,13 +1424,17 @@ export class MapRenderer {
         ctx.strokeStyle = this.theme.line1;
         ctx.lineWidth = 1;
         for (const sector of sectors) {
+            const top = sector.rect.y0 - BOUNDARY_Y;
+            const bottom = sector.rect.y1 - BOUNDARY_Y;
+            const left = sector.rect.x0 - BOUNDARY_X;
+            const right = sector.rect.x1 - BOUNDARY_X;
             for (let col = 8; col < SECTOR_COLS; col += 8) {
-                const x = sector.rect.x0 + col;
-                this.line(cam, vp, x, sector.rect.y0, x, sector.rect.y1);
+                const x = sector.rect.x0 + col - BOUNDARY_X;
+                this.line(cam, vp, x, top, x, bottom);
             }
             for (let row = 10; row < SECTOR_ROWS; row += 10) {
-                const y = sector.rect.y0 + row * ROW_STEP;
-                this.line(cam, vp, sector.rect.x0, y, sector.rect.x1, y);
+                const y = sector.rect.y0 + row * ROW_STEP - BOUNDARY_Y;
+                this.line(cam, vp, left, y, right, y);
             }
         }
         ctx.stroke();

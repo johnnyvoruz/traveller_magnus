@@ -5,7 +5,7 @@
  * and does not enter disc_hold. The atlas path checks again after every slice.
  */
 import { startDiscWorker } from '../platform/browser.ts';
-import { DISC_DELIVERY, type WorkerState, type WorkerTiles } from './vanilla/gl_messages.ts';
+import { DISC_DELIVERY, type PaintImage, type WorkerState, type WorkerTiles } from './vanilla/gl_messages.ts';
 import type { ShadeRequest } from './vanilla/gl_shade.ts';
 import { settleDiscDelivery, type DiscEnvelope } from './enhanced/delivery.ts';
 
@@ -16,6 +16,10 @@ export type DiscLink = {
     /** The envelope a later tile must match. Keys still in the frame may be remembered. */
     note(envelope: DiscEnvelope, keys: ReadonlySet<string>): void;
     submit(requests: readonly ShadeRequest[]): void;
+    /** A body's painted hexes (DW2c): sent once per key to this worker, which keeps them; a copy crosses. */
+    paint(key: string, image: PaintImage): void;
+    /** True when this worker holds the key. */
+    painted(key: string): boolean;
     dispose(): void;
 };
 
@@ -28,6 +32,7 @@ export function openDiscLink(): DiscLink {
     let isFailed = false;
     let live: DiscEnvelope | null = null;
     let keys = new Set<string>();
+    const paints = new Set<string>();
     const accept = (data: Incoming): void => {
         if (data.op === 'state' || data.op === 'tiles') {
             isReady = data.ready;
@@ -63,6 +68,13 @@ export function openDiscLink(): DiscLink {
                 generation: live.generation,
             });
         },
+        paint(key, image) {
+            if (paints.has(key)) return;
+            paints.add(key);
+            const pixels = image.pixels.slice();
+            worker.postMessage({ op: 'paint', key, image: { width: image.width, height: image.height, pixels } }, [pixels.buffer]);
+        },
+        painted: (key) => paints.has(key),
         dispose() {
             worker.terminate();
         },

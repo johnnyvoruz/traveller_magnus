@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { campaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { flushCampaign, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
-import { addImage, makePrimary, prepareImage } from '../../apps/web/src/campaign/images.ts';
+import { CAMPAIGN_LIMITS } from '@voyage/shared';
+import { addImage, makePrimary, prepareImage, removeImage, setCaption, uploadImage } from '../../apps/web/src/campaign/images.ts';
 
 const RECORD = 'cr_11111111-1111-1111-1111-111111111111';
 const STAMP = '2026-10-05T00:00:00.000Z';
@@ -181,4 +182,103 @@ test('makePrimary moves the chosen image to the front', async () => {
     assert.deepEqual(campaign.records[RECORD].images.map((image) => image.hash), [second.hash, first.hash]);
     const change = JSON.parse(box.requests[0].body);
     assert.deepEqual(change.records[0].images.map((image) => image.hash), [second.hash, first.hash]);
+});
+
+function image(hash, extra) {
+    return { hash, thumbHash: 'b'.repeat(64), width: 10, height: 20, bytes: 3, ...extra };
+}
+
+test('uploadImage puts the full object and then the thumbnail', async () => {
+    const stub = encoder();
+    const prepared = await prepareImage(new Blob(['photo']), stub.encode);
+    const box = harness();
+    install(box);
+    const uploaded = await uploadImage('uni-1', prepared.image);
+    assert.equal(uploaded.ok, true);
+    assert.deepEqual(box.requests.map((item) => item.method), ['PUT', 'PUT']);
+    assert.equal(box.requests[0].url, `/api/universes/uni-1/objects/${prepared.image.hash}`);
+    assert.equal(box.requests[1].url, `/api/universes/uni-1/objects/${prepared.image.thumbHash}`);
+});
+
+test('a failed thumbnail put is the save message and stops there', async () => {
+    const stub = encoder();
+    const prepared = await prepareImage(new Blob(['photo']), stub.encode);
+    const box = harness();
+    const inner = box.fetchImpl;
+    box.fetchImpl = async (url, init = {}) => {
+        const method = init.method || 'GET';
+        if (method === 'PUT' && String(url).endsWith(prepared.image.thumbHash)) {
+            box.requests.push({ url: String(url), method: 'PUT' });
+            return jsonResponse(500, { ok: false, error: { code: 'internal', message: 'no' } });
+        }
+        return inner(url, init);
+    };
+    install(box);
+    const uploaded = await uploadImage('uni-1', prepared.image);
+    assert.equal(uploaded.ok, false);
+    assert.equal(uploaded.message, 'The image could not be saved.');
+    assert.equal(box.requests.filter((item) => item.method === 'PUT').length, 2);
+});
+
+test('removeImage drops one image, clears the last, and leaves a closed record', async () => {
+    const first = image('a'.repeat(64));
+    const second = image('c'.repeat(64));
+    const box = harness();
+    install(box);
+    campaign.records[RECORD].images = [first, second];
+    removeImage(RECORD, 'missing');
+    await flushCampaign();
+    assert.equal(box.requests.length, 0);
+    assert.equal(campaign.records[RECORD].images.length, 2);
+
+    removeImage('cr_00000000-0000-0000-0000-000000000000', first.hash);
+    await flushCampaign();
+    assert.equal(box.requests.length, 0);
+
+    removeImage(RECORD, first.hash);
+    await flushCampaign();
+    assert.deepEqual(campaign.records[RECORD].images.map((item) => item.hash), [second.hash]);
+
+    campaign.records[RECORD].deleted = true;
+    removeImage(RECORD, second.hash);
+    await flushCampaign();
+    assert.equal(campaign.records[RECORD].images.length, 1);
+    assert.equal(box.requests.length, 1);
+
+    campaign.records[RECORD].deleted = false;
+    removeImage(RECORD, second.hash);
+    await flushCampaign();
+    assert.equal(campaign.records[RECORD].images, null);
+    const change = JSON.parse(box.requests.at(-1).body);
+    assert.equal(change.records[0].images, null);
+});
+
+test('setCaption trims, caps, and a blank caption clears it', async () => {
+    const shot = image('a'.repeat(64), { caption: 'old' });
+    const box = harness();
+    install(box);
+    campaign.records[RECORD].images = [shot];
+    setCaption(RECORD, 'missing', 'x');
+    await flushCampaign();
+    assert.equal(box.requests.length, 0);
+    assert.equal(campaign.records[RECORD].images[0].caption, 'old');
+
+    setCaption(RECORD, shot.hash, '  dock  ');
+    await flushCampaign();
+    assert.equal(campaign.records[RECORD].images[0].caption, 'dock');
+
+    const long = 'x'.repeat(CAMPAIGN_LIMITS.caption + 40);
+    setCaption(RECORD, shot.hash, long);
+    await flushCampaign();
+    assert.equal(campaign.records[RECORD].images[0].caption.length, CAMPAIGN_LIMITS.caption);
+
+    setCaption(RECORD, shot.hash, '   ');
+    await flushCampaign();
+    assert.equal(Object.hasOwn(campaign.records[RECORD].images[0], 'caption'), false);
+
+    campaign.records[RECORD].deleted = true;
+    campaign.records[RECORD].images[0].caption = 'kept';
+    setCaption(RECORD, shot.hash, 'gone');
+    await flushCampaign();
+    assert.equal(campaign.records[RECORD].images[0].caption, 'kept');
 });

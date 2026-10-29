@@ -9,7 +9,10 @@
  * page or the sheet knowing what is behind it. Pure, but for the one registered source.
  */
 import { CHARACTER_SCHEMA } from './character_sheet.ts';
+import type { CharacterRegister } from './credit_register.ts';
 import type { SheetValues } from './sheet_fields.ts';
+
+export type { CharacterRegister };
 
 /** One other person on a sheet: who, their colour (an index, 0 to 7, the server's), and the box they are in. */
 export type Presence = { id: string; name: string; colour: number; field: string | null };
@@ -22,6 +25,8 @@ export type CharacterHandle = {
     readonly fields: Readonly<Record<string, string | boolean>>;
     readonly who: readonly Presence[];
     readonly status: 'connecting' | 'live' | 'offline' | 'gone';
+    /** This account, as the room introduced it. Null until then. */
+    readonly you?: { id: string } | null;
     setField(name: string, value: string | boolean): void;
     focusField(name: string | null): void;
     close(): void;
@@ -40,6 +45,8 @@ export type CharacterSource = {
     open(id: string): CharacterHandle;
     /** The colour token for a presence colour (the server's index, 0 to 7): the store's own, so a person is one colour everywhere. */
     tone(colour: number): string;
+    /** The character's credit register (DT1c), read on the first ask. Absent, the page shows none. */
+    register?(id: string): CharacterRegister;
 };
 
 let source: CharacterSource | null = null;

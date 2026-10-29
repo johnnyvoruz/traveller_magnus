@@ -88,8 +88,8 @@ function set(id: string, value: FormValue): void {
       <div v-if="conflict" class="sysed-strip is-conflict" role="alert">
         <p>A newer version of this system was saved after you opened it. Your changes are still here, and they aren’t saved. To continue, select Take theirs or Keep mine.</p>
         <div class="sysed-strip-acts">
-          <button type="button" class="ui-btn" title="Discards your changes and opens the latest saved version" @click="takeTheirs()">Take theirs</button>
-          <button type="button" class="ui-btn is-primary" title="Applies your changes to the latest saved version. They’re saved when you select Keep" @click="keepMine()">Keep mine</button>
+          <button type="button" class="ui-btn" title="Discards your changes and opens the latest saved version." @click="takeTheirs()">Take theirs</button>
+          <button type="button" class="ui-btn is-primary" title="Applies your changes to the latest saved version. They're saved when you select Keep." @click="keepMine()">Keep mine</button>
         </div>
       </div>
       <p v-if="dropped.length" class="sysed-strip is-note" role="status">
@@ -148,7 +148,7 @@ function set(id: string, value: FormValue): void {
         <template v-for="group in section.groups" :key="'w' + group.owner">
           <template v-for="field in group.fields" :key="'w' + field.id">
             <details v-if="!(field.id in edit.mine) && whyOf(field.id, changed)" class="sysed-strip is-note sysed-why">
-              <summary>{{ field.label }}: {{ firstLine(whyOf(field.id, changed)) }}<em v-if="moreLines(whyOf(field.id, changed))">and {{ moreLines(whyOf(field.id, changed)) }} more lines</em></summary>
+              <summary>{{ field.label }}: {{ firstLine(whyOf(field.id, changed)) }}<em v-if="moreLines(whyOf(field.id, changed)) === 1">and one more line</em><em v-else-if="moreLines(whyOf(field.id, changed))">and {{ moreLines(whyOf(field.id, changed)) }} more lines</em></summary>
               <p v-if="moreLines(whyOf(field.id, changed))">{{ whyOf(field.id, changed) }}</p>
             </details>
             <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>

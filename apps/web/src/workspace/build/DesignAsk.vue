@@ -31,8 +31,9 @@ const what = computed(() => (handUi.removing && handUi.removing.kind === 'star' 
   <div v-if="remove && handUi.removing" class="sysed-strip design-ask" role="alertdialog" :aria-label="'Remove ' + handUi.removing.name">
     <p><b>Remove {{ handUi.removing.name }}?</b></p>
     <p v-if="count === null" role="status">Counting the bodies that orbit it…</p>
+    <p v-else-if="count === 0" role="status">This does not remove any other body.</p>
     <p v-else role="status">This also removes the {{ count }} {{ count === 1 ? 'body that orbits' : 'bodies that orbit' }} {{ what }}.</p>
-    <p class="design-ask-fine">Nothing is removed until you select Keep. To bring everything back, select Cancel or Discard.</p>
+    <p class="design-ask-fine">Select Remove to leave the change in the draft. The draft is saved when you select Keep. To put the bodies back, select Cancel.</p>
     <div class="sysed-strip-acts">
       <button type="button" class="ui-btn is-primary" data-remove-confirm :disabled="count === null" @click="confirmRemove()">Remove</button>
       <button type="button" class="ui-btn" data-remove-cancel @click="cancelRemove()">Cancel</button>

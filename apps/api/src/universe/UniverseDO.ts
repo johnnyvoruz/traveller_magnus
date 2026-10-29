@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
 import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS, PROPOSAL_SUBMIT_BUDGET } from './budget';
 import { respondProposals } from './proposals';
-import { applyCampaignChanges, CampaignRefusal, characterAttached, journalAuthorReady, playersCampaignHashes, readCampaign, readDemoCampaign, readPlayersCampaign, type Sql } from './campaign';
+import { applyCampaignChanges, CampaignRefusal, characterAttached, journalAuthorReady, parseJournalParent, parseJournalRead, playersCampaignHashes, readCampaign, readDemoCampaign, readPlayersCampaign, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
 import { applyInstall, InstallRefusal, previewInstall, removeInstall, type InstallBody, type InstallRemoveBody } from './install';
 import { readPublishSources } from './publish_read';
@@ -74,7 +74,11 @@ export class UniverseDO extends DurableObject<Env> {
                 return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
             }
             const withAuthor = request.headers.get('x-voyage-authors') === '1';
-            return Response.json({ ok: true, data: readCampaign(sql, after, limit, withAuthor) });
+            const journalRead = parseJournalRead(url.searchParams.get('parent'), url.searchParams.get('replies'));
+            if (!journalRead) {
+                return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
+            }
+            return Response.json({ ok: true, data: readCampaign(sql, after, limit, withAuthor, journalRead) });
         }
         if (request.method === 'GET' && url.pathname === '/campaign/seq') {
             const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
@@ -100,7 +104,11 @@ export class UniverseDO extends DurableObject<Env> {
             if (!Number.isInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1) {
                 return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
             }
-            return Response.json({ ok: true, data: readPlayersCampaign(sql, after, limit, { userId: memberId, handles: handleMap(request.headers.get('x-voyage-handles')) }) });
+            const parent = parseJournalParent(url.searchParams.get('parent'));
+            if (!parent.ok) {
+                return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
+            }
+            return Response.json({ ok: true, data: readPlayersCampaign(sql, after, limit, { userId: memberId, handles: handleMap(request.headers.get('x-voyage-handles')) }, parent.parent) });
         }
         if (request.method === 'PATCH' && url.pathname === '/campaign/changes') {
             const memberId = request.headers.get('x-voyage-member');

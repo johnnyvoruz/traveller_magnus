@@ -1,7 +1,7 @@
 /**
  * Append-only credit register on the character object.
  * directives/contracts/b_player_credits.md, guards accepted (decisions: memo 1 to 80,
- * amount a non-zero integer within ±1,000,000,000, whenDay 0 to 400,000, no line cap).
+ * amount a non-zero integer within ±1,000,000,000, whenDay 0 to 4,000,000, no line cap).
  * No payment, fare, or share value is computed.
  */
 import type { Sql } from './sheet.ts';
@@ -9,7 +9,7 @@ import type { Sql } from './sheet.ts';
 const KINDS = ['pay', 'purchase', 'fare', 'share', 'transfer', 'adjustment'] as const;
 const MEMO_MAX = 80;
 const AMOUNT_MAX = 1_000_000_000;
-const DAY_MAX = 400_000;
+const DAY_MAX = 4_000_000;
 const INVALID = { ok: false as const, status: 400 as const, code: 'validation', message: 'Invalid request.' };
 const MISSING = { ok: false as const, status: 503 as const, code: 'ledger_unavailable', message: 'The credit register is not available yet.' };
 

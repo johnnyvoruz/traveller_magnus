@@ -67,7 +67,7 @@ const goWords = computed(() => {
       <label v-for="item in ENGINES" :key="item.id" class="build-opt" :class="{ 'is-on': draft.engine === item.id, 'is-off': !item.ready }">
         <input type="radio" name="build-engine" :value="item.id" :checked="draft.engine === item.id" :disabled="!item.ready" @change="pickEngine(item.id)" />
         <span>{{ item.label }}</span>
-        <em v-if="!item.ready">not available yet</em>
+        <em v-if="!item.ready">Not available yet</em>
         <em v-else-if="item.generators.length === 1">{{ item.generators[0] === 'bottom-up' ? 'bottom up' : 'from the star outward' }}</em>
       </label>
     </fieldset>

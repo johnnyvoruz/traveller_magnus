@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { CampaignPage, linkAllowed, mentionsOf } from '@voyage/shared';
 
 const page = CampaignPage.parse(JSON.parse(readFileSync(new URL('../../tools/demo/example_campaign.json', import.meta.url), 'utf8')));
-const chart = JSON.parse(readFileSync(new URL('../../truth-local/v10/sectors/Spinward_Marches/index.json', import.meta.url), 'utf8'));
+// truth-local/ is a local build, not in git. CI has none, so the chart check is skipped there.
+const CHART = new URL('../../truth-local/v10/sectors/Spinward_Marches/index.json', import.meta.url);
 
 const WORLDS = [
     { name: 'Jenghe', hex: '1810', uwp: 'C799663-9' },
@@ -40,7 +41,8 @@ test('the example campaign matches the shared page, and every row is for players
     assert.equal(page.settings.party.memberIds.includes(harun.id), false);
 });
 
-test('the three worlds are the chart, and the ship track visits them', () => {
+test('the three worlds are the chart, and the ship track visits them', { skip: !existsSync(CHART) }, () => {
+    const chart = JSON.parse(readFileSync(CHART, 'utf8'));
     for (const world of WORLDS) {
         const row = chart.hexes[world.hex];
         assert.equal(row.name, world.name);

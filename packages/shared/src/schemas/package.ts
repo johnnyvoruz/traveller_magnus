@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HexKey } from './builder.ts';
+import { SURFACE_BODY_KEY, SurfaceEdits } from './surface.ts';
 
 const RECORD_ID = /^cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -9,6 +10,11 @@ export const PackageHex = z.object({
     treeHash: z.string().optional(),
     summary: z.record(z.string(), z.unknown()).optional(),
     deleted: z.literal(true).optional(),
+    /**
+     * Painted surfaces for this hex, keyed by dossier body. Absent when the hex has no paint.
+     * The system tree and the hex rev do not move when only this changes.
+     */
+    surfaces: z.record(z.string().regex(SURFACE_BODY_KEY), SurfaceEdits).optional(),
 });
 export type PackageHex = z.infer<typeof PackageHex>;
 
@@ -67,7 +73,7 @@ export const PackagePublish = z.object({
     recordIds: z.array(z.string().regex(RECORD_ID)),
 }).strict().superRefine((value, ctx) => {
     if (new Set(value.hexKeys).size !== value.hexKeys.length) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hexKeys'], message: 'duplicate hex key' });
+        ctx.addIssue({ code: 'custom', path: ['hexKeys'], message: 'duplicate hex key' });
     }
 });
 export type PackagePublish = z.infer<typeof PackagePublish>;
@@ -313,7 +319,7 @@ export const InstallRequest = z.object({
     expect: z.object({ conflicts: z.number().int().nonnegative() }).strict(),
 }).strict().superRefine((value, ctx) => {
     if (value.placement && value.installId) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['placement'], message: 'an update keeps its placement' });
+        ctx.addIssue({ code: 'custom', path: ['placement'], message: 'an update keeps its placement' });
     }
 });
 export type InstallRequest = z.infer<typeof InstallRequest>;

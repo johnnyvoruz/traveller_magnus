@@ -66,7 +66,7 @@ const SystemAnchor = z.object({
     locationLabel: z.string().optional(),
 }).strict().superRefine((anchor, ctx) => {
     if (anchor.point !== undefined && anchor.bodyKey !== undefined) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a point is not a body', path: ['point'] });
+        ctx.addIssue({ code: 'custom', message: 'a point is not a body', path: ['point'] });
     }
 });
 
@@ -131,7 +131,7 @@ export const TrackLeg = z.object({
     hoursTyped: z.literal(true).optional(),
 }).strict().superRefine((leg, ctx) => {
     if (leg.arrives < leg.departs) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'arrives before departs', path: ['arrives'] });
+        ctx.addIssue({ code: 'custom', message: 'arrives before departs', path: ['arrives'] });
     }
 });
 export type TrackLeg = z.infer<typeof TrackLeg>;
@@ -140,7 +140,7 @@ export type TrackLeg = z.infer<typeof TrackLeg>;
 export const Track = z.array(TrackLeg).max(CAMPAIGN_LIMITS.track).superRefine((legs, ctx) => {
     for (let i = 1; i < legs.length; i += 1) {
         if (legs[i].departs < legs[i - 1].arrives) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'out of time order', path: [i, 'departs'] });
+            ctx.addIssue({ code: 'custom', message: 'out of time order', path: [i, 'departs'] });
             return;
         }
     }
@@ -301,10 +301,10 @@ const PartyObject = z.object({
     anchor: CampaignAnchor,
 }).strict().superRefine((party, ctx) => {
     if (new Set(party.vesselIds).size !== party.vesselIds.length) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a ship is listed twice', path: ['vesselIds'] });
+        ctx.addIssue({ code: 'custom', message: 'a ship is listed twice', path: ['vesselIds'] });
     }
     if (Object.keys(party.aboard).length > CAMPAIGN_LIMITS.records) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too many people aboard', path: ['aboard'] });
+        ctx.addIssue({ code: 'custom', message: 'too many people aboard', path: ['aboard'] });
     }
 });
 
@@ -327,7 +327,7 @@ export const CampaignSettings = z.object({
      * kind to set id. A kind left out means the official set. Players receive this map.
      * The trade-code name check waits for a name-to-code table in rules/.
      */
-    tableSets: z.record(z.string()).optional(),
+    tableSets: z.record(z.string(), z.string()).optional(),
     rev: Rev,
 }).strict();
 export type CampaignSettings = z.infer<typeof CampaignSettings>;
@@ -355,6 +355,17 @@ const CampaignEntryObject = z.object({
      * A patch that sends null clears the list.
      */
     images: z.array(CampaignImage).max(CAMPAIGN_LIMITS.images).nullable().optional(),
+    /**
+     * The journal entry this row replies to. Null on an entry that is not a reply.
+     * Absent on a row written before the column existed; a read fills null.
+     * A write that omits it leaves the stored value. A reply cannot move to another parent.
+     */
+    parent: z.string().regex(JOURNAL_ID).nullable().optional(),
+    /**
+     * Live replies under this entry. The server fills this on a read.
+     * A write may send it. The number is not stored.
+     */
+    replies: z.number().int().nonnegative().optional(),
     rev: Rev,
     createdAt: Stamp,
     updatedAt: Stamp,
@@ -365,12 +376,12 @@ const CampaignEntryObject = z.object({
 function entrySequence(entry: { kind: string; sequence: number | null }, ctx: z.RefinementCtx): void {
     if (entry.kind === 'session') {
         if (entry.sequence == null) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'a session has a sequence', path: ['sequence'] });
+            ctx.addIssue({ code: 'custom', message: 'a session has a sequence', path: ['sequence'] });
         }
         return;
     }
     if (entry.sequence != null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'only a session has a sequence', path: ['sequence'] });
+        ctx.addIssue({ code: 'custom', message: 'only a session has a sequence', path: ['sequence'] });
     }
 }
 
@@ -484,11 +495,11 @@ export const CampaignChanges = z.object({
 }).strict().superRefine((value, ctx) => {
     const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.journal?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
     if (rows > CAMPAIGN_LIMITS.patchRows) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too_large', path: ['records'] });
+        ctx.addIssue({ code: 'custom', message: 'too_large', path: ['records'] });
     }
     const bytes = new TextEncoder().encode(JSON.stringify(value)).length;
     if (bytes > CAMPAIGN_LIMITS.patchBytes) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too_large', path: [] });
+        ctx.addIssue({ code: 'custom', message: 'too_large', path: [] });
     }
 });
 export type CampaignChanges = z.infer<typeof CampaignChanges>;

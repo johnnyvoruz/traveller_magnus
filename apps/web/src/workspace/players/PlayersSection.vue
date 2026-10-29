@@ -8,6 +8,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { PlayerList, type PlayerInvite } from '@voyage/shared';
 import { createInvite, revokeInvite } from '../../campaign/membership.ts';
+import { noteInvited } from '../onboarding.ts';
 import { campaign, transport } from '../../campaign/store.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { parseRead } from '../../campaign/read.ts';
@@ -58,6 +59,13 @@ async function loadList(): Promise<void> {
     const body = await res.json() as { data?: unknown };
     list.value = parseRead(PlayerList, body.data);
     listState.value = 'ready';
+    noteSeen();
+}
+
+/** The onboarding checklist (DU9): players are invited once a link is out or a member is in. */
+function noteSeen(): void {
+    const members = list.value ? list.value.playing.length + list.value.archived.length : 0;
+    noteInvited(campaign.universeId, { invite: invite.value !== null, members });
 }
 
 async function getLink(): Promise<void> {
@@ -70,6 +78,7 @@ async function getLink(): Promise<void> {
         return;
     }
     invite.value = made;
+    noteSeen();
 }
 
 async function copyLink(): Promise<void> {
@@ -92,6 +101,7 @@ async function revoke(): Promise<void> {
         return;
     }
     invite.value = null;
+    noteSeen();
     showToast('Link revoked. Nobody new can join with it.');
 }
 

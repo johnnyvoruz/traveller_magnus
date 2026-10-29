@@ -1,6 +1,7 @@
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/durable-sqlite';
 import { installCampaignSchema, type SqlRow } from './campaign';
+import { installSurfaceSchema } from './surfaces';
 import { installProposalSchema } from './proposals';
 import { RESERVATION_TABLE } from './quota';
 
@@ -224,6 +225,7 @@ export async function migrate(storage: DurableObjectStorage): Promise<void> {
     };
     installCampaignSchema(campaignSql);
     installProposalSchema(campaignSql);
+    installSurfaceSchema(campaignSql);
     drizzle(storage, { schema: doSchema });
     console.log(JSON.stringify({ event: 'UniverseDO migration', schemaVersion: 3 }));
 }

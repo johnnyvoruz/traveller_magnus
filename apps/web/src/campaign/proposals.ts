@@ -82,13 +82,22 @@ export function findBlock(text: string): { from: 'block' | 'whole'; json: string
     return null;
 }
 
+/** Zod 4 prefixes a type miss with "Invalid input: ". The words after it are the Zod 3 sentence. */
+function checkerMessage(message: string): string {
+    const literal = /^Invalid input: expected (.+)$/i.exec(message);
+    if (literal && !/received /i.test(message)) return `Invalid literal value, expected ${literal[1]}`;
+    const stripped = message.replace(/^Invalid input:\s*/i, '');
+    if (stripped === message) return message;
+    return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 /** A paste failure in plain words. The checker's own path and message stay off the screen. */
 function plainReason(problem: PasteProblem): string {
     const message = problem.message;
     const field = problem.path || 'a field';
     if (/invalid discriminator/i.test(message)) return 'that action is not one this campaign takes';
-    if (/(^|\.)type$/.test(problem.path) && /invalid enum/i.test(message)) return 'the record type is not one this campaign has';
-    if (/^required\b/i.test(message)) return `${field} is missing`;
+    if (/(^|\.)type$/.test(problem.path) && /invalid (enum|option)/i.test(message)) return 'the record type is not one this campaign has';
+    if (/^required\b/i.test(message) || /received undefined/i.test(message)) return `${field} is missing`;
     if (/expected .+ received /i.test(message)) return `${field} has the wrong type of value`;
     if (/invalid literal/i.test(message)) return `${field} is not one this campaign reads`;
     return `${field} could not be read`;
@@ -132,10 +141,10 @@ export function pastedBatch(text: string): PastedBatch {
                 op: typeof row?.op === 'string' ? row.op : null,
                 ref: typeof row?.ref === 'string' ? row.ref : null,
                 path: path.slice(2).map(String).join('.'),
-                message: issue.message,
+                message: checkerMessage(issue.message),
             };
         } else {
-            problem = { proposal: null, op: null, ref: null, path: path.map(String).join('.'), message: issue.message };
+            problem = { proposal: null, op: null, ref: null, path: path.map(String).join('.'), message: checkerMessage(issue.message) };
         }
         const key = JSON.stringify(problem);
         if (!seen.has(key)) {

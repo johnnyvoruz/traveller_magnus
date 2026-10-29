@@ -21,7 +21,8 @@
 import type { HybridWorld } from '../hybrid/inputs.ts';
 import { SHEET_LAYOUT, layoutFor, type SheetLayout } from '../hybrid/field.ts';
 import { gridOf, type Face } from '../hybrid/grid.ts';
-import { cachedHybridModel, rememberHybridModel } from '../hybrid/index.ts';
+import { cachedHybridModel, hybridModelWith, rememberHybridModel } from '../hybrid/index.ts';
+import type { HexEdits } from '../hybrid/serialize.ts';
 import { modelPreparation, startHybridBuild } from '../hybrid/model.ts';
 import { createHybridPaint, type HybridPaintJob } from '../hybrid/paint.ts';
 import { CAP_REACH_RAD, capHasCoast, capNoise, capShiftRad } from '../ice_edge.ts';
@@ -54,7 +55,7 @@ export type GasColours = {
 /** What a globe is painted from. Plain data: it crosses to the worker. */
 export type GlobeRecipe =
     | { readonly kind: 'vanilla'; readonly inputs: VanillaPaintInputs }
-    | { readonly kind: 'hybrid'; readonly world: HybridWorld }
+    | { readonly kind: 'hybrid'; readonly world: HybridWorld; readonly edits?: HexEdits | null }
     | { readonly kind: 'gas'; readonly gas: GasColours; readonly offsets: readonly number[] };
 
 const CDF_SAMPLES = 2048;
@@ -76,7 +77,7 @@ export function startGlobe(recipe: GlobeRecipe, rows: number, clock: () => numbe
         case 'vanilla':
             return vanillaGlobe(recipe.inputs, rows, clock, budgetMs);
         case 'hybrid':
-            return hybridGlobe(recipe.world, rows, clock, budgetMs);
+            return hybridGlobe(recipe.world, rows, clock, budgetMs, recipe.edits ?? null);
         case 'gas':
             return gasGlobe(recipe.gas, recipe.offsets, rows);
     }
@@ -302,18 +303,18 @@ export function readSheet(sheet: Uint8ClampedArray, layout: SheetLayout, x: numb
     out[idx + 3] = 255;
 }
 
-function hybridGlobe(world: HybridWorld, rows: number, clock: () => number, budgetMs: number): GlobeBuild {
+function hybridGlobe(world: HybridWorld, rows: number, clock: () => number, budgetMs: number, edits: HexEdits | null = null): GlobeBuild {
     const globe = blank(rows);
     const { width: W, height: H, pixels } = globe;
     const layout = hybridSheetFor(rows);
     const cached = cachedHybridModel(world);
     const modelBuild = cached ? null : startHybridBuild(world);
+    // The painted hexes (DW2) are laid over the generated model; the base is what is remembered.
     const paint: HybridPaintJob = createHybridPaint(
         () => {
-            if (cached) return cached;
-            const model = (modelBuild as NonNullable<typeof modelBuild>).model();
-            rememberHybridModel(world, model);
-            return model;
+            const base = cached ?? (modelBuild as NonNullable<typeof modelBuild>).model();
+            if (!cached) rememberHybridModel(world, base);
+            return hybridModelWith(base, edits);
         },
         layout, clock, budgetMs, modelPreparation(world), modelBuild,
     );

@@ -129,7 +129,7 @@ watch(() => (preview.value ? preview.value.roll : -1), (roll) => {
     </template>
     <template v-else-if="drafting">
       <span class="build-tag is-preview">Draft</span>
-      <span class="build-bar-word" role="status">{{ dirty ? line : 'no changes yet' }}</span>
+      <span class="build-bar-word" role="status">{{ dirty ? line : 'No changes yet' }}</span>
       <span v-if="edit.mode === 'hand'" class="build-tag is-yours" title="Designed by hand. Building does not generate this system">By hand</span>
       <span class="build-bar-gap"></span>
       <button type="button" class="ui-btn" data-command="build-draft-discard" :disabled="edit.keeping" @click="discard()">{{ dirty ? 'Discard' : 'Close' }}</button>

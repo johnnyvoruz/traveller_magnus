@@ -23,6 +23,7 @@ import { parsePlayed, parseWhen } from './dates.ts';
 import JournalBody from './JournalBody.vue';
 import PrintButton from '../PrintButton.vue';
 import RecordAvatar from '../RecordAvatar.vue';
+import Replies from './Replies.vue';
 import { placeSource } from '../place_source.ts';
 import { kindWord, playerNoteAccess, whenText, whenWeekday } from './list.ts';
 import { isPlayerView } from '../players/player_mode.ts';
@@ -315,6 +316,10 @@ watch(() => props.id, greet, { immediate: true });
 
     <EntryGallery :id="id" part="strip" :read-only="imageLocked" :hide-adds="isPlayerView" />
 
+    <section class="jn-replies-block">
+      <Replies :key="id" :parent-id="id" :count="entry.replies ?? 0" :read-only="readOnly && !isPlayerView" />
+    </section>
+
     <footer class="rec-foot">
       <PrintButton target=".jn-entry" :title="entry.title || 'Journal entry'" />
       <span class="rec-gap"></span>
@@ -390,6 +395,7 @@ watch(() => props.id, greet, { immediate: true });
     "ident side"
     "body side"
     "images side"
+    "replies side"
     "foot side";
   column-gap: 16px;
   align-items: start;
@@ -401,6 +407,7 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="yes"] .rec-ident { grid-area: ident; }
 .jn-entry[data-beside="yes"] .jn-body-block { grid-area: body; }
 .jn-entry[data-beside="yes"] .jn-images { grid-area: images; }
+.jn-entry[data-beside="yes"] .jn-replies-block { grid-area: replies; }
 .jn-entry[data-beside="yes"] .rec-foot { grid-area: foot; }
 .jn-entry[data-beside="yes"] .jn-side { grid-area: side; }
 
@@ -430,8 +437,9 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="no"] .where { order: 3; }
 .jn-entry[data-beside="no"] .jn-body-block { order: 4; }
 .jn-entry[data-beside="no"] .jn-images { order: 5; }
-.jn-entry[data-beside="no"] .jn-mentioned { order: 6; }
-.jn-entry[data-beside="no"] .rec-foot { order: 7; }
+.jn-entry[data-beside="no"] .jn-replies-block { order: 6; }
+.jn-entry[data-beside="no"] .jn-mentioned { order: 7; }
+.jn-entry[data-beside="no"] .rec-foot { order: 8; }
 
 .rec-ident.is-players {
   padding: 8px;
@@ -562,5 +570,13 @@ watch(() => props.id, greet, { immediate: true });
 
 .jn-entry .jn-images > .ui-heading {
   margin-top: 0;
+}
+
+.jn-replies-block .jn-replies {
+  margin-top: 0;
+}
+
+.jn-replies-block .ui-heading {
+  margin-bottom: 2px;
 }
 </style>

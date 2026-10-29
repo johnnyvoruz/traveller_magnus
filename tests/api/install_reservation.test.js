@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -170,6 +171,38 @@ function webp(size, mark) {
     return body;
 }
 
+function sqliteFiles(dir, out = []) {
+    let names = [];
+    try { names = readdirSync(dir); } catch { return out; }
+    for (const name of names) {
+        const full = path.join(dir, name);
+        let info;
+        try { info = statSync(full); } catch { continue; }
+        if (info.isDirectory()) sqliteFiles(full, out);
+        else if (name.endsWith('.sqlite')) out.push(full);
+    }
+    return out;
+}
+
+/** The job's reservation row in this run's own state, or null when it is not written yet. */
+function reservationOf(persistTo, jobId) {
+    for (const file of sqliteFiles(persistTo)) {
+        let db;
+        try { db = new DatabaseSync(file, { readOnly: true }); } catch { continue; }
+        try {
+            const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'object_reservations'`).all();
+            if (!tables.length) continue;
+            const row = db.prepare(`SELECT bytes, expires_at AS expiresAt FROM object_reservations WHERE id = ?`).get(jobId);
+            if (row) return { bytes: Number(row.bytes), expiresAt: Number(row.expiresAt) };
+        } catch {
+            // A locked file, or a sqlite file that is not this object.
+        } finally {
+            try { db.close(); } catch { /* already closed */ }
+        }
+    }
+    return null;
+}
+
 function objectBytes(persistTo, id) {
     const out = runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--json', '--command', `SELECT object_bytes AS n FROM universes WHERE id = '${id}'`]);
     const at = out.indexOf('[');
@@ -182,8 +215,10 @@ if (process.env.RUN_API_TESTS !== '1') {
     test(NAME, { skip: 'wrangler is absent' }, () => {});
 } else {
     test(NAME, { timeout: 400000 }, async () => {
-        const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-install-reserve-'));
-        const port = 18897;
+        const ownedPersist = !process.env.VOYAGE_PERSIST_TO;
+        const persistTo = process.env.VOYAGE_PERSIST_TO || mkdtempSync(path.join(tmpdir(), 'voyage-install-reserve-'));
+        const port = Number(process.env.VOYAGE_API_PORT || 18897);
+        const inspectorPort = Number(process.env.VOYAGE_INSPECTOR_PORT || 19897);
         const base = `http://127.0.0.1:${port}`;
         let child = null;
         try {
@@ -193,7 +228,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             const reader = userCookie(`irb${stamp}`, `irb${stamp}@localhost`, persistTo);
             const aHeaders = { 'content-type': 'application/json', cookie: author };
             const bHeaders = { 'content-type': 'application/json', cookie: reader };
-            child = startDev({ port, persistTo, inspectorPort: 19897, args: ['--var', 'GENERATE_PAUSE:20000', '--var', 'QUOTA_RESERVATION_MS:4000'] });
+            child = startDev({ port, persistTo, inspectorPort, args: ['--var', 'GENERATE_PAUSE:20000', '--var', 'QUOTA_RESERVATION_MS:4000'] });
             await up(base);
             const made = async (headers, name) => {
                 const res = await jsonFetch(`${base}/api/universes`, { method: 'POST', headers, body: JSON.stringify({ name, truthVersion: null, editionDefault: 'MgT2E' }) });
@@ -239,26 +274,24 @@ if (process.env.RUN_API_TESTS !== '1') {
             const posted = await jsonFetch(`${base}/api/universes/${target}/generate`, { method: 'POST', headers: bHeaders, body: JSON.stringify({ hexKeys: jobKeys, edition: 'MgT2E', generator: 'top-down' }) });
             assert.equal(posted.status, 202, JSON.stringify(posted.body));
             const jobId = posted.body.data.jobId;
-            let refused = null;
+            let hold = null;
             const holdBy = Date.now() + 60000;
             while (Date.now() < holdBy) {
                 const read = await jsonFetch(`${base}/api/universes/${target}/jobs/${jobId}`, { headers: { cookie: reader } });
-                const live = read.body.data;
-                if (live.state === 'failed') assert.fail(JSON.stringify(live));
-                // The batch marks the job done, then the consumer pauses before finishCounts, still holding the bytes.
-                if (live.done > 0 || live.state === 'done') {
-                    refused = await install(target);
-                    break;
-                }
+                const live = read.body?.data;
+                if (live?.state === 'failed') assert.fail(JSON.stringify(live));
+                hold = reservationOf(persistTo, jobId);
+                if (hold && hold.expiresAt > Date.now()) break;
                 await sleep(30);
             }
-            assert.ok(refused, 'the job never reserved its objects');
+            assert.ok(hold && hold.expiresAt > Date.now(), 'the job never reserved its objects');
+            const refused = await install(target);
             assert.equal(refused.status, 400, JSON.stringify(refused.body));
             assert.equal(refused.body.error.code, 'too_large');
             assert.equal(refused.body.error.message, FULL, 'the same sentence as a full universe');
             assert.equal(objectBytes(persistTo, target), QUOTA - slice, 'a refused install charges nothing');
 
-            await sleep(5000); // QUOTA_RESERVATION_MS is 4 s: the job's hold has ended
+            while (Date.now() < hold.expiresAt + 250) await sleep(50);
             const accepted = await install(target);
             assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
             assert.equal(objectBytes(persistTo, target), QUOTA - slice + need);
@@ -313,7 +346,7 @@ if (process.env.RUN_API_TESTS !== '1') {
         } finally {
             if (child) stopDev(child.pid);
             await sleep(300);
-            rmSync(persistTo, { recursive: true, force: true });
+            if (ownedPersist) rmSync(persistTo, { recursive: true, force: true });
         }
     });
 }

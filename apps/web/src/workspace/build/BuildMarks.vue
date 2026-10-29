@@ -220,7 +220,7 @@ defineExpose({
   stroke: var(--attention);
   stroke-width: 2;
   stroke-dasharray: 5 5;
-  animation: build-mark-march 0.9s linear infinite;
+  animation: build-mark-march var(--t-march) linear infinite;
 }
 
 .build-mark-landed {

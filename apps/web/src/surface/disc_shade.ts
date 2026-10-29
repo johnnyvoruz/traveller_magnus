@@ -14,7 +14,10 @@ const UNSHADED = new Set(['star', 'belt', 'ring']);
 
 type Body = Record<string, any>;
 
-export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: SurfaceMode = 'vanilla', dpr = 1): ShadeRequest | null {
+/** A body's painted hexes on the disc (DW2c): the texture's key the worker holds, and the longitude offset. */
+export type DiscPaint = { readonly key: string; readonly lon: number };
+
+export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: SurfaceMode = 'vanilla', dpr = 1, paint: DiscPaint | null = null): ShadeRequest | null {
     const body = disc.body as Body;
     const word = mode === 'enhanced' ? knownSurfaceWord(body) : null;
     const kind = surfaceKind(disc.body, word);
@@ -51,5 +54,9 @@ export function discShadeRequest(timeSeconds: number, disc: DiscRequest, mode: S
         ...(mode === 'enhanced' ? { cityLook: cityLook().index } : {}),
     };
     if (disc.near !== undefined) request.near = disc.near;
+    if (paint && mode === 'enhanced') {
+        request.paintKey = paint.key;
+        request.paintLon = paint.lon;
+    }
     return request;
 }

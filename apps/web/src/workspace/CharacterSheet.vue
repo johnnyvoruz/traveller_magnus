@@ -21,6 +21,7 @@ import {
 import { valueOf, type SheetDoc, type SheetField } from './sheet_fields.ts';
 import SheetBox from './SheetBox.vue';
 import SheetPanel from './SheetPanel.vue';
+import { parseDm, rollFrom } from '../dice/command.ts';
 
 const props = defineProps<{
     doc: SheetDoc;
@@ -34,6 +35,8 @@ const props = defineProps<{
     links?: Readonly<Partial<Record<SlotName, readonly { id: string; name: string }[]>>>;
     /** Which sections are folded, by name; kept by whoever gives it. Omitted, the sheet keeps its own for as long as it is mounted. */
     folded?: Record<string, boolean>;
+    /** Boxes whose value comes from elsewhere (the credit register's balance): what to show, and whether typing is locked. */
+    readouts?: Readonly<Record<string, { value: string; locked: boolean }>>;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +69,17 @@ function held(field: Pick<SheetField, 'name' | 'type'>): string | boolean {
     return valueOf(values.value, field);
 }
 
+/** What a loose box shows: a readout when one is given for it, else what is held. */
+function shown(field: Pick<SheetField, 'name' | 'type'>): string | boolean {
+    const given = props.readouts ? props.readouts[field.name] : undefined;
+    return given ? given.value : held(field);
+}
+
+function locked(field: { name: string }): boolean {
+    const given = props.readouts ? props.readouts[field.name] : undefined;
+    return given !== undefined && given.locked;
+}
+
 function has(field: { name: string } | null): boolean {
     return field !== null && field.name in values.value;
 }
@@ -81,6 +95,33 @@ function textBox(name: string): { name: string; type: 'text' } {
 /** The input's id, from the PDF's name, so its label can point at it. */
 function idOf(field: SheetField): string {
     return 'csheet-' + field.name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+}
+
+/**
+ * The die beside a box (DU8): 2D with the DM that box holds, named after the box. The sheet
+ * computes nothing; the number typed in the DM box is the DM, and an empty or odd box is none.
+ */
+function roll(from: string, dm: string | boolean): void {
+    rollFrom(from, parseDm(dm));
+}
+
+/** "Roll 2D for Strength" or "Roll 2D+1 for Strength": the die's label. */
+function rollWords(from: string, dm: string | boolean): string {
+    const value = parseDm(dm);
+    const words = value === null || value === 0 ? '2D' : '2D' + (value > 0 ? '+' : '−') + Math.abs(value);
+    return 'Roll ' + words + ' for ' + from;
+}
+
+/** A characteristic's name for the roll: its label, or the name typed for an "other" characteristic. */
+function charName(cell: { label: string; name: Pick<SheetField, 'name' | 'type'> | null }): string {
+    const typed = cell.name ? String(held(cell.name)).trim() : '';
+    return typed || cell.label;
+}
+
+/** A skill's name for the roll, with its specialism when one is typed: "Pilot (spacecraft)". */
+function skillFrom(name: string, specialism: Pick<SheetField, 'name' | 'type'> | null): string {
+    const typed = specialism ? String(held(specialism)).trim() : '';
+    return typed ? name + ' (' + typed + ')' : name;
 }
 
 function commit(name: string, value: string | boolean): void {
@@ -161,8 +202,8 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                 :name="cell.field.name"
                 kind="text"
                 :look="cell.look"
-                :value="held(cell.field)"
-                :disabled="!editable"
+                :value="shown(cell.field)"
+                :disabled="!editable || locked(cell.field)"
                 :holder="who(cell.field)"
                 @commit="commit"
                 @enter="emit('enter', $event)"
@@ -214,6 +255,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                   @leave="emit('leave', $event)"
                 />
               </span>
+              <button type="button" class="csheet-roll" data-sheet-roll :aria-label="rollWords(charName(cell), held(cell.dm))" :title="rollWords(charName(cell), held(cell.dm))" @click="roll(charName(cell), held(cell.dm))">
+                <Icon name="dice" :size="13" />
+              </button>
             </div>
           </div>
 
@@ -272,6 +316,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                     @enter="emit('enter', $event)"
                     @leave="emit('leave', $event)"
                   />
+                  <button type="button" class="csheet-roll" data-sheet-roll :aria-label="rollWords(skillFrom(skillName(group.head), group.head.specialism), held(group.head.modifier))" :title="rollWords(skillFrom(skillName(group.head), group.head.specialism), held(group.head.modifier))" @click="roll(skillFrom(skillName(group.head), group.head.specialism), held(group.head.modifier))">
+                    <Icon name="dice" :size="13" />
+                  </button>
                 </div>
                 <div v-for="line in group.more" :key="line.modifier.name" class="csheet-skill is-tier has-spec" :class="{ 'is-idle': idle(line) }">
                   <span class="csheet-gutter"></span>
@@ -302,6 +349,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                     @enter="emit('enter', $event)"
                     @leave="emit('leave', $event)"
                   />
+                  <button type="button" class="csheet-roll" data-sheet-roll :aria-label="rollWords(skillFrom(skillName(line), line.specialism), held(line.modifier))" :title="rollWords(skillFrom(skillName(line), line.specialism), held(line.modifier))" @click="roll(skillFrom(skillName(line), line.specialism), held(line.modifier))">
+                    <Icon name="dice" :size="13" />
+                  </button>
                 </div>
                 <div v-for="n in group.extra" :key="'extra-' + n" class="csheet-skill is-tier has-spec" :class="{ 'is-idle': !has(textBox(extraFieldName(group.label, n, 'Specialism'))) && !has(textBox(extraFieldName(group.label, n, 'Modifier'))) }">
                   <span class="csheet-gutter"></span>
@@ -331,6 +381,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                     @enter="emit('enter', $event)"
                     @leave="emit('leave', $event)"
                   />
+                  <button type="button" class="csheet-roll" data-sheet-roll :aria-label="rollWords(skillFrom(group.label, textBox(extraFieldName(group.label, n, 'Specialism'))), held(textBox(extraFieldName(group.label, n, 'Modifier'))))" :title="rollWords(skillFrom(group.label, textBox(extraFieldName(group.label, n, 'Specialism'))), held(textBox(extraFieldName(group.label, n, 'Modifier'))))" @click="roll(skillFrom(group.label, textBox(extraFieldName(group.label, n, 'Specialism'))), held(textBox(extraFieldName(group.label, n, 'Modifier'))))">
+                    <Icon name="dice" :size="13" />
+                  </button>
                 </div>
               </li>
             </ul>
@@ -365,6 +418,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                   @enter="emit('enter', $event)"
                   @leave="emit('leave', $event)"
                 />
+                <button type="button" class="csheet-roll" data-sheet-roll :aria-label="rollWords(String(held(blank.name)).trim() || 'Skill or ability ' + (at + 1), held(blank.dm))" :title="rollWords(String(held(blank.name)).trim() || 'Skill or ability ' + (at + 1), held(blank.dm))" @click="roll(String(held(blank.name)).trim() || 'Skill or ability ' + (at + 1), held(blank.dm))">
+                  <Icon name="dice" :size="13" />
+                </button>
               </li>
             </ul>
           </template>
@@ -410,6 +466,8 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
             <button v-for="item in linked(block.slot)" :key="item.id" type="button" class="ui-chip csheet-pill" :title="'Open ' + item.name" @click="emit('openLink', item.id)">{{ item.name }}</button>
           </div>
         </template>
+        <!-- The credit register (DT1c): the page puts it under the Finances boxes, or nothing. -->
+        <slot v-if="section.name === 'Finances'" name="finances" />
       </SheetPanel>
     </div>
   </section>
@@ -461,9 +519,43 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
 
 .csheet-char {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 54px 62px;
+  grid-template-columns: minmax(0, 1fr) 54px 62px 24px;
   align-items: center;
   gap: 6px;
+}
+
+/* The die beside a box (DU8): quiet until pointed at; the roll it makes is in its title. */
+.csheet-roll {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.csheet-roll:hover,
+.csheet-roll:focus-visible {
+  border-color: var(--signal-dim);
+  color: var(--signal);
+}
+
+.csheet-roll:focus-visible {
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .csheet-roll {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 .csheet-char .sbox.is-tag {

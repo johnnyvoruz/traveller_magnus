@@ -13,7 +13,9 @@ import { characterAttached } from '../../apps/api/src/universe/campaign.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const NOW = '2026-10-18T22:01:00.000Z';
 const AMOUNT_MAX = 1_000_000_000;
-const DAY_MAX = 400_000;
+const DAY_MAX = 4_000_000;
+/** 001-1105 on the campaign clock (year × 365 + day). Past the old 400,000 bound. */
+const MILIEU_DAY = 403_602;
 
 function memorySql() {
     const db = new DatabaseSync(':memory:');
@@ -136,11 +138,14 @@ test('each kind posts, a transfer keeps its link, and the guards refuse the rest
     const memo = 'm'.repeat(80);
     const high = postLedger(sql, { kind: 'adjustment', amount: AMOUNT_MAX, memo, whenDay: 0 }, 'owner', NOW, 0, ids);
     const low = postLedger(sql, { kind: 'adjustment', amount: -AMOUNT_MAX, memo: 'low', whenDay: DAY_MAX }, 'owner', NOW, 0, ids);
+    const milieu = postLedger(sql, { kind: 'pay', amount: 1, memo: 'milieu', whenDay: MILIEU_DAY }, 'owner', NOW, 0, ids);
     const blankLink = postLedger(sql, { kind: 'transfer', amount: 1, memo: 'move', linkId: '' }, 'owner', NOW, 0, ids);
     assert.equal(high.ok, true);
     assert.equal(high.line.memo, memo);
     assert.equal(high.line.whenDay, 0);
     assert.equal(low.line.whenDay, DAY_MAX);
+    assert.equal(milieu.ok, true);
+    assert.equal(milieu.line.whenDay, MILIEU_DAY);
     assert.equal(blankLink.line.linkId, null);
     const open = readLedger(sql, 0);
     assert.equal(open.credits, 'detailed');

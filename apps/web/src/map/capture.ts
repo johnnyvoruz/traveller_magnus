@@ -115,7 +115,9 @@ export async function captureChart(input: ChartCapture): Promise<boolean> {
     const px = paperFor(input.rect, input.paper);
     const canvas = createCanvas(px.deviceWidth, px.deviceHeight);
     const cam = captureCamera(input.rect, px.width, px.height);
-    const frame = input.renderer.drawInto(canvas, cam, px.width, px.height, px.dpr, input.theme, { titleTop: 0, workspaceLeft: 0, selection: null });
+    // An area (a subsector, a sector) draws only its own worlds (DF20): the margins cover the rest, but a name below a
+    // world in the row above would otherwise run over the area's top hexes.
+    const frame = input.renderer.drawInto(canvas, cam, px.width, px.height, px.dpr, input.theme, { titleTop: 0, workspaceLeft: 0, selection: null, only: input.hexes });
     if (!frame) return false;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;

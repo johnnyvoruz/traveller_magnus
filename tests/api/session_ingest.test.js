@@ -579,8 +579,24 @@ INSERT INTO access_tokens (
                 headers: { ...cookie, cookie: player },
                 body: JSON.stringify(proposalBatch(`player-${stamp}-key`, [question('A player must not paste.')])),
             });
-            assert.equal(playerPaste.status, 403, JSON.stringify(playerPaste.body));
-            assert.equal(playerPaste.body.error.message, 'The owner does that.');
+            assert.equal(playerPaste.status, 404, JSON.stringify(playerPaste.body));
+            assert.equal(playerPaste.body.error.message, 'No such universe.');
+            const homeInvite = await jsonFetch(`${base}/api/universes/${id}/players/invite`, { method: 'POST', headers: { cookie: owner } });
+            assert.equal(homeInvite.body?.ok, true, JSON.stringify(homeInvite.body));
+            const homeToken = homeInvite.body.data.url.split('/join/')[1];
+            const homeJoin = await jsonFetch(`${base}/api/join`, {
+                method: 'POST',
+                headers: { cookie: player, 'content-type': 'application/json' },
+                body: JSON.stringify({ token: homeToken }),
+            });
+            assert.equal(homeJoin.status, 200, JSON.stringify(homeJoin.body));
+            const memberPaste = await jsonFetch(`${base}/api/universes/${id}/campaign/proposals`, {
+                method: 'POST',
+                headers: { ...cookie, cookie: player },
+                body: JSON.stringify(proposalBatch(`member-${stamp}-key`, [question('A member must not paste.')])),
+            });
+            assert.equal(memberPaste.status, 403, JSON.stringify(memberPaste.body));
+            assert.equal(memberPaste.body.error.message, 'The owner does that.');
             const malformed = await jsonFetch(`${base}/api/universes/${id}/campaign/proposals`, {
                 method: 'POST',
                 headers: cookie,

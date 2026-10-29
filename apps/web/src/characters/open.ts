@@ -5,6 +5,7 @@
  */
 import { reactive } from 'vue';
 import { attachLive, type LiveController } from './live.ts';
+import { noteLedgerFrame, resetRegisters } from './register.ts';
 import { characters, noteCharacterText, registerDeleted, registerReset, registerRole, registerText } from './store.ts';
 import type { CharacterHandle, CharacterState } from './types.ts';
 
@@ -20,6 +21,7 @@ const rooms = new Map<string, Room>();
 registerReset(() => {
     for (const room of rooms.values()) room.live.stop();
     rooms.clear();
+    resetRegisters();
 });
 
 registerDeleted((id) => {
@@ -79,6 +81,8 @@ export function openCharacter(id: string): CharacterHandle {
     });
     const live = attachLive(state, (name, summary) => {
         noteCharacterText(id, { name, summary });
+    }, (frame) => {
+        noteLedgerFrame(id, frame);
     });
     const room: Room = { state, handle: null as unknown as CharacterHandle, live, refs: 1 };
     room.handle = makeHandle(state, live, () => {

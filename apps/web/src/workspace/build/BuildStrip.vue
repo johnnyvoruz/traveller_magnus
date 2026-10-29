@@ -110,11 +110,11 @@ onBeforeUnmount(() => {
     >
       <Icon name="table-cells" :size="13" />Select hexes<kbd class="build-key">S</kbd>
     </button>
-    <span v-if="build.selecting" class="build-strip-say" role="status">Drag to select · Alt+drag to deselect · Space+drag to move the map · Esc to finish</span>
+    <span v-if="build.selecting" class="build-strip-say" role="status">Drag to select · Alt+drag to deselect · Space+drag to move the map · Escape to finish</span>
     <span v-if="count" class="build-strip-tally" role="status">
       <b>{{ count.n }}</b> hexes<template v-if="count.full"> · selection limit reached</template><template v-else> · {{ count.empty }} empty</template>
     </span>
-    <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Esc)" @click="$emit('clear')">
+    <button v-if="count" type="button" class="ui-btn build-strip-count" title="Clear the selection (Escape)" @click="$emit('clear')">
       Clear<Icon name="xmark" :size="12" />
     </button>
     <!-- The notes hang below: the strip never changes size. -->

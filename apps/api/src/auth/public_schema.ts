@@ -2,6 +2,7 @@ let ready: boolean | null = null;
 let shipsReady: boolean | null = null;
 let cardsReady: boolean | null = null;
 let courseColumn = false;
+let shipClassColumn = false;
 let logged = false;
 
 export function publicGamesReady(): boolean {
@@ -71,6 +72,23 @@ export async function courseReady(db: D1Database): Promise<boolean> {
         courseColumn = false;
     }
     return courseColumn;
+}
+
+/**
+ * 0026 probe. A yes is kept for the isolate. A no is asked again, so applying the migration
+ * needs no restart. A missing column means the card has no class and the old sentence stays.
+ */
+export async function shipClassReady(db: D1Database): Promise<boolean> {
+    if (shipClassColumn) return true;
+    try {
+        const row = await db.prepare(
+            `SELECT COUNT(*) AS n FROM pragma_table_info('public_ships') WHERE name = 'ship_class'`,
+        ).first<{ n: number }>();
+        shipClassColumn = Number(row?.n ?? 0) > 0;
+    } catch {
+        shipClassColumn = false;
+    }
+    return shipClassColumn;
 }
 
 /** 1 or 0 when 0013 is applied and the row exists. Null when the column is absent or the row is gone. */

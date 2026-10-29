@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
     </div>
     <div ref="cardEl" v-if="latest && cardOn" class="dice-card is-on" :style="{ '--locator-height': locatorPx + 'px' }" @click="dismiss">
       <button type="button" class="ui-btn is-icon dice-card-x" aria-label="Close dice" @click.stop="dismiss">×</button>
-      <span class="dice-card-title">{{ formula || title }}</span>
+      <span class="dice-card-title">{{ latest.from ? latest.from + ' · ' : '' }}{{ formula || title }}</span>
       <span class="dice-total">{{ shownTotal }}</span>
       <span class="dice-faces">
         <span
@@ -268,7 +268,7 @@ onBeforeUnmount(() => {
 }
 
 .dice-tray.is-on .die-wrap {
-  animation: dice-toss 1.1s cubic-bezier(.2, .8, .3, 1);
+  animation: dice-toss var(--t-tumble) cubic-bezier(.2, .8, .3, 1);
 }
 
 .dice-tray.is-on .die-wrap:nth-child(2) {
@@ -308,7 +308,7 @@ onBeforeUnmount(() => {
 }
 
 .die.is-spin {
-  transition: transform 1.1s cubic-bezier(.15, .7, .25, 1);
+  transition: transform var(--t-tumble) cubic-bezier(.15, .7, .25, 1);
 }
 
 .face {
@@ -365,8 +365,19 @@ onBeforeUnmount(() => {
   bottom: calc(var(--chrome-inset) + var(--locator-height, 0px) + var(--sp-2) + var(--dice-card-height, 0px) + var(--sp-2) + env(safe-area-inset-bottom, 0px));
 }
 
+.dice-bar .dice-panel {
+  width: 100%;
+}
+
+/* The bar is 420px at most: the picks and the strip wrap inside it instead of running past its edges (DU8). */
 .dice-bar .dice-picks {
+  flex-wrap: wrap;
+  justify-content: center;
   margin: 0;
+}
+
+.dice-bar .dice-recent {
+  justify-content: center;
 }
 
 .dice-bar-x {

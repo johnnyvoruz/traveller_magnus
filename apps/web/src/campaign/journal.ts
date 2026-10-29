@@ -65,7 +65,8 @@ export function rebuildJournalIndex(
     byId.clear();
     atHex.clear();
     mentioning.clear();
-    const live = Object.values(entries).filter((entry) => !entry.deleted);
+    // A reply (a row with a parent) is read under its entry, never listed as one (DU30).
+    const live = Object.values(entries).filter((entry) => !entry.deleted && !entry.parent);
     byUpdated = live.slice().sort(compareUpdated);
     byDate = live.slice().sort(compareEntries);
     for (const entry of byDate) {
@@ -216,6 +217,16 @@ export function saveEntry(entry: CampaignEntry): boolean {
     return true;
 }
 
+/**
+ * The delete toast. The server tombstones an entry's replies with it and does not bring them
+ * back with the entry (contracts/b_players.md "Replies"), so the toast says both.
+ */
+export function deletedWords(label: string, replies: number): string {
+    if (replies <= 0) return 'Deleted ' + label + '.';
+    const words = replies === 1 ? '1 reply' : replies + ' replies';
+    return 'Deleted ' + label + ' and its ' + words + '. Undo brings back the entry only.';
+}
+
 /** Tombstones an entry. Undo is the toast, as a record's delete is. */
 export function deleteEntry(id: string): boolean {
     if (!open()) return false;
@@ -223,7 +234,7 @@ export function deleteEntry(id: string): boolean {
     if (!entry || entry.deleted) return false;
     commit({ journal: [{ id, baseRev: entry.rev, deleted: true }] });
     const label = entry.title ? entry.title : 'the entry';
-    showToast('Deleted ' + label + '.', { action: { label: 'Undo', run: () => { restoreEntry(id); } } });
+    showToast(deletedWords(label, entry.replies ?? 0), { action: { label: 'Undo', run: () => { restoreEntry(id); } } });
     return true;
 }
 

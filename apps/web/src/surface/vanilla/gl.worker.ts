@@ -6,7 +6,7 @@ import { handOverDiscAnswer } from '../enhanced/delivery.ts';
 import { mountDiscProgram, resetDiscProgram } from '../enhanced/session.ts';
 import { cubeSizeFor, MEMORY_BUDGET, type BakeProfile, type CubeFaces, type GpuSpan } from './gl_bake.ts';
 import { createDiscBaker, type DiscBaker, type DiscCapture } from './gl.ts';
-import type { AtlasSlot, DiscDelivery, RpcRequest, WatchRequest, WorkerTile } from './gl_messages.ts';
+import type { AtlasSlot, DiscDelivery, PaintMessage, RpcRequest, WatchRequest, WorkerTile } from './gl_messages.ts';
 import type { ShadeRequest } from './gl_shade.ts';
 
 type Scope = {
@@ -356,8 +356,14 @@ async function rpc(message: RpcRequest): Promise<void> {
 }
 
 scope.onmessage = (event: MessageEvent) => {
-    const data = event.data as RpcRequest | WatchRequest | null;
+    const data = event.data as RpcRequest | WatchRequest | PaintMessage | null;
     if (!data || typeof data !== 'object') return;
+    // A body's painted hexes (DW2c): kept by key; the next watch that names the key draws with it.
+    if (data.op === 'paint' && !('id' in data)) {
+        const paint = data as PaintMessage;
+        session().setPaint(paint.key, paint.image);
+        return;
+    }
     if (data.op === 'watch' && !('id' in data)) {
         const job = data as WatchRequest;
         watch = job;

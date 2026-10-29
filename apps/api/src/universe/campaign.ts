@@ -117,7 +117,8 @@ export function installCampaignSchema(sql: Sql): void {
         updated_at TEXT NOT NULL,
         deleted INTEGER NOT NULL,
         images TEXT,
-        author_id TEXT
+        author_id TEXT,
+        parent TEXT
     )`);
     const journalColumns = sql.exec(`SELECT name AS name FROM pragma_table_info('campaign_journal')`);
     if (!journalColumns.some((row) => row.name === 'images')) {
@@ -126,8 +127,12 @@ export function installCampaignSchema(sql: Sql): void {
     if (!journalColumns.some((row) => row.name === 'author_id')) {
         sql.exec(`ALTER TABLE campaign_journal ADD COLUMN author_id TEXT`);
     }
+    if (!journalColumns.some((row) => row.name === 'parent')) {
+        sql.exec(`ALTER TABLE campaign_journal ADD COLUMN parent TEXT`);
+    }
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_seq ON campaign_journal(seq)`);
     sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_kind ON campaign_journal(kind)`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS campaign_journal_parent ON campaign_journal(parent)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS lists (
         kind TEXT PRIMARY KEY,
         rev INTEGER,
@@ -353,14 +358,15 @@ function entryFrom(row: SqlRow): StoredJournalEntry {
         updatedAt: String(row.updated_at),
         deleted: bit(row.deleted),
         authorId: text(row.author_id),
+        parent: text(row.parent),
     };
 }
 
 /** The owner page is the campaign schema. `authorId` stays off that body. */
-function ownerEntry(row: SqlRow): CampaignEntry {
+function ownerEntry(row: SqlRow, replies = 0): CampaignEntry {
     const { authorId, ...entry } = entryFrom(row);
     void authorId;
-    return entry;
+    return { ...entry, replies };
 }
 
 function loadRecord(sql: Sql, id: string): SqlRow | null {
@@ -407,6 +413,74 @@ function journalVisibility(change: { visibility: string }, stored: SqlRow | null
 }
 
 /** A patch writes images only when the field is present. Omitting it leaves the stored list. */
+const PARENT_REFUSED = 'Invalid request.';
+
+/** `undefined` means the write left the parent alone. Null is a top-level entry. */
+function requestedParent(change: object): string | null | undefined {
+    if (!Object.prototype.hasOwnProperty.call(change, 'parent')) return undefined;
+    const value = (change as { parent?: unknown }).parent;
+    if (value == null) return null;
+    return String(value);
+}
+
+function replyCount(sql: Sql, id: string): number {
+    const rows = sql.exec(
+        `SELECT COUNT(*) AS n FROM campaign_journal WHERE deleted = 0 AND parent = ?`,
+        id,
+    );
+    return Number(rows[0]?.n ?? 0);
+}
+
+function replyCounts(sql: Sql, ids: readonly string[]): Map<string, number> {
+    const found = new Map<string, number>();
+    if (!ids.length) return found;
+    const marks = ids.map(() => '?').join(', ');
+    const rows = sql.exec(
+        `SELECT parent AS parent, COUNT(*) AS n FROM campaign_journal WHERE deleted = 0 AND parent IN (${marks}) GROUP BY parent`,
+        ...ids,
+    );
+    for (const row of rows) found.set(String(row.parent), Number(row.n));
+    return found;
+}
+
+function assertLiveParent(sql: Sql, parent: string, selfId: string): void {
+    if (parent === selfId) throw new CampaignRefusal('validation', PARENT_REFUSED);
+    const row = loadEntry(sql, parent);
+    if (!row || bit(row.deleted)) throw new CampaignRefusal('validation', PARENT_REFUSED);
+}
+
+/** A reply is a players note. Any other kind, author, or visibility is refused. */
+function assertReplyShape(change: { kind: string; author: string; visibility: string }): void {
+    if (change.kind !== 'note' || change.author !== 'players' || change.visibility !== 'players') {
+        throw new CampaignRefusal('validation', PARENT_REFUSED);
+    }
+}
+
+/**
+ * The parent keeps its rev. Each live reply becomes a tombstone at its next rev,
+ * and the same follows for a reply under that reply.
+ */
+function tombstoneReplies(sql: Sql, parentId: string, now: string, applied: CampaignChangesResult['applied']): void {
+    const children = sql.exec(
+        `SELECT id, rev FROM campaign_journal WHERE parent = ? AND deleted = 0`,
+        parentId,
+    );
+    for (const child of children) {
+        const id = String(child.id);
+        const rev = Number(child.rev) + 1;
+        const seq = nextSeq(sql);
+        sql.exec(
+            `UPDATE campaign_journal SET deleted = 1, rev = ?, seq = ?, updated_at = ? WHERE id = ?`,
+            rev,
+            seq,
+            now,
+            id,
+        );
+        applied.push({ table: 'journal', id, rev, seq });
+        tombstoneReplies(sql, id, now, applied);
+    }
+}
+
 function imagesWrite(change: object): string | null | undefined {
     if (!Object.prototype.hasOwnProperty.call(change, 'images')) return undefined;
     const value = (change as { images?: unknown }).images;
@@ -416,18 +490,23 @@ function imagesWrite(change: object): string | null | undefined {
 
 type ParseIssue = {
     code?: string;
-    path?: Array<string | number>;
+    path?: PropertyKey[];
     unionErrors?: { issues?: ParseIssue[] }[];
+    /** Zod 4 nests a union's failures here. Zod 3 used `unionErrors`. */
+    errors?: ParseIssue[][];
 };
 
 /** True when a journal change sends more than 12 images. */
 function journalImageOverflow(error: { issues: ParseIssue[] }): boolean {
-    function walk(issues: ParseIssue[], path: Array<string | number>): boolean {
+    function walk(issues: ParseIssue[], path: PropertyKey[]): boolean {
         for (const issue of issues) {
             const here = [...path, ...(issue.path ?? [])];
             if (issue.code === 'too_big' && here[0] === 'journal' && here.includes('images')) return true;
             for (const nested of issue.unionErrors ?? []) {
                 if (walk(nested.issues ?? [], here)) return true;
+            }
+            for (const nested of issue.errors ?? []) {
+                if (walk(nested, here)) return true;
             }
         }
         return false;
@@ -473,23 +552,61 @@ function pendingProposals(sql: Sql): number {
     return Number(sql.exec(`SELECT COUNT(*) AS n FROM proposals WHERE state = 'pending'`)[0]?.n ?? 0);
 }
 
-export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuthor = false): CampaignPage & { pendingProposals: number } {
+/**
+ * `top` is the campaign poll: journal rows that are not replies.
+ * `all` is the export: every journal row, replies included.
+ * `{ parent }` is the replies under that entry. Records and links stay empty on that read.
+ */
+export type JournalRead = 'top' | 'all' | { parent: string };
+
+const JOURNAL_PARENT = /^cj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Absent `parent` is the poll. A value that is not a journal id is refused. */
+export function parseJournalParent(value: string | null): { ok: true; parent: string | null } | { ok: false } {
+    if (value == null) return { ok: true, parent: null };
+    if (!JOURNAL_PARENT.test(value)) return { ok: false };
+    return { ok: true, parent: value };
+}
+
+/** `replies=all` is the export. It includes every journal row. A parent read wins when both are set. */
+export function parseJournalRead(parent: string | null, replies: string | null): JournalRead | null {
+    if (replies != null && replies !== 'all') return null;
+    const parsed = parseJournalParent(parent);
+    if (!parsed.ok) return null;
+    if (parsed.parent) return { parent: parsed.parent };
+    if (replies === 'all') return 'all';
+    return 'top';
+}
+
+export function readCampaign(
+    sql: Sql,
+    afterSeq: number,
+    limit: number,
+    withAuthor = false,
+    journalRead: JournalRead = 'top',
+): CampaignPage & { pendingProposals: number } {
     const cap = Math.min(1000, Math.max(1, Math.floor(limit)));
-    const records = sql.exec(
+    const parentOnly = typeof journalRead === 'object';
+    const records = parentOnly ? [] : sql.exec(
         `SELECT * FROM campaign_records WHERE seq > ? ORDER BY seq LIMIT ?`,
         afterSeq,
         cap + 1,
     );
-    const links = sql.exec(
+    const links = parentOnly ? [] : sql.exec(
         `SELECT * FROM campaign_links WHERE seq > ? ORDER BY seq LIMIT ?`,
         afterSeq,
         cap + 1,
     );
-    const journal = sql.exec(
-        `SELECT * FROM campaign_journal WHERE seq > ? ORDER BY seq LIMIT ?`,
-        afterSeq,
-        cap + 1,
-    );
+    const journalParams: Array<string | number | null> = [afterSeq];
+    let journalSql = `SELECT * FROM campaign_journal WHERE seq > ?`;
+    if (journalRead === 'top') journalSql += ` AND parent IS NULL`;
+    else if (typeof journalRead === 'object') {
+        journalSql += ` AND parent = ?`;
+        journalParams.push(journalRead.parent);
+    }
+    journalSql += ` ORDER BY seq LIMIT ?`;
+    journalParams.push(cap + 1);
+    const journal = sql.exec(journalSql, ...journalParams);
     const merged = [
         ...records.map((row) => ({ seq: Number(row.seq), table: 'records' as const, row })),
         ...links.map((row) => ({ seq: Number(row.seq), table: 'links' as const, row })),
@@ -500,12 +617,15 @@ export function readCampaign(sql: Sql, afterSeq: number, limit: number, withAuth
     const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
     const universeSeq = Number(counter[0]?.value ?? 0);
     const seq = done ? universeSeq : page[page.length - 1]?.seq ?? universeSeq;
+    const journalPage = page.filter((item) => item.table === 'journal');
+    const counts = replyCounts(sql, journalPage.map((item) => String(item.row.id)));
     return {
         records: page.filter((item) => item.table === 'records').map((item) => recordFrom(item.row)) as CampaignPage['records'],
         links: page.filter((item) => item.table === 'links').map((item) => linkFrom(item.row)) as CampaignPage['links'],
-        journal: page.filter((item) => item.table === 'journal').map((item) => (
-            withAuthor ? entryFrom(item.row) : ownerEntry(item.row)
-        )) as CampaignPage['journal'],
+        journal: journalPage.map((item) => {
+            const replies = counts.get(String(item.row.id)) ?? 0;
+            return withAuthor ? { ...entryFrom(item.row), replies } : ownerEntry(item.row, replies);
+        }) as CampaignPage['journal'],
         settings: readSettings(sql),
         clock: readClock(sql),
         seq,
@@ -559,17 +679,22 @@ export function readDemoCampaign(sql: Sql): PlayersView {
     return playersView({
         records: rows.records.map((row) => recordFrom(row)) as CampaignPage['records'],
         links: rows.links.map((row) => linkFrom(row)) as CampaignPage['links'],
-        journal: rows.journal.map((row) => entryFrom(row)),
+        journal: journalEntries(sql, rows.journal.filter((row) => text(row.parent) == null)),
         settings: readSettings(sql),
         clock: readClock(sql),
     });
+}
+
+function journalEntries(sql: Sql, rows: readonly SqlRow[]): Array<ReturnType<typeof entryFrom> & { replies: number }> {
+    const counts = replyCounts(sql, rows.map((row) => String(row.id)));
+    return rows.map((row) => ({ ...entryFrom(row), replies: counts.get(String(row.id)) ?? 0 }));
 }
 
 function projectLive(sql: Sql, rows: { records: SqlRow[]; links: SqlRow[]; journal: SqlRow[] }, caller: PlayersCaller): PlayersView {
     return playersView({
         records: rows.records.map((row) => recordFrom(row)) as CampaignPage['records'],
         links: rows.links.map((row) => linkFrom(row)) as CampaignPage['links'],
-        journal: rows.journal.map((row) => entryFrom(row)),
+        journal: journalEntries(sql, rows.journal),
         settings: readSettings(sql),
         clock: readClock(sql),
     }, caller);
@@ -599,18 +724,45 @@ function pageKind<T extends { id: string }>(
     };
 }
 
-/** The member read. The whole live set is projected, then each table is paged on its own. */
-export function readPlayersCampaign(sql: Sql, afterSeq: number, limit: number, caller: PlayersCaller): PlayersCampaignPage {
+/**
+ * The member read. The whole live set is projected, then each table is paged on its own.
+ * A `parent` reads that entry's replies and leaves records, links, and `visible` off the page.
+ */
+export function readPlayersCampaign(
+    sql: Sql,
+    afterSeq: number,
+    limit: number,
+    caller: PlayersCaller,
+    parent: string | null = null,
+): PlayersCampaignPage {
     const cap = Math.min(1000, Math.max(1, Math.floor(limit)));
     const rows = liveRows(sql);
     const seqOf = new Map<string, number>();
     for (const row of rows.records) seqOf.set(`records:${String(row.id)}`, Number(row.seq));
     for (const row of rows.links) seqOf.set(`links:${String(row.id)}`, Number(row.seq));
     for (const row of rows.journal) seqOf.set(`journal:${String(row.id)}`, Number(row.seq));
+    if (parent) {
+        const children = sql.exec(`SELECT * FROM campaign_journal WHERE parent = ?`, parent);
+        for (const row of children) seqOf.set(`journal:${String(row.id)}`, Number(row.seq));
+        const view = projectLive(sql, { records: rows.records, links: rows.links, journal: children }, caller);
+        const journal = pageKind(view.journal, seqOf, 'journal', afterSeq, cap);
+        const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
+        const universeSeq = Number(counter[0]?.value ?? 0);
+        const done = !journal.truncated;
+        return {
+            records: [],
+            links: [],
+            journal: journal.rows,
+            settings: view.settings,
+            clock: view.clock,
+            seq: done ? universeSeq : journal.last ?? universeSeq,
+            done,
+        };
+    }
     const view = projectLive(sql, rows, caller);
     const records = pageKind(view.records, seqOf, 'records', afterSeq, cap);
     const links = pageKind(view.links, seqOf, 'links', afterSeq, cap);
-    const journal = pageKind(view.journal, seqOf, 'journal', afterSeq, cap);
+    const journal = pageKind(view.journal.filter((entry) => entry.parent == null), seqOf, 'journal', afterSeq, cap);
     const cut = [records, links, journal].filter((item) => item.truncated && item.last != null);
     const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
     const universeSeq = Number(counter[0]?.value ?? 0);
@@ -738,6 +890,8 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
                 if (!isFullEntry(change) || change.baseRev !== 0) refuseMember();
                 assertMemberNote(change);
                 assertMemberAnchor(sql, change.anchor);
+                const parent = requestedParent(change) ?? null;
+                if (parent) assertLiveParent(sql, parent, change.id);
                 if (!change.deleted && countPlayerNotes(sql, member.userId) >= PLAYER_NOTES) {
                     throw new CampaignRefusal('too_large', PLAYER_NOTE_SENTENCE);
                 }
@@ -747,8 +901,8 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
                 sql.exec(
                     `INSERT INTO campaign_journal (
                         id, kind, title, body, when_json, real_date, sequence, author, visibility,
-                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted, author_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted, author_id, parent
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     change.id,
                     change.kind,
                     change.title,
@@ -767,6 +921,7 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
                     now,
                     change.deleted ? 1 : 0,
                     member.userId,
+                    parent,
                 );
                 applied.push({ table: 'journal', id: change.id, rev, seq });
                 continue;
@@ -775,12 +930,16 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
             if (isFullEntry(change)) {
                 assertMemberNote(change);
                 assertMemberAnchor(sql, change.anchor);
+                const parent = requestedParent(change);
+                if (parent !== undefined && parent !== text(stored.parent)) {
+                    throw new CampaignRefusal('validation', PARENT_REFUSED);
+                }
             }
             if (change.baseRev !== Number(stored.rev)) {
                 conflicts.push({
                     table: 'journal',
                     id: change.id,
-                    current: ownerEntry(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
+                    current: ownerEntry(stored, replyCount(sql, change.id)) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
                 });
                 continue;
             }
@@ -851,6 +1010,7 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
                 );
             }
             applied.push({ table: 'journal', id: change.id, rev, seq });
+            if (willDelete && !bit(stored.deleted)) tombstoneReplies(sql, change.id, now, applied);
         }
         return storedResult(sql, now, applied, conflicts);
     });
@@ -1134,6 +1294,11 @@ export function applyCampaignChanges(
             const stored = loadEntry(sql, change.id);
             if (!stored) {
                 if (!isFullEntry(change) || change.baseRev !== 0) continue;
+                const parent = requestedParent(change) ?? null;
+                if (parent) {
+                    assertReplyShape(change);
+                    assertLiveParent(sql, parent, change.id);
+                }
                 requireRoom(sql, 'campaign_journal', false, !change.deleted);
                 const rev = 1;
                 const seq = nextSeq(sql);
@@ -1141,8 +1306,8 @@ export function applyCampaignChanges(
                 sql.exec(
                     `INSERT INTO campaign_journal (
                         id, kind, title, body, when_json, real_date, sequence, author, visibility,
-                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted, parent
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     change.id,
                     change.kind,
                     change.title,
@@ -1160,6 +1325,7 @@ export function applyCampaignChanges(
                     now,
                     now,
                     change.deleted ? 1 : 0,
+                    parent,
                 );
                 applied.push({ table: 'journal', id: change.id, rev, seq });
                 continue;
@@ -1168,9 +1334,16 @@ export function applyCampaignChanges(
                 conflicts.push({
                     table: 'journal',
                     id: change.id,
-                    current: ownerEntry(stored) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
+                    current: ownerEntry(stored, replyCount(sql, change.id)) as Extract<CampaignChangesResult['conflicts'][number], { table: 'journal' }>['current'],
                 });
                 continue;
+            }
+            if (isFullEntry(change)) {
+                const parent = requestedParent(change);
+                if (parent !== undefined && parent !== text(stored.parent)) {
+                    throw new CampaignRefusal('validation', PARENT_REFUSED);
+                }
+                if (text(stored.parent)) assertReplyShape(change);
             }
             const rev = Number(stored.rev) + 1;
             const seq = nextSeq(sql);
@@ -1237,6 +1410,7 @@ export function applyCampaignChanges(
                 );
             }
             applied.push({ table: 'journal', id: change.id, rev, seq });
+            if (willDelete && !bit(stored.deleted)) tombstoneReplies(sql, change.id, now, applied);
         }
         return storedResult(sql, now, applied, conflicts);
     });
