@@ -31,6 +31,8 @@ import ClockLine from './ClockLine.vue';
 import FirstRun from './FirstRun.vue';
 import { dateIsSet, vesselHasPlace, worldIsOpen } from './first_run.ts';
 import { editDateNext, journalFilter, journalQuery, recordFilter, recordQuery } from './list_state.ts';
+import { publishAsk } from './market/command.ts';
+import { canPublishRecords } from './market/record_publish.ts';
 import PartyPanel from './PartyPanel.vue';
 import { partyWords } from './party.ts';
 import { ensureCampaign, openFailed, retryCampaign } from './opening.ts';
@@ -100,6 +102,8 @@ const onProposals = computed(() => proposalsPane.value !== null);
 const onSession = computed(() => addressPane(route.path, route.query).pane.kind === 'session' && props.tab === 'records' && !props.recordId && !props.entryId);
 /** A session is live in this campaign on this device: the head's button carries the mark. */
 const sessionLive = computed(() => liveFor(campaign.universeId) !== null);
+/** At Column the referee's Timeline, Relationships and Session go under the head's menu (DU34); a player, with no menu, keeps the buttons. */
+const headFolded = computed(() => span.value === 'column' && isReferee.value);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -130,9 +134,13 @@ const status = computed(() => {
     return campaign.status === 'signed-out' ? 'loading' : campaign.status;
 });
 
-/** The date beside the search bar was pressed: the field opens as soon as the panel can show it. */
-watch(() => [editDateNext.value, status.value, props.recordId, props.entryId, props.open] as const, () => {
+/** The date beside the search bar was pressed, or the first-run card's Set the date: the field opens as soon as the panel shows the Party tab, where the date lives (DU34). */
+watch(() => [editDateNext.value, status.value, props.recordId, props.entryId, props.open, props.tab] as const, () => {
     if (!editDateNext.value || !props.open || status.value !== 'ready' || props.recordId || props.entryId) return;
+    if (props.tab !== 'party') {
+        showTab('party');
+        return;
+    }
     editDateNext.value = false;
     void nextTick(() => { if (clockLine.value) clockLine.value.edit(); });
 }, { flush: 'post' });
@@ -149,6 +157,8 @@ const title = computed(() => {
 });
 /** The tabs' counts and words. */
 const recordCount = computed(() => Object.values(campaign.records).filter((record) => !record.deleted).length);
+/** Publish records, from the head's menu (DU34): the records list's own gate. */
+const canPublish = computed(() => canPublishRecords(ro.value, recordCount.value));
 const journalCount = computed(() => {
     void campaign.seq;
     return entriesNewestFirst().length;
@@ -377,7 +387,13 @@ function addFirstShip(): void {
 
 function editFirstDate(): void {
     if (!online.value) return;
-    void nextTick(() => { if (clockLine.value) clockLine.value.edit(); });
+    editDateNext.value = true;
+}
+
+/** Publish records from the head's menu: the records list opens the dialog (it watches the ask, as it does for the palette). */
+function openPublish(): void {
+    publishAsk.records = true;
+    if (props.tab !== 'records' || onTimeline.value || onWeb.value || onProposals.value || onSession.value) showTab('records');
 }
 
 /** "/" goes to the list's search, unless a field is being typed in. */
@@ -575,12 +591,12 @@ defineExpose({ remeasure: publish });
               <Icon name="book-atlas" :size="12" />Journal <b>{{ journalCount }}</b>
             </button>
           </div>
-            <button type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
-            <button type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
-            <button v-if="isReferee" type="button" class="camp-timeline camp-session" :class="{ 'is-live': sessionLive }" :aria-pressed="onSession ? 'true' : 'false'" data-open-session @click="openSession"><i v-if="sessionLive" class="camp-live" aria-hidden="true"></i>Session</button>
-            <CampaignMenu v-if="isReferee" @proposals="openProposals" />
+            <button v-if="!headFolded" type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
+            <button v-if="!headFolded" type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
+            <button v-if="isReferee && !headFolded" type="button" class="camp-timeline camp-session" :class="{ 'is-live': sessionLive }" :aria-pressed="onSession ? 'true' : 'false'" data-open-session @click="openSession"><i v-if="sessionLive" class="camp-live" aria-hidden="true"></i>Session</button>
+            <CampaignMenu v-if="isReferee" :folded="headFolded" :publish="canPublish" :live="sessionLive" @timeline="openTimeline" @web="openWeb" @session="openSession" @publish="openPublish" @proposals="openProposals" />
           </div>
-          <ClockLine v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" ref="clockLine" :read-only="ro" />
+          <ClockLine v-if="status === 'ready' && tab === 'party' && !recordId && !entryId" ref="clockLine" :read-only="ro" />
           <p v-if="!online" class="camp-strip" role="status">
             You are offline. This is what was loaded; changes wait until you are back.
           </p>
@@ -618,7 +634,7 @@ defineExpose({ remeasure: publish });
           <div v-else-if="span === 'full'" class="camp-split">
             <div class="camp-col">
               <FirstRun v-if="showFirstRun" :read-only="!online" @ship="addFirstShip" @date="editFirstDate" />
-              <CampaignList ref="list" :selected="recordId" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+              <CampaignList ref="list" :selected="recordId" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" />
             </div>
             <div class="camp-detail">
               <PlayerRecordPage v-if="recordId && isPlayer" :id="recordId" beside @back="go(null)" @open="go" @map="showMap" />
@@ -632,7 +648,7 @@ defineExpose({ remeasure: publish });
           <RecordPage v-else-if="recordId" :id="recordId" :beside="false" :read-only="!online" @back="go(null)" @map="showMap" />
           <div v-else class="camp-col">
             <FirstRun v-if="showFirstRun" :read-only="!online" @ship="addFirstShip" @date="editFirstDate" />
-            <CampaignList ref="list" :selected="null" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" @timeline="openTimeline" />
+            <CampaignList ref="list" :selected="null" :read-only="ro" :player="isPlayer" :hide-empty="showFirstRun" @open="go" @create="create" @map="showMap" />
           </div>
         </template>
       </div>
@@ -663,15 +679,27 @@ defineExpose({ remeasure: publish });
   border-bottom: 1px solid var(--line-1);
 }
 
-/* The three tabs keep one row: the Party tab's line gives way (its ellipsis), not the Journal tab. */
+/*
+ * The three tabs keep one row: the Party tab's line gives way (its ellipsis), not the Journal tab.
+ * The tabs' basis is small so the row shrinks the party's line before it wraps the menu to a row
+ * of its own (DU34); at Half the head's buttons sit tighter for the same reason.
+ */
 .camp-tabs {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 200px;
   flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
   margin: 0;
   border-bottom: 0;
+}
+
+.camp[data-span="half"] .camp-head {
+  gap: 6px;
+}
+
+.camp[data-span="half"] .camp-timeline {
+  padding: 6px 7px 8px;
 }
 
 .camp-timeline {

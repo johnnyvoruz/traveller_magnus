@@ -4,6 +4,7 @@ import { session } from '../../apps/web/src/account/session.ts';
 import { saveEntry } from '../../apps/web/src/campaign/journal.ts';
 import {
     createInvite,
+    readInvite,
     invitePreview,
     join,
     leave,
@@ -427,4 +428,28 @@ test('a player reload on a played campaign opens that campaign', async () => {
     assert.equal(campaign.universeId, 'uni-play');
     assert.equal(campaign.role, 'player');
     assert.equal(memory.get(CAMPAIGN_UNIVERSE_KEY), 'uni-play');
+});
+
+test('DU33: the live link read after a reload: the url and the expiry; no link, a 404 and a wrong shape are null', async () => {
+    resetCampaign();
+    campaign.universeId = 'uni-play';
+    campaign.role = 'owner';
+    let answer = { status: 200, body: { ok: true, data: { link: { url: 'https://traveller.voyage/join/kept-token', createdAt: STAMP, expiresAt: '2026-11-16T00:00:00.000Z' } } } };
+    const seen = [];
+    transport.fetch = async (url, init = {}) => {
+        seen.push((init.method || 'GET') + ' ' + String(url));
+        return jsonResponse(answer.status, answer.body);
+    };
+    assert.deepEqual(await readInvite(), { url: 'https://traveller.voyage/join/kept-token', expiresAt: '2026-11-16T00:00:00.000Z' }, 'the uses count is not on the read');
+    assert.deepEqual(seen, ['GET /api/universes/uni-play/invite']);
+    answer = { status: 200, body: { ok: true, data: { link: null } } };
+    assert.equal(await readInvite(), null, 'no live link');
+    answer = { status: 404, body: { ok: false, error: { code: 'not_found', message: 'No such universe.' } } };
+    assert.equal(await readInvite(), null, 'a 404 leaves the section as it is');
+    answer = { status: 200, body: { ok: true, data: { link: { url: '', expiresAt: 'x' } } } };
+    assert.equal(await readInvite(), null, 'an empty url is no link');
+    transport.fetch = async () => { throw new Error('offline'); };
+    assert.equal(await readInvite(), null, 'offline is null, not a throw');
+    campaign.universeId = null;
+    assert.equal(await readInvite(), null, 'no campaign open');
 });

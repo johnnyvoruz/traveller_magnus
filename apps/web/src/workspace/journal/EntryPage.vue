@@ -25,7 +25,7 @@ import PrintButton from '../PrintButton.vue';
 import RecordAvatar from '../RecordAvatar.vue';
 import Replies from './Replies.vue';
 import { placeSource } from '../place_source.ts';
-import { kindWord, playerNoteAccess, whenText, whenWeekday } from './list.ts';
+import { authorChip, kindWord, playerNoteAccess, whenText, whenWeekday } from './list.ts';
 import { isPlayerView } from '../players/player_mode.ts';
 import { vRecordCard } from '../record_card.ts';
 
@@ -58,8 +58,8 @@ const entry = computed((): CampaignEntry | null => {
     return found && !found.deleted ? found : null;
 });
 
-/** The handle on this entry, when the read names who wrote it. */
-const authorHandle = computed(() => (campaign.authorNames[props.id] ?? '').trim());
+/** Who wrote this players note, when the read says: the handle, or the referee (DF23b). Nothing on the referee's own entries. */
+const authorHandle = computed(() => (entry.value ? authorChip(entry.value, campaign.authorNames[props.id]) : null));
 
 /** A player never changes images. The text follows the page's own read-only flag. */
 const imageLocked = computed(() => !playerNoteAccess(isPlayerView.value, !props.readOnly).images);

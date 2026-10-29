@@ -7,6 +7,7 @@
 import type { CampaignAnchor, CampaignEntry, CampaignEntryKind, CampaignRecord } from '@voyage/shared';
 import { hexWords } from '../places.ts';
 import { weekdayName } from '../stardate.ts';
+import { authorWords } from './replies.ts';
 
 export const KIND_ORDER = ['session', 'note', 'handout', 'rumor'] as const;
 
@@ -193,6 +194,19 @@ export function writtenBy(handle: string | null | undefined): string | null {
 }
 
 /**
+ * The chip after "Written by" on a players note: the handle, "Referee" when the referee wrote it,
+ * "Referee · voss" with the handle (DF23b, the thread's own words). Null when the read names no one,
+ * and on the referee's own entries: those are the referee's by their kind, and the read now sends the
+ * owner's handle on them too (B's BF3), which would say so on every one.
+ */
+export function authorChip(entry: Pick<CampaignEntry, 'author' | 'authorRole'>, handle: string | null | undefined): string | null {
+    if (entry.author !== 'players') return null;
+    const name = (handle ?? '').trim();
+    if (!name && entry.authorRole !== 'referee') return null;
+    return authorWords({ authorName: name, authorRole: entry.authorRole });
+}
+
+/**
  * Who may change a note. A player edits and deletes only their own note, and never its images.
  * The referee edits and deletes any note, images included. Offline is not writable.
  */
@@ -225,7 +239,7 @@ export function rowFace(
         metaRest: metaLine(entry, place, false),
         images: entry.images ?? null,
         public: entry.visibility === 'public',
-        author: writtenBy(authorName) ? (authorName ?? '').trim() : null,
+        author: authorChip(entry, authorName),
         replies: entry.replies ?? 0,
     };
 }

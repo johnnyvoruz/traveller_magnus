@@ -14,7 +14,7 @@ import { resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { deleteEntry, deletedWords, entriesNewestFirst, rebuildJournalIndex } from '../../apps/web/src/campaign/journal.ts';
 import { campaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { toasts } from '../../apps/web/src/shell/toast.ts';
-import { rowFace } from '../../apps/web/src/workspace/journal/list.ts';
+import { authorChip, rowFace } from '../../apps/web/src/workspace/journal/list.ts';
 import {
     authorWords,
     changesPath,
@@ -22,6 +22,7 @@ import {
     deleteChange,
     mayDelete,
     POST_FAILED,
+    ownHandle,
     postedReply,
     readThread,
     refusalWords,
@@ -101,6 +102,10 @@ test('the words: the count, the author, the date, the refusal', () => {
     assert.equal(replyWords(3), '3 replies');
     assert.equal(authorWords({ authorName: ' voss ' }), 'voss');
     assert.equal(authorWords({ authorName: '' }), 'Players');
+    // DF23b: the referee's rows say so (B's BF3 sends authorRole on the owner's rows and nothing on the rest).
+    assert.equal(authorWords({ authorName: '', authorRole: 'referee' }), 'Referee');
+    assert.equal(authorWords({ authorName: ' voss ', authorRole: 'referee' }), 'Referee · voss');
+    assert.equal(authorWords({ authorName: 'voss', authorRole: undefined }), 'voss', 'a row without the field reads as before');
     assert.equal(dateWords('2026-10-21T10:00:00.000Z'), dateWords(new Date('2026-10-21T10:00:00.000Z').toISOString()));
     assert.match(dateWords('2026-10-21T12:00:00.000Z'), /^2[01] Oct 2026$/);
     assert.equal(dateWords('nonsense'), '');
@@ -301,4 +306,33 @@ describe('the thread renders', { concurrency: 1 }, () => {
         assert.doesNotMatch(closed, /data-reply-box/);
         assert.equal(calls.length, 0);
     });
+});
+
+test('DF23b: "Written by" on a players note the referee wrote says Referee, in the list row and on the page; a referee entry says nothing', () => {
+    const note = (over) => ({ ...entry(), author: 'players', visibility: 'players', ...over });
+    assert.equal(authorChip(note({}), 'kim'), 'kim');
+    assert.equal(authorChip(note({}), '  '), null, 'no one named');
+    assert.equal(authorChip(note({ authorRole: 'referee' }), ''), 'Referee');
+    assert.equal(authorChip(note({ authorRole: 'referee' }), 'johnny'), 'Referee · johnny');
+    assert.equal(authorChip({ ...entry(), author: 'referee', authorRole: 'referee' }, 'johnny'), null, 'the referee owns the entry by its kind');
+    assert.equal(rowFace(note({ authorRole: 'referee' }), {}, () => null, 'johnny').author, 'Referee · johnny');
+    // A reply the referee has just posted says so before any read brings the role back.
+    const posted = postedReply(replyChange(cj(9), 'Bring a bottle.', cj(10), '2026-10-29T09:00:00.000Z'), 3, 'johnny', 'referee');
+    assert.equal(authorWords(posted), 'Referee · johnny');
+    assert.equal('authorRole' in postedReply(replyChange(cj(9), 'Noted.', cj(11), '2026-10-29T09:00:00.000Z'), 3, 'kim'), false, 'a player carries none');
+    assert.match(read('apps/web/src/workspace/journal/Replies.vue'), /postedReply\(change, applied\.rev, myName\.value, campaign\.role === 'owner' \? 'referee' : undefined\)/);
+    // DF26: the name a fresh post carries is the profile handle (what the read sends), else the username, else none.
+    assert.equal(ownHandle({ profile: { handle: 'reader' }, username: null }), 'reader');
+    assert.equal(ownHandle({ profile: null, username: 'voss' }), 'voss');
+    assert.equal(ownHandle({ profile: { handle: ' kim ' }, username: 'other' }), 'kim', 'the handle first: it is the name the read brings');
+    assert.equal(ownHandle({ profile: {}, username: null }), '');
+    assert.equal(ownHandle(null), '');
+    assert.match(read('apps/web/src/workspace/journal/Replies.vue'), /const myName = computed\(\(\) => ownHandle\(session\.user\)\);/);
+    assert.equal(rowFace(note({}), {}, () => null, 'kim').author, 'kim');
+    assert.equal(rowFace({ ...entry(), author: 'referee', authorRole: 'referee' }, {}, () => null, 'johnny').author, null);
+    const page = read('apps/web/src/workspace/journal/EntryPage.vue');
+    assert.match(page, /const authorHandle = computed\(\(\) => \(entry\.value \? authorChip\(entry\.value, campaign\.authorNames\[props\.id\]\) : null\)\);/);
+    assert.match(page, /<span v-if="authorHandle" class="jn-by">Written by <span class="ui-chip">\{\{ authorHandle \}\}<\/span><\/span>/);
+    assert.match(read('apps/web/src/workspace/journal/list.ts'), /author: authorChip\(entry, authorName\),/);
+    assert.match(read('apps/web/src/workspace/journal/Replies.vue'), /\{\{ authorWords\(reply\) \}\}/);
 });

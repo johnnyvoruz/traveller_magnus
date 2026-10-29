@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue';
+import { whenMapPaints } from '../platform/browser.ts';
 import type { PanelSpan } from '../shell/panel_state.ts';
 import type { BodyLink, BodyModel } from './model.ts';
 import BodyRow from './BodyRow.vue';
@@ -9,10 +10,13 @@ import FactTiles from './FactTiles.vue';
 import JourneyTimes from './JourneyTimes.vue';
 import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
-import SurfaceStage, { type SurfaceTarget } from './SurfaceStage.vue';
+import type { SurfaceTarget } from './SurfaceStage.vue';
 import UwpRibbon from './UwpRibbon.vue';
 import WorldSection from './WorldSection.vue';
 import { fieldSummary, foldId, hasTwilight, loadFolds, openFolds, presentRows, saveFolds, type FoldId } from './world_panel.ts';
+
+/** The surface painter and the print image. On the map they wait until the chart has paint. */
+const SurfaceStage = defineAsyncComponent(() => import('./SurfaceStage.vue'));
 
 const props = defineProps<{
     model: BodyModel;
@@ -52,7 +56,15 @@ function factsOf(link: BodyLink): string {
 }
 
 const folds = ref(openFolds());
-onMounted(() => { folds.value = loadFolds(); });
+/** The orbit view has no map canvas to wait for. The map waits until that canvas has paint. */
+const showSurface = ref(props.live === true);
+let stopPaint: (() => void) | null = null;
+onMounted(() => {
+    folds.value = loadFolds();
+    if (props.live === true) return;
+    stopPaint = whenMapPaints(() => { showSurface.value = true; });
+});
+onBeforeUnmount(() => { if (stopPaint) stopPaint(); });
 
 function toggle(id: FoldId): void {
     const next = { ...folds.value, [id]: !folds.value[id] };
@@ -73,7 +85,8 @@ const folded = computed(() => props.model.sideSections.flatMap((block) => {
 <template>
   <div class="doss-body" :data-span="span">
     <div class="doss-main">
-      <SurfaceStage :target="surface ?? null" :paintable="paintable === true" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
+      <div v-if="!showSurface" class="doss-stage" aria-hidden="true"></div>
+      <SurfaceStage v-else :target="surface ?? null" :paintable="paintable === true" :sun="sun ?? null" :now-days="nowDays" :start-days="startDays" />
       <UwpRibbon v-if="model.ribbon" :ribbon="model.ribbon" />
       <FactTiles :facts="model.facts" :restated="restated" :twilight="twilight" />
       <p v-if="season" class="doss-season">

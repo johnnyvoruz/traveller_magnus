@@ -93,12 +93,24 @@ export function replyChange(parentId: string, body: string, id: string, stamp: s
     };
 }
 
-/** The reply a post made, as the thread shows it once the server has applied it at `rev`. */
-export function postedReply(change: EntryChange, rev: number, authorName: string): Reply | null {
+/**
+ * The name a reply posted here carries until a read brings the server's (DF26): the profile handle,
+ * which is what the read sends as `authorName` (the other screens read it the same way), else the
+ * username, else '' (the row then says "Players", or "Referee" for the referee).
+ */
+export function ownHandle(user: { profile?: { handle?: string } | null; username?: string | null } | null): string {
+    if (!user) return '';
+    const handle = user.profile && typeof user.profile.handle === 'string' ? user.profile.handle.trim() : '';
+    if (handle) return handle;
+    return typeof user.username === 'string' ? user.username.trim() : '';
+}
+
+/** The reply a post made, as the thread shows it once the server has applied it at `rev`; the referee's carries the role the read would send (DF23b). */
+export function postedReply(change: EntryChange, rev: number, authorName: string, authorRole?: 'referee'): Reply | null {
     if (!('kind' in change)) return null;
     const { baseRev, ...entry } = change;
     void baseRev;
-    return { ...entry, rev, authorName, replies: 0 };
+    return { ...entry, rev, authorName, replies: 0, ...(authorRole ? { authorRole } : {}) };
 }
 
 /** The tombstone a delete sends, on the revision held. */
@@ -156,9 +168,14 @@ export function mayDelete(reply: Pick<Reply, 'rev'>, role: 'owner' | 'player' | 
     return false;
 }
 
-/** The name over a reply: the handle, else "Players" (a players note is all a reply can be). */
-export function authorWords(reply: Pick<Reply, 'authorName'>): string {
+/**
+ * The name over a reply: "Referee" when the referee wrote it, "Referee · voss" with the handle
+ * (DF23b; the read sends `authorRole` on the owner's rows and nothing on the rest), else the handle,
+ * else "Players" (a players note is all a reply can be). A row without the field reads as before.
+ */
+export function authorWords(reply: Pick<Reply, 'authorName'> & { authorRole?: 'referee' }): string {
     const name = reply.authorName.trim();
+    if (reply.authorRole === 'referee') return name ? 'Referee · ' + name : 'Referee';
     return name || 'Players';
 }
 

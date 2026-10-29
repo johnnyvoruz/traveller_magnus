@@ -2,7 +2,9 @@
 /**
  * The Campaign panel's menu, the referee's (SI3): Copy for your AI, and Proposals with the count
  * still waiting. A dot on the button says proposals are waiting; the count is read when the
- * campaign opens (the owner's poll page will carry it once B's BP2 is in).
+ * campaign opens (the owner's poll page will carry it once B's BP2 is in). Publish records sits here
+ * too, a referee's rare act (DU34), and at Column the head's Timeline, Relationships and Session,
+ * which the head has no room for there.
  */
 import { nextTick, onMounted, ref, watch } from 'vue';
 import Icon from '../../design/Icon.vue';
@@ -10,7 +12,16 @@ import { loadBatches, proposals } from '../../campaign/proposals.ts';
 import { campaign } from '../../campaign/store.ts';
 import CopyForAi from './CopyForAi.vue';
 
-const emit = defineEmits<{ proposals: [] }>();
+withDefaults(defineProps<{
+    /** The head's buttons are folded in here (Column): Timeline, Relationships and Session lead the menu. */
+    folded?: boolean;
+    /** Publish records is offered (the records list's gate). */
+    publish?: boolean;
+    /** A session is live on this device: the Session item carries the mark. */
+    live?: boolean;
+}>(), { folded: false, publish: false, live: false });
+
+const emit = defineEmits<{ proposals: []; timeline: []; web: []; session: []; publish: [] }>();
 
 const open = ref(false);
 const copying = ref(false);
@@ -33,10 +44,14 @@ function toggle(): void {
     });
 }
 
-function pick(what: 'copy' | 'proposals'): void {
+function pick(what: 'copy' | 'proposals' | 'timeline' | 'web' | 'session' | 'publish'): void {
     open.value = false;
     if (what === 'copy') copying.value = true;
-    else emit('proposals');
+    else if (what === 'proposals') emit('proposals');
+    else if (what === 'timeline') emit('timeline');
+    else if (what === 'web') emit('web');
+    else if (what === 'session') emit('session');
+    else emit('publish');
 }
 
 function onMenuKey(event: KeyboardEvent): void {
@@ -77,6 +92,19 @@ function onMenuKey(event: KeyboardEvent): void {
     </button>
     <div v-if="open" class="camp-add-backdrop" @click="open = false"></div>
     <div v-if="open" ref="menu" class="camp-add-menu" role="menu" aria-label="Campaign" @keydown="onMenuKey">
+      <button v-if="folded" type="button" role="menuitem" data-menu-timeline @click="pick('timeline')">
+        <Icon name="clock-rotate-left" :size="14" /><span>Timeline</span>
+      </button>
+      <button v-if="folded" type="button" role="menuitem" data-menu-web @click="pick('web')">
+        <Icon name="sitemap" :size="14" /><span>Relationships</span>
+      </button>
+      <button v-if="folded" type="button" role="menuitem" data-menu-session @click="pick('session')">
+        <Icon name="clock" :size="14" /><span>Session</span>
+        <i v-if="live" class="camp-live" aria-hidden="true"></i>
+      </button>
+      <button v-if="publish" type="button" role="menuitem" data-menu-publish @click="pick('publish')">
+        <Icon name="store" :size="14" /><span>Publish records</span>
+      </button>
       <button type="button" role="menuitem" data-menu-copy @click="pick('copy')">
         <Icon name="file-export" :size="14" /><span>Copy for your AI</span>
       </button>

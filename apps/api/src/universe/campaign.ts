@@ -336,7 +336,7 @@ function linkFrom(row: SqlRow) {
     return { ...link, provenance: parseJson(row.provenance) };
 }
 
-/** A stored journal row. `authorId` is the player's account, or null on a referee note. */
+/** A stored journal row. `authorId` is the account that wrote it, or null on a note written before that was stored. */
 type StoredJournalEntry = CampaignEntry & { authorId: string | null };
 
 function entryFrom(row: SqlRow): StoredJournalEntry {
@@ -637,6 +637,7 @@ export function readCampaign(
 export type PlayersCaller = {
     userId: string;
     handles: Readonly<Record<string, string>>;
+    ownerId?: string | null;
 };
 
 export type PlayersCampaignPage = {
@@ -679,7 +680,11 @@ export function readDemoCampaign(sql: Sql): PlayersView {
     return playersView({
         records: rows.records.map((row) => recordFrom(row)) as CampaignPage['records'],
         links: rows.links.map((row) => linkFrom(row)) as CampaignPage['links'],
-        journal: journalEntries(sql, rows.journal.filter((row) => text(row.parent) == null)),
+        journal: journalEntries(sql, rows.journal.filter((row) => text(row.parent) == null)).map((entry) => {
+            const { authorId, ...rest } = entry;
+            void authorId;
+            return rest;
+        }),
         settings: readSettings(sql),
         clock: readClock(sql),
     });
@@ -1016,16 +1021,36 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
     });
 }
 
+/** The read adds `authorName`. A save of that row sends it back. It is not a stored field. */
+function withoutAuthorName(changes: unknown): unknown {
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return changes;
+    const journal = (changes as { journal?: unknown }).journal;
+    if (!Array.isArray(journal)) return changes;
+    let copied = false;
+    const next = journal.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row) || !('authorName' in row)) return row;
+        copied = true;
+        const copy = { ...(row as Record<string, unknown>) };
+        delete copy.authorName;
+        return copy;
+    });
+    if (!copied) return changes;
+    return { ...(changes as Record<string, unknown>), journal: next };
+}
+
 export function applyCampaignChanges(
     sql: Sql,
     changes: unknown,
     now: string,
     acknowledgePublic = false,
     member?: MemberCaller | null,
+    ownerId?: string | null,
 ): CampaignWriteResult {
-    if (member) return applyMemberNotes(sql, changes, now, member);
-    const legacyParty = legacySettingsWrite(changes);
-    const parsed = CampaignChanges.safeParse(changes);
+    const body = withoutAuthorName(changes);
+    if (member) return applyMemberNotes(sql, body, now, member);
+    const refereeId = ownerId || null;
+    const legacyParty = legacySettingsWrite(body);
+    const parsed = CampaignChanges.safeParse(body);
     if (!parsed.success) {
         const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
         throw new CampaignRefusal(
@@ -1303,11 +1328,7 @@ export function applyCampaignChanges(
                 const rev = 1;
                 const seq = nextSeq(sql);
                 const mentions = mentionsOf(change.body);
-                sql.exec(
-                    `INSERT INTO campaign_journal (
-                        id, kind, title, body, when_json, real_date, sequence, author, visibility,
-                        anchor, mentions, images, rev, seq, created_at, updated_at, deleted, parent
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                const values = [
                     change.id,
                     change.kind,
                     change.title,
@@ -1325,8 +1346,27 @@ export function applyCampaignChanges(
                     now,
                     now,
                     change.deleted ? 1 : 0,
-                    parent,
-                );
+                ];
+                if (journalAuthorReady(sql)) {
+                    sql.exec(
+                        `INSERT INTO campaign_journal (
+                            id, kind, title, body, when_json, real_date, sequence, author, visibility,
+                            anchor, mentions, images, rev, seq, created_at, updated_at, deleted, author_id, parent
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        ...values,
+                        parent ? refereeId : null,
+                        parent,
+                    );
+                } else {
+                    sql.exec(
+                        `INSERT INTO campaign_journal (
+                            id, kind, title, body, when_json, real_date, sequence, author, visibility,
+                            anchor, mentions, images, rev, seq, created_at, updated_at, deleted, parent
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        ...values,
+                        parent,
+                    );
+                }
                 applied.push({ table: 'journal', id: change.id, rev, seq });
                 continue;
             }

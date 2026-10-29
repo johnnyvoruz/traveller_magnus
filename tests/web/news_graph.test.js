@@ -179,12 +179,18 @@ test('Spinward Marches raw files build 439 nodes and 86 bare edges in under 10 m
         hexes,
         metadata: { routes: meta.routes },
     };
-    const started = performance.now();
-    const graph = buildNewsGraph([index], [], NEWS_PARAMS);
-    const elapsed = performance.now() - started;
+    // The budget is a floor on the build's speed, not a load test: the best of three builds after one
+    // warm-up, so a full test run's load (17 to 25 ms for one build on a busy machine, 2 to 4 ms alone) does not fail it (DF27).
+    let graph = buildNewsGraph([index], [], NEWS_PARAMS);
+    let best = Infinity;
+    for (let run = 0; run < 3; run += 1) {
+        const started = performance.now();
+        graph = buildNewsGraph([index], [], NEWS_PARAMS);
+        best = Math.min(best, performance.now() - started);
+    }
     assert.equal(graph.nodes.length, 439);
     assert.equal(graph.xboatEdges, 86);
     assert.equal(edgePairs(graph, 0).length, 86);
     assert.equal(graph.offEdges, 0);
-    assert.ok(elapsed < 10, 'build took ' + elapsed + ' ms');
+    assert.ok(best < 10, 'the best of three builds took ' + best + ' ms');
 });

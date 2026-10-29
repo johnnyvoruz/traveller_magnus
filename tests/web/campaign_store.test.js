@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, deleteCampaign, listCampaigns, markMembershipGone, noteUnauthorized, openCampaign, pinTruthVersion, renameCampaign, resetCampaignState, setCampaignDate, switchCampaign, transport } from '../../apps/web/src/campaign/store.ts';
 import { commit, flushCampaign, lastError, newRecordId, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
@@ -512,6 +513,28 @@ function entry(over = {}) {
         ...over,
     };
 }
+
+test('DF25: the owner read\'s author names are kept beside the rows, and a row without one has none', async () => {
+    memory.clear();
+    resetCampaign();
+    const box = harness([universeRow({ id: 'uni-1' })]);
+    const other = 'cj_55555555-5555-4555-8555-555555555555';
+    box.server.pages['uni-1'] = [{ after: 0, body: { ...page([], 2, true), journal: [
+        { ...entry(), authorName: 'kim', author: 'players', visibility: 'players' },
+        { ...entry(), id: other, authorRole: 'referee', authorName: 'ref' },
+    ] } }];
+    await open(box, 'uni-1');
+    assert.equal(campaign.journal[JOURNAL].title, 'At the starport', 'the row parses as before');
+    assert.equal('authorName' in campaign.journal[JOURNAL], false, 'the name rides beside the row, not on it');
+    assert.equal(campaign.authorNames[JOURNAL], 'kim');
+    assert.equal(campaign.authorNames[other], 'ref');
+    assert.equal(campaign.journal[other].authorRole, 'referee', 'the role stays on the row (BF3)');
+    box.server.pages['uni-1'] = [{ after: 0, body: { ...page([], 3, true), journal: [entry()] } }];
+    await open(box, 'uni-1');
+    assert.equal(campaign.authorNames[JOURNAL], undefined, 'a read without the name forgets it');
+    const poll = fs.readFileSync(new URL('../../apps/web/src/campaign/poll.ts', import.meta.url), 'utf8');
+    assert.match(poll, /liftAuthorNames\(data, names\);\s+const page = parseRead\(CampaignPage, data\);\s+applyOwnerPage\(page\);\s+Object\.assign\(campaign\.authorNames, names\);/, 'the poll keeps them too');
+});
 
 test('a page with a journal fills it, and a page without one leaves it empty', async () => {
     memory.clear();

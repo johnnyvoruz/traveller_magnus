@@ -86,6 +86,29 @@ export async function createInvite(): Promise<PlayerInvite | null> {
     return parseRead(PlayerInvite, data);
 }
 
+/**
+ * The live invite after a reload (DU33; contracts/b_players.md "Invite link, read"): the url and the
+ * expiry, or null when there is none, the read fails, or the body is not the link's shape. The read
+ * sends no uses count. A 401 signs the store out, as every read does.
+ */
+export async function readInvite(): Promise<{ url: string; expiresAt: string } | null> {
+    const path = universePath('/invite');
+    if (!path) return null;
+    let res: Response;
+    try {
+        res = await apiFetch(transport.fetch, path);
+    } catch {
+        return null;
+    }
+    const data = await readOk(res);
+    if (!data || typeof data !== 'object') return null;
+    const link = (data as { link?: unknown }).link;
+    if (!link || typeof link !== 'object') return null;
+    const { url, expiresAt } = link as { url?: unknown; expiresAt?: unknown };
+    if (typeof url !== 'string' || !url || typeof expiresAt !== 'string') return null;
+    return { url, expiresAt };
+}
+
 /** Revokes the live invite. */
 export async function revokeInvite(): Promise<boolean> {
     const path = universePath('/players/invite');

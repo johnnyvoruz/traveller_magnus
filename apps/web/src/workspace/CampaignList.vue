@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * The record list (design §2): search, Add, the type chips with their counts, the rows grouped
- * by type under headings that fold (kept per campaign on this device), the empty states, the
+ * The record list (design §2): search, Add, the chips of the kinds that have records with their
+ * counts (records_tab.ts, DU34: the rest of the chrome is the head's or the head's menu's), the rows
+ * grouped by type under headings that fold (kept per campaign on this device), the empty states, the
  * first-run card, and this session's deletes at the foot. Past VIRTUAL_FROM rows it draws only
  * the items near the view. It reads the
  * campaign from the store and asks the panel to open or create; it changes nothing itself
@@ -19,11 +20,14 @@ import { handedQuery, listSort, recordFilter, recordQuery } from './list_state.t
 import { publishAsk } from './market/command.ts';
 import { canPublishRecords } from './market/record_publish.ts';
 import { placeSource } from './place_source.ts';
+import { observeSize } from '../platform/browser.ts';
+import { onFrame } from '../shell/frame.ts';
 import { commandScope, handleKey, registerCommand, setCommandScope } from '../shell/registry.ts';
 import { showToast } from '../shell/toast.ts';
 import { hexKeyOf, hexWords, liveById, resolvePlace, type Resolved } from './places.ts';
 import { placeNow } from './place_now.ts';
-import { RECORD_TYPES, filterRecords, liveRecords, typeCounts, typeInfo } from './records.ts';
+import { filterRecords, liveRecords, typeCounts, typeInfo } from './records.ts';
+import { kindChips, rowMeta, stripEdges } from './records_tab.ts';
 import { vRecordCard } from './record_card.ts';
 import { HEAD_GUESS, ROW_GUESS, VIRTUAL_FROM, groupItems, readFolded, windowOf, writeFolded } from './record_groups.ts';
 
@@ -43,7 +47,6 @@ const emit = defineEmits<{
     create: [type: CampaignRecordType];
     /** The map has to be seen (a locate): the panel gives way when it covers it. */
     map: [];
-    timeline: [];
 }>();
 
 /** Publish records (contract F18), loaded when first opened. */
@@ -57,6 +60,22 @@ const nameDraft = ref('');
 
 const all = computed(() => liveRecords(campaign.records));
 const counts = computed(() => typeCounts(all.value));
+/** The kind chips: the kinds with records, and the chosen one (DU34). */
+const chips = computed(() => kindChips(counts.value, filter.value));
+/** At Column the chips scroll sideways: the edges with more beyond them fade (DU35). Read on scroll, on resize, and when the chips change. */
+const typesEl = ref<HTMLElement | null>(null);
+const stripMore = ref<'' | 'left' | 'right' | 'both'>('');
+let stopStrip: (() => void) | null = null;
+function readStrip(): void {
+    const el = typesEl.value;
+    stripMore.value = el ? stripEdges(el.scrollLeft, el.clientWidth, el.scrollWidth) : '';
+}
+watch(chips, () => { void nextTick(readStrip); });
+watch(typesEl, (el) => {
+    if (stopStrip) stopStrip();
+    stopStrip = el ? observeSize(el, readStrip) : null;
+    readStrip();
+});
 /** The system selected or last opened on the map, for the "At Regina 1910" chip (design J6). */
 const here = ref<{ hexKey: string; label: string } | null>(null);
 const atHere = ref(false);
@@ -136,6 +155,10 @@ watch(shownItems, () => { void nextTick(bindScroll); });
 onBeforeUnmount(() => {
     releaseListKeys();
     if (scrollEl) scrollEl.removeEventListener('scroll', readScroll);
+    if (stopFrame) stopFrame();
+    stopFrame = null;
+    if (stopStrip) stopStrip();
+    stopStrip = null;
 });
 
 /** Brings item `index` into the view, drawing it if the window had left it out, then focuses it. */
@@ -157,16 +180,23 @@ function focusItem(index: number): void {
     });
 }
 
+/**
+ * The here chip's system and words. Read when the list mounts and again whenever the view publishes
+ * its frame (DF24): the name arrives with the sector's index a moment after the hex is known, and a
+ * newly opened system changes the chip. Until the name is there the hex's words stand in.
+ */
 function readHere(): void {
     const source = placeSource();
     const now = source ? source.current() : null;
     here.value = now ? { hexKey: hexKeyOf(now.slug, now.hex), label: 'At ' + (now.name ? now.name + ' ' + now.hex : hexWords(hexKeyOf(now.slug, now.hex))) } : null;
     if (!here.value) atHere.value = false;
 }
+let stopFrame: (() => void) | null = null;
 
 onMounted(() => {
     bindKeys();
     readHere();
+    stopFrame = onFrame(readHere);
     void nextTick(bindScroll);
     // A search handed over by the omnibox ("All 12 matches") is applied once.
     if (handedQuery.value) {
@@ -191,7 +221,7 @@ const places = computed(() => {
     return found;
 });
 const first = computed(() => all.value.length === 0);
-/** Publish records: offered to the campaign's owner, signed in and online, once there is a record. */
+/** Publish records: offered to the campaign's owner, signed in and online, once there is a record. The head's menu asks for it (DU34); the palette too. */
 const canPublish = computed(() => canPublishRecords(props.readOnly, all.value.length));
 const publishing = ref(false);
 /** The rows the list shows are chosen when the list is narrowed (a type, a search, here); the whole list starts with none. */
@@ -418,14 +448,10 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
             @keydown="onSearchKey"
           >
         </label>
-        <button type="button" class="ui-btn" @click="emit('timeline')">Timeline</button>
-        <button v-if="canPublish" type="button" class="ui-btn camp-publish" title="Publish records to the Marketplace" data-publish-records @click="publishing = true">
-          <Icon name="store" :size="13" />Publish
-        </button>
         <AddButton v-if="!player" :type="addType" :disabled="readOnly" @add="add" />
       </div>
 
-      <div class="camp-types" role="radiogroup" aria-label="Type">
+      <div ref="typesEl" class="camp-types" role="radiogroup" aria-label="Type" :data-more="stripMore || undefined" @scroll.passive="readStrip">
         <button
           v-if="here"
           type="button"
@@ -441,7 +467,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
           All <b>{{ counts.all }}</b>
         </button>
         <button
-          v-for="info in RECORD_TYPES"
+          v-for="info in chips"
           :key="info.type"
           type="button"
           role="radio"
@@ -492,7 +518,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
               <span class="camp-row-text">
                 <b>{{ item.record.name }}</b>
                 <span v-if="item.record.summary" class="camp-row-sum">{{ item.record.summary }}</span>
-                <span class="camp-row-meta">{{ typeInfo(item.record.type).one }} · {{ placeNow(item.record) }}</span>
+                <span class="camp-row-meta">{{ rowMeta(typeInfo(item.record.type).one, placeNow(item.record), grouped) }}</span>
                 <span v-if="item.record.tags.length" class="camp-row-tags">
                   <span v-for="tag in item.record.tags" :key="tag" class="ui-chip">{{ tag }}</span>
                 </span>
@@ -576,7 +602,7 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
 }
 
 .camp-search {
-  flex: 1 1 200px;
+  flex: 1 1 140px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -617,6 +643,39 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* At Column the chips keep one line and scroll sideways rather than stack (DU34). */
+.camp[data-span="column"] .camp-types {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.camp[data-span="column"] .camp-types::-webkit-scrollbar {
+  display: none;
+}
+
+.camp[data-span="column"] .camp-type,
+.camp[data-span="column"] .camp-sort {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* The strip fades at an edge that hides chips, so a cut chip reads as "more this way" (DU35). */
+.camp[data-span="column"] .camp-types[data-more="right"] {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - 36px), transparent);
+}
+
+.camp[data-span="column"] .camp-types[data-more="left"] {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 36px);
+  mask-image: linear-gradient(to right, transparent, black 36px);
+}
+
+.camp[data-span="column"] .camp-types[data-more="both"] {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 36px, black calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 36px, black calc(100% - 36px), transparent);
 }
 
 .camp-type {

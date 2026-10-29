@@ -21,7 +21,8 @@ test('one rule: a vessel where its track puts it at the campaign date, under way
 
 test('the header, the list row and the web bar say it; none reads the stored anchor directly', () => {
     assert.match(read('workspace/RecordPage.vue'), /<span>· \{\{ placeNow\(record\) \}\}<\/span>/);
-    assert.match(read('workspace/CampaignList.vue'), /\{\{ typeInfo\(item\.record\.type\)\.one \}\} · \{\{ placeNow\(item\.record\) \}\}/);
+    // DU34: in a grouped list the heading says the kind, so the row says the place alone (records_tab.ts rowMeta).
+    assert.match(read('workspace/CampaignList.vue'), /\{\{ rowMeta\(typeInfo\(item\.record\.type\)\.one, placeNow\(item\.record\), grouped\) \}\}/);
     assert.match(read('workspace/web/RelationshipWeb.vue'), /\{\{ placeNow\(pointedRecord\) \}\}/);
     for (const file of ['workspace/RecordPage.vue', 'workspace/CampaignList.vue', 'workspace/web/RelationshipWeb.vue']) {
         assert.doesNotMatch(read(file), /placeLine\(/, file);

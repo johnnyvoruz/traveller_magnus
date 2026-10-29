@@ -99,7 +99,7 @@ function asksForPublicJournal(request: Request): boolean {
 }
 
 /** Owner reads ask the Durable Object for `authorId`, then this replaces it with the handle. */
-async function withAuthorNames(response: Response, handles: Record<string, string>): Promise<Response> {
+async function withAuthorNames(response: Response, handles: Record<string, string>, ownerId: string): Promise<Response> {
     if (!response.ok) return response;
     const text = await response.text();
     let body: { data?: { journal?: Array<Record<string, unknown>> } };
@@ -111,7 +111,11 @@ async function withAuthorNames(response: Response, handles: Record<string, strin
     for (const entry of body.data?.journal ?? []) {
         if (!entry || typeof entry !== 'object') continue;
         const authorId = entry.authorId;
-        if (typeof authorId === 'string' && authorId) entry.authorName = handles[authorId] ?? '';
+        delete entry.authorRole;
+        if (typeof authorId === 'string' && authorId) {
+            entry.authorName = handles[authorId] ?? '';
+            if (authorId === ownerId) entry.authorRole = 'referee';
+        }
         delete entry.authorId;
     }
     const headers = new Headers(response.headers);
@@ -353,6 +357,7 @@ universesRoute.get('/:id/campaign', async (c) => {
         return privateNoStore(await access.forward(new Request(door), {
             'x-voyage-member': access.actor.id,
             'x-voyage-handles': JSON.stringify(handles),
+            'x-voyage-owner': access.row.ownerId,
         }));
     }
     const url = new URL(c.req.url);
@@ -361,7 +366,7 @@ universesRoute.get('/:id/campaign', async (c) => {
         'x-voyage-authors': '1',
         'x-voyage-handles': JSON.stringify(handles),
     });
-    return privateNoStore(await maskOwnerJournal(c.req.raw, await withAuthorNames(response, handles)));
+    return privateNoStore(await maskOwnerJournal(c.req.raw, await withAuthorNames(response, handles, access.row.ownerId)));
 });
 
 universesRoute.patch('/:id/campaign/changes', async (c) => {

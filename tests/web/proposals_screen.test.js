@@ -212,7 +212,7 @@ test('the wiring: the pane, the referee\'s menu, the mount, the review link, the
     assert.match(pane, /if \(pane\.kind === 'proposals'\) return \{ \.\.\.cleared, panel: 'proposals', batch: pane\.batch \};/);
     const panel = read('workspace/CampaignPanel.vue');
     assert.match(panel, /const isReferee = computed\(\(\) => campaign\.role === 'owner' && !isPlayer\.value && !viewAs\.on\);/);
-    assert.match(panel, /<CampaignMenu v-if="isReferee" @proposals="openProposals" \/>/);
+    assert.match(panel, /<CampaignMenu v-if="isReferee" :folded="headFolded" :publish="canPublish" :live="sessionLive" @timeline="openTimeline" @web="openWeb" @session="openSession" @publish="openPublish" @proposals="openProposals" \/>/);
     assert.match(panel, /<ProposalsSection v-else-if="onProposals && isReferee"/);
     assert.match(read('router.ts'), /path: '\/universes\/:universe\/proposals\/:batch', redirect:/);
     assert.match(read('workspace/passkey/AccountPage.vue'), /<AgentAccess \/>/);

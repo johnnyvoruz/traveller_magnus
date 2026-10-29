@@ -42,6 +42,10 @@ export default defineConfig({
     fs: { allow: [repoRoot] },
     proxy,
   },
+  // The preview used for a first-paint measure serves dist and still needs the chart.
+  preview: {
+    proxy,
+  },
   build: {
     rolldownOptions: {
       output: {

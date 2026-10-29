@@ -141,6 +141,25 @@ export function mountPlayerRoutes(route: Hono<AppEnv>): void {
         return held(c, invitePayload(new URL(c.req.url).origin, token, expiresAt, 0));
     });
 
+    route.get('/:id/invite', async (c) => {
+        const owned = await ownedUniverse(c);
+        if (owned instanceof Response) return owned;
+        if (!await detectPlayers(c.env.DB)) return unavailable(c);
+        const live = await c.env.DB.prepare(
+            `SELECT token AS token, created_at AS createdAt, expires_at AS expiresAt
+             FROM universe_invites
+             WHERE universe_id = ? AND revoked_at IS NULL AND token IS NOT NULL AND expires_at > ?`,
+        ).bind(owned.row.id, new Date().toISOString()).first<{ token: string; createdAt: string; expiresAt: string }>();
+        if (!live?.token) return held(c, { link: null });
+        return held(c, {
+            link: {
+                url: `${new URL(c.req.url).origin}/join/${live.token}`,
+                createdAt: live.createdAt,
+                expiresAt: live.expiresAt,
+            },
+        });
+    });
+
     route.delete('/:id/players/invite', async (c) => {
         const owned = await ownedUniverse(c);
         if (owned instanceof Response) return owned;

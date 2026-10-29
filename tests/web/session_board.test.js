@@ -113,7 +113,7 @@ test('the palette: "Start a session" asks the board and opens the pane; the ask 
 test('the wiring: the head\'s Session button, the board at Full, the board\'s pieces', () => {
     const panel = read('apps/web/src/workspace/CampaignPanel.vue');
     assert.match(panel, /data-open-session @click="openSession"/);
-    assert.match(panel, /<button v-if="isReferee"[^>]*class="camp-timeline camp-session"/);
+    assert.match(panel, /<button v-if="isReferee && !headFolded"[^>]*class="camp-timeline camp-session"/, 'at Column it is the menu\'s (DU34)');
     assert.match(panel, /<SessionBoard v-else-if="onSession && isReferee" :read-only="!online" @map="showMap" @journal="goEntry" @open="go" \/>/);
     assert.match(panel, /watch\(onSession, \(on\) => \{\s+if \(!on \|\| span\.value === 'full'\) return;\s+span\.value = 'full';/);
     assert.match(panel, /onProposals\.value \|\| onSession\.value\) \{\s+event\.preventDefault\(\);/, 'Escape leaves the board');

@@ -231,7 +231,9 @@ test('the trail returns to Campaign, and the list is one tab stop that only read
     assert.equal(timelineAdvice(true).act, 'journal');
     assert.doesNotMatch(builder, /setCampaignDate/);
     assert.match(panel, /class="camp-timeline"/);
-    assert.match(list, /emit\('timeline'\)/);
+    // DU34: the list's own Timeline button went; the head's Timeline (and the menu's at Column) is the way in.
+    assert.doesNotMatch(list, /emit\('timeline'\)/);
+    assert.match(fs.readFileSync(path.join(root, 'apps/web/src/workspace/proposals/CampaignMenu.vue'), 'utf8'), /data-menu-timeline @click="pick\('timeline'\)"/);
     assert.doesNotMatch(list, /visibility/);
     assert.doesNotMatch(journalList, /visibility/);
 });

@@ -24,6 +24,7 @@ import {
     deleteChange,
     mayDelete,
     POST_FAILED,
+    ownHandle,
     postedReply,
     READ_FAILED,
     readThread,
@@ -78,7 +79,7 @@ const shownCount = computed(() => (rows.value ? rows.value.length : props.count)
 const label = computed(() => (shownCount.value > 0 ? replyWords(shownCount.value) : 'Reply'));
 /** Nothing to open: read-only, and no reply to read. */
 const offered = computed(() => !(locked.value && shownCount.value === 0));
-const myName = computed(() => (session.user && session.user.username ? session.user.username : ''));
+const myName = computed(() => ownHandle(session.user));
 
 function nameOf(target: string): string | null {
     if (!target.startsWith('cr_')) return null;
@@ -158,7 +159,7 @@ async function post(): Promise<void> {
             return;
         }
         const applied = body?.data?.applied?.find((row) => row.table === 'journal' && row.id === change.id);
-        const reply = applied ? postedReply(change, applied.rev, myName.value) : null;
+        const reply = applied ? postedReply(change, applied.rev, myName.value, campaign.role === 'owner' ? 'referee' : undefined) : null;
         if (!reply) {
             postError.value = POST_FAILED;
             return;

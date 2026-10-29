@@ -11,13 +11,7 @@ import { rebuildJournalIndex } from './journal.ts';
 import { pending } from './commit.ts';
 import { notePendingCount } from './proposals.ts';
 import { JOURNAL_PUBLIC_HEADERS, parseRead, pendingProposalCount } from './read.ts';
-import {
-    applyPlayersPage,
-    campaign,
-    markMembershipGone,
-    noteUnauthorized,
-    transport,
-} from './store.ts';
+import { applyPlayersPage, campaign, liftAuthorNames, markMembershipGone, noteUnauthorized, transport } from './store.ts';
 
 /** The gap between reads while the panel stays open and the tab stays visible. */
 export const POLL_MS = 30_000;
@@ -109,8 +103,11 @@ async function pull(): Promise<boolean> {
             after = page.seq;
             continue;
         }
+        const names: Record<string, string> = {};
+        liftAuthorNames(data, names);
         const page = parseRead(CampaignPage, data);
         applyOwnerPage(page);
+        Object.assign(campaign.authorNames, names);
         const pendingCount = pendingProposalCount(data);
         if (pendingCount !== null) notePendingCount(pendingCount);
         if (page.done) return false;

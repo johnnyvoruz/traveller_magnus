@@ -63,7 +63,10 @@ test('Publish records: at least one record, no hexes asked for, the kind from th
     const form = read('workspace/market/PublishForm.vue');
     assert.match(form, /<PublishFields :problems="problems" :tried="tried" \/>/, 'Build asks the same way');
     const list = read('workspace/CampaignList.vue');
-    assert.match(list, /<button v-if="canPublish" type="button" class="ui-btn camp-publish"[^>]*data-publish-records @click="publishing = true">/);
+    // DU34: Publish records moved from the list's tool row to the head's menu; the list still opens the dialog on the ask.
+    assert.match(read('workspace/proposals/CampaignMenu.vue'), /<button v-if="publish" type="button" role="menuitem" data-menu-publish @click="pick\('publish'\)">/);
+    assert.match(read('workspace/CampaignPanel.vue'), /function openPublish\(\): void \{\s+publishAsk\.records = true;/);
+    assert.doesNotMatch(list, /data-publish-records/);
     assert.match(list, /<RecordsPublish v-if="publishing" :start="publishStart" @close="publishing = false" \/>/);
     // The owner test moved out of the list into the gate it shares with a record's own page (ZB1).
     assert.match(list, /canPublishRecords\(props\.readOnly, all\.value\.length\)/);

@@ -366,6 +366,11 @@ const CampaignEntryObject = z.object({
      * A write may send it. The number is not stored.
      */
     replies: z.number().int().nonnegative().optional(),
+    /**
+     * On a read, `referee` when this row's author is the universe owner.
+     * Absent on every other row. A write may send it. It is not stored.
+     */
+    authorRole: z.literal('referee').optional(),
     rev: Rev,
     createdAt: Stamp,
     updatedAt: Stamp,

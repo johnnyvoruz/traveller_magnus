@@ -17,20 +17,36 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.4',
+        date: '2026-10-29',
+        title: 'A cleaner Records tab',
+        story: [
+            'The Records tab shows your records, not its controls: one row for search and Add, one row for the kinds your campaign has.',
+            'The invite link survives a reload, the referee\'s replies say so, and a system address shows its chart sooner.',
+        ],
+        items: [
+            'The Records tab on the Campaign panel keeps the search box, Add, and one row of chips for the kinds your campaign has, with their counts. The campaign date is on the Party tab, and Publish records is in the panel\'s menu. On a phone the chips stay on one line and scroll.',
+            'The Players section shows a live invite link after a reload, with Copy, Revoke, and the date it works until.',
+            'A reply from the referee says Referee over it, with the referee\'s handle when the account has one. A players note says who wrote it, to the referee too, and a reply you just wrote shows your name at once.',
+            'A system address shows its chart sooner. The world map, the print image, and the markets load after the first frame.',
+            'Smaller: when the Campaign panel is narrow, Timeline, Relationships, and Session are in the panel\'s menu. The here chip names the system as soon as the chart knows its name.',
+        ],
+    },
+    {
         version: '1.3.3',
         date: '2026-10-28',
         title: 'Paint your own world maps',
         story: [
-            'Paint, on the large world map in Build, colours any hex so a world can match the map in your books, and everyone in the campaign sees it.',
-            'Start a session turns the Campaign panel into a live board for the table, players and the referee reply under journal entries, and every skill has a die beside it.',
+            'Paint, on the large world map with Build on, colours any hex so a world can match the map in your books, and everyone in the campaign sees it.',
+            'Start a session turns the Campaign panel into a live board for the table. Players and the referee reply under journal entries, and every skill has a die beside it.',
         ],
         items: [
-            'Paint, on the large world map with Build on, colours the hex under the pointer with one of the 19 terrains, 3 accents, or the features. Drag to paint a run, Shift-click to paint a straight line, Clear hex or Clear map to take paint back. Keep saves the map for the campaign, and players see it on the world map and in the orbit view. The UWP never changes.',
-            'Reply under a journal entry. Players and the referee write replies, one level under a reply, and the entry shows its count. The referee can delete any reply, a player their own. Deleting an entry takes its replies with it.',
+            'Paint, on the large world map with Build on, colours the hex under the pointer with one of the 19 terrains, the 3 accents, or the features. Drag to paint a run, Shift-click to paint a straight line, Clear hex or Clear map to take paint back. Keep saves the map for the campaign, and players see it on the world map and in the orbit view. The UWP never changes.',
+            'Reply under a journal entry. Players and the referee write replies, one level under a reply, and the entry shows its count. The referee can delete any reply, and a player can delete their own. Deleting an entry takes its replies with it.',
             'A die beside every characteristic and skill on a character sheet rolls 2D with the number typed in its DM box and names the box on the card. Roll again repeats the last roll, and the last eight rolls sit under the picks.',
-            'Finances on a character sheet is a credits register: Simple keeps a balance, Detailed keeps a line per change, dated by the campaign day. Only the campaign\'s referee posts to a player\'s register.',
-            'Start a session, on the Campaign panel, opens a live board for the referee: the clock large with +1 hour, +1 day, and +1 week, the party and who is aboard each ship, the dice, the current world\'s records and the markets nearby, and the session entry open for typing. The clock moves what you look at, not the campaign date. End the session asks once whether to advance the campaign date to the clock.',
-            'Smaller: Save image is on the system map and on the world map, at 300 dpi, as on the chart. An invite link or a public ship unfurls as a card in Discord, with the ship\'s class when its sheet names one. A sector or subsector address, signed out, lists its places. Reduced motion in your system settings stops every animation. The account menu has a checklist for a new campaign. The chart\'s first paint on a slow phone is back to where 1.3.0 was.',
+            'Finances on a character sheet is a credits register. In Simple, you type Cash on Hand, and each change is kept as a line. In Detailed, Cash on Hand is the balance, and each change is its own line, dated by the campaign day. A line added without access to the register waits until the player accepts it.',
+            'Start a session, on the Campaign panel, opens a live board for the referee: the clock large with +1 hour, +1 day, and +1 week, the party and who is aboard each ship, the dice, the current world\'s records and the markets nearby, and the session entry open for typing. The clock moves the day you are looking at, not the campaign date. When the clock has moved, End the session asks once whether to advance the campaign date to the clock.',
+            'Smaller: Save image is on the system map and on the world map, at 300 dpi, as on the chart. An invite link or a public ship shows as a card in Discord, with the ship\'s class when its sheet names one. A sector address, signed out, lists its subsectors, and a subsector address lists its worlds. Reduced motion in your system settings stops every animation. The account menu has a checklist for a new campaign. On a slow phone, the chart shows up as soon as it did in 1.3.0.',
         ],
     },
     {

@@ -139,6 +139,21 @@ function holdLink(row: PlayersLink): CampaignLink {
     return { ...row, provenance: null, rev: 0 };
 }
 
+/**
+ * The handles the owner read sends beside its journal rows (`authorName`, on every row with an author;
+ * the players page carries the same and holdEntry lifts it there). The owner page's schema drops the
+ * field, so it is read off the raw rows first (DF25): the referee then sees who wrote a players note.
+ */
+export function liftAuthorNames(body: unknown, into: Record<string, string>): void {
+    const rows = body && typeof body === 'object' ? (body as { journal?: unknown }).journal : null;
+    if (!Array.isArray(rows)) return;
+    for (const row of rows) {
+        if (!row || typeof row !== 'object') continue;
+        const { id, authorName } = row as { id?: unknown; authorName?: unknown };
+        if (typeof id === 'string' && typeof authorName === 'string') into[id] = authorName;
+    }
+}
+
 function holdEntry(row: unknown): CampaignEntryRow {
     const raw = { ...(row as Record<string, unknown>) };
     const authorName = typeof raw.authorName === 'string' ? raw.authorName : undefined;
@@ -283,6 +298,7 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
     const records: Record<string, CampaignRecord> = {};
     const links: Record<string, CampaignLink> = {};
     const journal: Record<string, CampaignEntryRow> = {};
+    const names: Record<string, string> = {};
     let settings: CampaignSettings | null = null;
     let clock: CampaignClock | null = null;
     let seq = 0;
@@ -317,6 +333,7 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
             after = parsed.seq;
             continue;
         }
+        liftAuthorNames(body, names);
         const page = parseRead((await shared).CampaignPage, body);
         for (const record of page.records) records[record.id] = record;
         for (const link of page.links) links[link.id] = link;
@@ -347,6 +364,7 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
         return;
     }
     replaceRows(records, links, journal, settings, clock, seq);
+    Object.assign(campaign.authorNames, names);
     campaign.universeId = universe.id;
     campaign.status = 'ready';
     remember(universe.id);

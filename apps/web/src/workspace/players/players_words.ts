@@ -27,10 +27,17 @@ export function usesWords(uses: number): string {
     return uses === 1 ? 'Used once' : 'Used ' + uses + ' times';
 }
 
-/** The line under the link: when it stops working, and how often it has been used. */
-export function inviteLine(invite: { expiresAt: string; uses: number }): string {
+/**
+ * The link as the Players section shows it: what the invite write answers, or what the read brings
+ * back after a reload (DU33), which has no uses count.
+ */
+export type InviteShown = { url: string; expiresAt: string; uses?: number };
+
+/** The line under the link: when it stops working, and how often it has been used (left out when the read does not say). */
+export function inviteLine(invite: { expiresAt: string; uses?: number }): string {
     const date = realDate(invite.expiresAt);
-    return (date ? 'Works until ' + date : 'Works for 30 days') + ' · ' + usesWords(invite.uses);
+    const until = date ? 'Works until ' + date : 'Works for 30 days';
+    return invite.uses === undefined ? until : until + ' · ' + usesWords(invite.uses);
 }
 
 export type MemberRow = {

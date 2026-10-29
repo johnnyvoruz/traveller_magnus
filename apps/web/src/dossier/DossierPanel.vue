@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { SectorHex, SectorIndex, TreeEnvelope } from '@voyage/shared';
 import { observeSize, pageOrigin } from '../platform/browser.ts';
@@ -16,7 +16,6 @@ import { signInFrom } from '../workspace/account.ts';
 import { campaign } from '../campaign/store.ts';
 import { retryCampaign } from '../workspace/opening.ts';
 import { bodyCounts, hexKeyOf } from '../workspace/places.ts';
-import MarketsNearby from '../workspace/MarketsNearby.vue';
 import RecordsHere from '../workspace/RecordsHere.vue';
 import { buildReady, hexState, placeNames } from '../workspace/build/acts.ts';
 import BuildBar from '../workspace/build/BuildBar.vue';
@@ -24,7 +23,6 @@ import BuildPane from '../workspace/build/BuildPane.vue';
 import BuildScope from '../workspace/build/BuildScope.vue';
 import { edit, editing, draftHandle } from '../workspace/build/edit.ts';
 import SystemEditor from '../workspace/build/SystemEditor.vue';
-import PublishForm from '../workspace/market/PublishForm.vue';
 import { marketUi } from '../workspace/market/market.ts';
 import DesignAsk from '../workspace/build/DesignAsk.vue';
 import { handUi } from '../workspace/build/hand.ts';
@@ -50,6 +48,10 @@ import { bodyAngle } from '../orbit/maths.ts';
 import { seasonOnMoon, seasonOnWorld, type SeasonShown } from '../orbit/season_on.ts';
 import { addressColumn, bodyKeys, bodyModel, overviewModel, pickSystem, type AddressColumn, type AllegianceName } from './model.ts';
 import type { SurfaceTarget } from './SurfaceStage.vue';
+
+/** The market list and the publish form. They are not on the first chart frame. */
+const MarketsNearby = defineAsyncComponent(() => import('../workspace/MarketsNearby.vue'));
+const PublishForm = defineAsyncComponent(() => import('../workspace/market/PublishForm.vue'));
 
 const props = defineProps<{
     open: boolean;

@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
 
         <template v-else-if="!packageId">
           <form class="mk-find" role="search" @submit.prevent="search">
-            <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions and tags" aria-label="Search packages" maxlength="100" />
+            <input v-model="q" class="mk-box mk-q" type="search" placeholder="Search titles, descriptions, and tags" aria-label="Search packages" maxlength="100" />
             <button type="submit" class="ui-btn">Search</button>
           </form>
 

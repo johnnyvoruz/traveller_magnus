@@ -108,7 +108,11 @@ export class UniverseDO extends DurableObject<Env> {
             if (!parent.ok) {
                 return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
             }
-            return Response.json({ ok: true, data: readPlayersCampaign(sql, after, limit, { userId: memberId, handles: handleMap(request.headers.get('x-voyage-handles')) }, parent.parent) });
+            return Response.json({ ok: true, data: readPlayersCampaign(sql, after, limit, {
+                userId: memberId,
+                handles: handleMap(request.headers.get('x-voyage-handles')),
+                ownerId: request.headers.get('x-voyage-owner'),
+            }, parent.parent) });
         }
         if (request.method === 'PATCH' && url.pathname === '/campaign/changes') {
             const memberId = request.headers.get('x-voyage-member');
@@ -132,7 +136,15 @@ export class UniverseDO extends DurableObject<Env> {
             }
             try {
                 const acknowledgePublic = !memberId && request.headers.get('x-voyage-journal') === 'public';
-                const result = applyCampaignChanges(sql, body, new Date().toISOString(), acknowledgePublic, memberId ? { userId: memberId } : null);
+                const actorId = request.headers.get('x-voyage-user-id');
+                const result = applyCampaignChanges(
+                    sql,
+                    body,
+                    new Date().toISOString(),
+                    acknowledgePublic,
+                    memberId ? { userId: memberId } : null,
+                    memberId ? null : actorId,
+                );
                 return Response.json({ ok: true, data: result });
             } catch (err) {
                 if (err instanceof CampaignRefusal) {

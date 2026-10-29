@@ -4,13 +4,13 @@
  * Playing and Archived with Which one, Archive and Bring back. It only draws what it is given and
  * says what was pressed; PlayersSection.vue makes the calls.
  */
-import type { PlayerInvite, PlayerList } from '@voyage/shared';
+import type { PlayerList } from '@voyage/shared';
 import Icon from '../../design/Icon.vue';
-import { inviteLine, isFull, memberLine, PLAYERS_FULL, type MemberRow } from './players_words.ts';
+import { inviteLine, isFull, memberLine, PLAYERS_FULL, type InviteShown, type MemberRow } from './players_words.ts';
 
 const props = defineProps<{
     readOnly: boolean;
-    invite: PlayerInvite | null;
+    invite: InviteShown | null;
     inviteBusy: boolean;
     list: PlayerList | null;
     listState: 'loading' | 'ready' | 'failed';

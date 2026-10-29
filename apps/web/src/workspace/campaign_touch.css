@@ -41,6 +41,11 @@
     display: none;
   }
 
+  /* The tabs' icons go too, so the three tabs and the menu share the row (DU34). */
+  .camp .camp-tab > .ui-icon {
+    display: none;
+  }
+
   /* A tag's own remove button sits inside the tag: its hit area grows, not the tag. */
   .camp .rec-tag button,
   .camp .clock-date,

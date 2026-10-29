@@ -34,6 +34,50 @@ export function now(): number {
     return performance.now();
 }
 
+/**
+ * Calls done once the map canvas has two colours, or after about twelve seconds.
+ * The orbit canvases carry a class, so they do not count. No document: done at once.
+ */
+export function whenMapPaints(done: () => void): () => void {
+    if (typeof document === 'undefined') {
+        done();
+        return () => {};
+    }
+    let frame = 0;
+    let stopped = false;
+    const started = now();
+    const step = () => {
+        if (stopped) return;
+        const canvas = document.querySelector('canvas:not([class])');
+        if (canvas instanceof HTMLCanvasElement && canvas.width >= 8 && canvas.height >= 8) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const keys = new Set<string>();
+                const py = Math.floor(canvas.height / 2);
+                for (let i = 0; i < 8; i += 1) {
+                    const px = Math.min(canvas.width - 1, Math.floor((i + 0.5) * canvas.width / 8));
+                    const d = ctx.getImageData(px, py, 1, 1).data;
+                    keys.add(d[0] + ',' + d[1] + ',' + d[2]);
+                }
+                if (keys.size >= 2) {
+                    done();
+                    return;
+                }
+            }
+        }
+        if (now() - started >= 12000) {
+            done();
+            return;
+        }
+        frame = nextFrame(step);
+    };
+    frame = nextFrame(step);
+    return () => {
+        stopped = true;
+        cancelFrame(frame);
+    };
+}
+
 /** Page origin for apiBase. Kept here so views do not touch location. */
 export function pageOrigin(): string {
     return location.origin;

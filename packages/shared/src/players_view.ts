@@ -41,10 +41,11 @@ export type CampaignRead = {
     clock: CampaignClock | null;
 };
 
-/** Who is reading, for own-note `rev` and `authorName`. Both are optional. */
+/** Who is reading, for own-note `rev` and `authorName`. The owner id marks a referee's row. */
 export type PlayersViewOptions = {
     userId?: string | null;
     handles?: Readonly<Record<string, string>>;
+    ownerId?: string | null;
 };
 
 export type PlayersRecord = Omit<CampaignRecord, 'rev' | 'provenance'>;
@@ -52,6 +53,7 @@ export type PlayersLink = Omit<CampaignLink, 'rev' | 'provenance'>;
 export type PlayersEntry = Omit<CampaignEntry, 'rev' | 'authorId'> & {
     rev?: number;
     authorName?: string;
+    authorRole?: 'referee';
 };
 export type PlayersSettings = Omit<CampaignSettings, 'rev'>;
 export type PlayersClock = Omit<CampaignClock, 'rev'>;
@@ -351,7 +353,8 @@ function projectEntry(
     kept: ReadonlySet<string>,
     options: PlayersViewOptions,
 ): PlayersEntry {
-    const { rev, authorId, ...rest } = entry;
+    const { rev, authorId, authorRole: _dropped, ...rest } = entry;
+    void _dropped;
     const body = redactString(entry.body, records, hiddenIds);
     const next: PlayersEntry = {
         ...rest,
@@ -364,6 +367,7 @@ function projectEntry(
     if (typeof authorId === 'string' && authorId) {
         const handle = options.handles?.[authorId];
         next.authorName = typeof handle === 'string' ? handle : '';
+        if (options.ownerId && authorId === options.ownerId) next.authorRole = 'referee';
         if (options.userId != null && authorId === options.userId) next.rev = rev;
     }
     return next;

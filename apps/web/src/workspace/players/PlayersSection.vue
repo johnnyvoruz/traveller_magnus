@@ -3,11 +3,12 @@
  * The referee's players (players_build_plan.md P5; contracts/b_players.md): on the Party tab, under
  * the party. The invite link (get it, copy it, revoke it; when it stops working, how often it was
  * used). The players in two groups, Playing and Archived: each with their handle, which person in
- * the party they are ("Which one"), and Archive or Bring back. Shown to the referee only.
+ * the party they are ("Which one"), and Archive or Bring back. Shown to the referee only. The live
+ * link is read once when the section opens (DU33), so a reload shows it as it did when it was made.
  */
 import { computed, onMounted, ref, watch } from 'vue';
-import { PlayerList, type PlayerInvite } from '@voyage/shared';
-import { createInvite, revokeInvite } from '../../campaign/membership.ts';
+import { PlayerList } from '@voyage/shared';
+import { createInvite, readInvite, revokeInvite } from '../../campaign/membership.ts';
 import { noteInvited } from '../onboarding.ts';
 import { campaign, transport } from '../../campaign/store.ts';
 import { apiFetch } from '../../platform/http.ts';
@@ -15,11 +16,11 @@ import { parseRead } from '../../campaign/read.ts';
 import { showToast } from '../../shell/toast.ts';
 import { archiveMember, bringBack, failWords, setMemberPerson } from './referee_calls.ts';
 import PlayersBoard from './PlayersBoard.vue';
-import { partyPeople, type MemberRow } from './players_words.ts';
+import { partyPeople, type InviteShown, type MemberRow } from './players_words.ts';
 
 const props = defineProps<{ readOnly: boolean }>();
 
-const invite = ref<PlayerInvite | null>(null);
+const invite = ref<InviteShown | null>(null);
 const inviteBusy = ref(false);
 const list = ref<PlayerList | null>(null);
 /** The list's state: loading, ready, or a sentence to show in its place. */
@@ -59,6 +60,16 @@ async function loadList(): Promise<void> {
     const body = await res.json() as { data?: unknown };
     list.value = parseRead(PlayerList, body.data);
     listState.value = 'ready';
+    noteSeen();
+}
+
+/** The live link, read once when the section opens: shown unless one was made meanwhile. No link, a 404 or a failed read leaves the section as it is. */
+async function loadInvite(): Promise<void> {
+    const id = campaign.universeId;
+    if (!id) return;
+    const found = await readInvite();
+    if (!found || id !== campaign.universeId || invite.value) return;
+    invite.value = found;
     noteSeen();
 }
 
@@ -136,11 +147,15 @@ function choosePerson(member: MemberRow, personId: string | null): void {
     });
 }
 
-onMounted(() => { void loadList(); });
+onMounted(() => {
+    void loadList();
+    void loadInvite();
+});
 watch(() => campaign.universeId, () => {
     invite.value = null;
     list.value = null;
     void loadList();
+    void loadInvite();
 });
 </script>
 

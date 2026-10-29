@@ -109,6 +109,21 @@ test('an older journal table gains parent and does not lose a column', () => {
     assert.equal(names.filter((name) => name === 'parent').length, 1);
 });
 
+test('a save may send the read-only author name back', () => {
+    const { sql } = open();
+    installCampaignSchema(sql);
+    applyCampaignChanges(sql, { journal: [note(ENTRY, { title: 'Briefing' })] }, NOW);
+    const saved = applyCampaignChanges(sql, {
+        journal: [note(REPLY, { parent: ENTRY, title: 'Hold here', authorName: 'Referee', authorRole: 'referee' })],
+    }, NOW, false, null, 'owner-1');
+    assert.equal(saved.conflicts.length, 0);
+    const replies = readCampaign(sql, 0, 10, true, { parent: ENTRY });
+    assert.equal(replies.journal[0].id, REPLY);
+    assert.equal(replies.journal[0].authorId, 'owner-1');
+    assert.equal(replies.journal[0].title, 'Hold here');
+    assert.equal('authorName' in replies.journal[0], false);
+});
+
 test('a reply is a players note under a live entry', () => {
     const { sql } = open();
     installCampaignSchema(sql);
