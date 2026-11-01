@@ -249,6 +249,17 @@ function add(type: CampaignRecordType): void {
   flex: 1 1 auto;
   gap: 8px;
   margin: 0;
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .here-head {
+    flex-wrap: wrap;
+  }
+
+  .here-head .ui-heading {
+    flex-basis: 100%;
+  }
 }
 
 .here-note {

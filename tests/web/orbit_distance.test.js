@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BODY_SNAP_PX, NEAR_BODY_AU, pictureOfAu, picturePlaceAu, placeAtPicture, pointWords, realDistanceKm, realDistanceKmBetween, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
+import { BODY_SNAP_PX, NEAR_BODY_AU, anchorEnd, pictureOfAu, picturePlaceAu, placeAtPicture, planMainworldKey, pointWords, realDistanceKm, realDistanceKmBetween, realPositionAu } from '../../apps/web/src/orbit/distance.ts';
 import { AU_KM, layoutScene } from '../../apps/web/src/orbit/layout.ts';
 import { plotText } from '../../apps/web/src/orbit/ships.ts';
 
@@ -270,6 +270,28 @@ test('a place is a body or a point, and a point is itself at any date', () => {
         [world('w9', 0.4, 0, { index: 0, star: 1, body: { au: 0.4 } })],
     );
     assert.equal(realDistanceKmBetween(unplaced, { x: 1, y: 0 }, 0, 'w9', 0), null);
+});
+
+test('a ship docked at the system, with no body named, is measured from the mainworld', () => {
+    const hex = 'Spinward_Marches/1910';
+    const bare = { kind: 'system', hexKey: hex };
+    const body = { kind: 'system', hexKey: hex, bodyKey: 'w2' };
+    const point = { kind: 'system', hexKey: hex, point: { x: 2.24, y: 1.43 } };
+    const main = world('w1', 1, 0, { index: 0 });
+    main.mainworld = true;
+    const plan = planOf([star('s0', 0, { body: { mass: 1 } })], [main, world('w2', 3, 0, { index: 1 })]);
+    assert.equal(planMainworldKey(plan), 'w1');
+    const host = world('w2', 3, 0, { index: 1, moons: [{ ...moon('m1'), mainworld: true }] });
+    assert.equal(planMainworldKey(planOf([star('s0', 0, { body: { mass: 1 } })], [host])), 'm1');
+    assert.equal(anchorEnd(bare, hex, 'w1'), 'w1');
+    assert.equal(anchorEnd(body, hex, 'w1'), 'w2');
+    assert.deepEqual(anchorEnd(point, hex, 'w1'), { x: 2.24, y: 1.43 });
+    assert.equal(anchorEnd({ kind: 'system', hexKey: 'other/0101' }, hex, 'w1'), null);
+    assert.equal(anchorEnd(bare, hex, null), null);
+    const from = anchorEnd(bare, hex, planMainworldKey(plan));
+    const km = realDistanceKmBetween(plan, from, 0, point.point, 0);
+    assert.equal(typeof km, 'number');
+    assert.ok(km > 0);
 });
 
 test('a picture point round-trips through AU, log and linear, at two zooms', () => {

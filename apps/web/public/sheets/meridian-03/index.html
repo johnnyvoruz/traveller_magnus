@@ -254,6 +254,25 @@ button.char:hover{border-color:var(--roll);background:var(--roll-soft)}
 .benefits li{padding-left:14px;position:relative}
 .benefits li::before{content:"";position:absolute;left:0;top:.55em;width:6px;height:6px;background:var(--red)}
 
+.gear{display:grid;gap:8px}
+.gear-item{border:1px solid var(--line);padding:12px;display:grid;gap:8px;min-width:0}
+.gear-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.gear-name{font-family:var(--f-display);font-weight:600;font-size:16px;letter-spacing:.06em;text-transform:uppercase}
+.gear-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gear-meta{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;color:var(--dim)}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line);font-family:var(--f-mono)}
+.qty-btn{font:inherit;font-size:14px;line-height:1;color:var(--ink);background:transparent;border:0;width:28px;height:28px;cursor:pointer}
+.qty-btn:hover{background:var(--roll-soft)}
+.qty output{min-width:1.6em;text-align:center;font-weight:600;color:var(--roll)}
+.gear-note,.gear-add textarea,.gear-add input{font:inherit;font-family:var(--f-mono);font-size:13px;line-height:1.5;color:var(--ink);background:transparent;border:1px solid var(--line);padding:8px;width:100%}
+.gear-note{resize:vertical;min-height:4.5em}
+.gear-note:focus-visible,.gear-add textarea:focus-visible,.gear-add input:focus-visible,.qty-btn:focus-visible{outline:2px solid var(--roll);outline-offset:1px}
+.gear-add{display:grid;gap:8px;border:1px dashed var(--line);padding:12px;margin-top:8px}
+.gear-add label{display:grid;gap:4px;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.gear-add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.gear-add-row .grow{flex:1;min-width:180px}
+.gear-add input[name=qty]{width:88px}
+
 @media (max-width:720px){
   .stats{padding-left:20px;padding-right:20px}
   .chars{grid-template-columns:repeat(3,1fr)}
@@ -312,14 +331,16 @@ window.CHARACTER = {
     "Metastatic Platelet Injection (TL12): doubles natural healing",
     "Personal Automedic (TL11): DM+1 vs poison and disease, auto-injects Fast Drug if dying, DM+1 on Medic checks to treat himself"
   ],
+  // qty and note edits, plus anything added in the browser, live in localStorage.
   equipment: [
-    "Medikit",
-    "Portable Mediscanner, TL12 (DM+1 on Medic checks after 1D minutes calibration)",
-    "Trauma Pack (restores 1D END for 1D hours)",
-    "Stims x6 (remove fatigue)",
-    "Fast Drug x1 (loaded in the Automedic)",
-    "Mobile Comm, TL10 (wiped)",
-    "Remembrance Hologram of Dr. Tobias Hale"
+    { name: "Medikit" },
+    { name: "Portable Mediscanner", meta: "TL12", note: "DM+1 on Medic checks after 1D minutes of calibration." },
+    { name: "Trauma Pack", meta: "TL8 · 2 kg · Cr750", qty: 1, note: "Medic check. Restores 1D END for 1D hours. That END can bring a patient back from 0, if the last wound was within 1D rounds. When the hours end the END vanishes, which can kill them. Once per day. A second dose is deadly." },
+    { name: "Stims", qty: 6, note: "Remove fatigue." },
+    { name: "Fast Drug", qty: 1, note: "Loaded in the Automedic." },
+    { name: "Medicinal Drug", meta: "TL5+ · Cr5+", qty: 2, note: "Medic skill required. Treats one specific disease or condition (vaccines, antitoxins, antibiotics). The wrong drug can be worse than doing nothing." },
+    { name: "Mobile Comm", meta: "TL10", note: "Wiped." },
+    { name: "Remembrance Hologram of Dr. Tobias Hale" }
   ],
   benefits: [
     "Cr45,000 on a credit chit in an unknown name",
@@ -353,11 +374,26 @@ window.CHARACTER = {
     <div class="chars" id="chars"></div>
     <div class="kit">
       <div class="kit-col wide"><h3>Skills <span class="hint">// Click a skill or characteristic to roll 2D</span></h3><ul class="skills" id="skills"></ul></div>
-      <div class="kit-col stack">
-        <div><h3>Augments</h3><ul class="benefits" id="augments"></ul></div>
-        <div><h3>Benefits</h3><ul class="benefits" id="benefits"></ul></div>
+      <div class="kit-col"><h3>Augments</h3><ul class="benefits" id="augments"></ul></div>
+      <div class="kit-col"><h3>Benefits</h3><ul class="benefits" id="benefits"></ul></div>
+      <div class="kit-col wide">
+        <h3>Equipment <span class="hint">// Added items and notes stay in this browser</span></h3>
+        <div class="gear" id="equipment"></div>
+        <form class="gear-add" id="gear-add">
+          <div class="gear-add-row">
+            <label class="grow">Item
+              <input name="name" type="text" maxlength="80" required autocomplete="off">
+            </label>
+            <label>Qty
+              <input name="qty" type="number" min="0" max="999" value="1" inputmode="numeric">
+            </label>
+          </div>
+          <label>What it does
+            <textarea name="note" rows="2" maxlength="2000" placeholder="Mechanical effect"></textarea>
+          </label>
+          <div class="gear-add-row"><button class="act solid" type="submit">Add item</button></div>
+        </form>
       </div>
-      <div class="kit-col"><h3>Equipment</h3><ul class="benefits" id="equipment"></ul></div>
     </div>
     <div class="combat">
       <div class="kit-col"><h3>Weapons <span class="hint">// Attack or Damage to roll</span></h3><div class="weapons" id="weapons"></div></div>
@@ -493,7 +529,7 @@ window.CHARACTER = {
       if(window.pickStat) window.pickStat({ label: 'Unskilled', level: C.unskilled, suggest: null });
     }, 'Roll unskilled check');
   }
-  ['augments','equipment','benefits'].forEach(function(key){
+  ['augments','benefits'].forEach(function(key){
     var ul=document.getElementById(key); if(!ul || !C[key]) return;
     C[key].forEach(function(t){ var li=document.createElement('li'); li.textContent=t; ul.appendChild(li); });
   });
@@ -539,6 +575,143 @@ window.CHARACTER = {
   inp.addEventListener('input', upd); upd();
   calc.appendChild(lab); calc.appendChild(inp); calc.appendChild(document.createTextNode('after armour')); calc.appendChild(out);
   abox.appendChild(calc);
+})();
+
+(function(){
+  var C=window.CHARACTER;
+  var root=document.getElementById('equipment');
+  var form=document.getElementById('gear-add');
+  if(!C || !root || !form) return;
+  var KEY='meridian-03-equipment';
+  function blank(){ return { qty:{}, notes:{}, added:[] }; }
+  function clampQty(n){
+    n=parseInt(n,10);
+    if(isNaN(n) || n<0) return 0;
+    if(n>999) return 999;
+    return n;
+  }
+  function load(){
+    try{
+      var raw=localStorage.getItem(KEY);
+      if(!raw) return blank();
+      var o=JSON.parse(raw);
+      var s=blank();
+      if(o && o.qty && typeof o.qty==='object') s.qty=o.qty;
+      if(o && o.notes && typeof o.notes==='object') s.notes=o.notes;
+      if(o && Array.isArray(o.added)){
+        s.added=o.added.filter(function(it){
+          return it && typeof it.id==='string' && typeof it.name==='string';
+        }).map(function(it){
+          return { id:it.id, name:String(it.name).slice(0,80), qty:clampQty(it.qty), note:typeof it.note==='string' ? it.note.slice(0,2000) : '' };
+        });
+      }
+      return s;
+    }catch(e){ return blank(); }
+  }
+  function save(s){
+    try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){}
+  }
+  function el(tag, cls, text){
+    var e=document.createElement(tag);
+    if(cls) e.className=cls;
+    if(text!=null) e.textContent=text;
+    return e;
+  }
+  var store=load();
+  var base=(C.equipment||[]).map(function(item){
+    if(typeof item==='string') return { name:item, note:'', qty:null, meta:'' };
+    return { name:item.name, note:item.note||'', qty:item.qty==null ? null : clampQty(item.qty), meta:item.meta||'' };
+  });
+
+  function currentQty(item, custom){
+    if(custom) return item.qty;
+    if(Object.prototype.hasOwnProperty.call(store.qty, item.name)) return clampQty(store.qty[item.name]);
+    return item.qty;
+  }
+
+  function card(item, custom){
+    var box=el('div','gear-item');
+    var top=el('div','gear-top');
+    top.appendChild(el('span','gear-name', item.name));
+    var right=el('div','gear-tools');
+    if(item.meta) right.appendChild(el('span','gear-meta', item.meta));
+    var qty=currentQty(item, custom);
+    if(qty!=null){
+      var q=el('span','qty');
+      var minus=el('button','qty-btn','\u2212'); minus.type='button';
+      minus.setAttribute('aria-label','Fewer '+item.name);
+      var num=el('output'); num.textContent=String(qty);
+      var plus=el('button','qty-btn','+'); plus.type='button';
+      plus.setAttribute('aria-label','More '+item.name);
+      function setQty(n){
+        n=clampQty(n);
+        num.textContent=String(n);
+        if(custom) item.qty=n;
+        else if(n===item.qty) delete store.qty[item.name];
+        else store.qty[item.name]=n;
+        save(store);
+      }
+      minus.addEventListener('click', function(){ setQty(currentQty(item, custom)-1); });
+      plus.addEventListener('click', function(){ setQty(currentQty(item, custom)+1); });
+      q.appendChild(minus); q.appendChild(num); q.appendChild(plus);
+      right.appendChild(q);
+    }
+    if(custom){
+      var rm=el('button','act ghost','Remove'); rm.type='button';
+      rm.addEventListener('click', function(){
+        store.added=store.added.filter(function(it){ return it.id!==item.id; });
+        save(store);
+        render();
+      });
+      right.appendChild(rm);
+    }
+    top.appendChild(right);
+    box.appendChild(top);
+    var note=document.createElement('textarea');
+    note.className='gear-note';
+    note.rows=3;
+    note.placeholder='What it does';
+    note.setAttribute('aria-label', item.name+' — what it does');
+    note.value = custom ? (item.note||'') : (Object.prototype.hasOwnProperty.call(store.notes, item.name) ? store.notes[item.name] : (item.note||''));
+    note.addEventListener('input', function(){
+      if(custom) item.note=note.value;
+      else if(note.value===(item.note||'')) delete store.notes[item.name];
+      else store.notes[item.name]=note.value;
+      save(store);
+    });
+    box.appendChild(note);
+    return box;
+  }
+
+  function render(){
+    root.replaceChildren();
+    base.forEach(function(item){ root.appendChild(card(item, false)); });
+    store.added.forEach(function(item){ root.appendChild(card(item, true)); });
+  }
+
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var nameEl=form.querySelector('[name=name]');
+    var qtyEl=form.querySelector('[name=qty]');
+    var noteEl=form.querySelector('[name=note]');
+    var name=(nameEl.value||'').trim();
+    if(!name){ nameEl.focus(); return; }
+    store.added.push({
+      id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      name: name.slice(0,80),
+      qty: clampQty(qtyEl.value==='' ? 1 : qtyEl.value),
+      note: (noteEl.value||'').slice(0,2000)
+    });
+    save(store);
+    nameEl.value='';
+    qtyEl.value='1';
+    noteEl.value='';
+    render();
+    var last=root.lastElementChild;
+    if(last) last.scrollIntoView({ block:'nearest' });
+  });
+
+  render();
 })();
 
 (function(){

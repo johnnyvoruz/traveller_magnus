@@ -182,12 +182,16 @@ test('a dead parent is refused, and deleting the parent tombstones the replies',
     assert.ok(session instanceof CampaignRefusal);
     assert.equal(session.message, 'Invalid request.');
 
-    applyCampaignChanges(sql, { journal: [note(REPLY, { parent: HIDDEN })] }, NOW, false, { userId: MEMBER });
+    const hiddenReply = refusal(() => applyCampaignChanges(sql, { journal: [note(REPLY, { parent: HIDDEN })] }, NOW, false, { userId: MEMBER }));
+    assert.ok(hiddenReply instanceof CampaignRefusal);
+    assert.equal(hiddenReply.code, 'validation');
+    assert.equal(hiddenReply.message, missing.message);
+    applyCampaignChanges(sql, { journal: [note(REPLY, { parent: HIDDEN })] }, NOW);
     applyCampaignChanges(sql, { journal: [note(NEST, { parent: REPLY, title: 'And then' })] }, NOW);
 
     const moved = refusal(() => applyCampaignChanges(sql, {
         journal: [note(REPLY, { parent: ENTRY, baseRev: 1, rev: 1 })],
-    }, NOW, false, { userId: MEMBER }));
+    }, NOW));
     assert.ok(moved instanceof CampaignRefusal);
     assert.equal(moved.message, 'Invalid request.');
 
@@ -205,6 +209,24 @@ test('a dead parent is refused, and deleting the parent tombstones the replies',
 
     const again = refusal(() => applyCampaignChanges(sql, { journal: [note(LATE, { parent: HIDDEN, title: 'Too late' })] }, NOW));
     assert.ok(again instanceof CampaignRefusal);
+});
+
+test('a players note the referee writes keeps their id; a referee entry does not', () => {
+    const { db, sql } = open();
+    installCampaignSchema(sql);
+    const NOTE = 'cj_00000000-0000-4000-8000-000000000006';
+    const OWN = 'cj_00000000-0000-4000-8000-000000000007';
+    applyCampaignChanges(sql, {
+        journal: [
+            note(NOTE, { title: 'From the chair' }),
+            note(OWN, { title: 'Mine', author: 'referee', visibility: 'referee' }),
+        ],
+    }, NOW, false, null, 'owner-1');
+    assert.equal(db.prepare('SELECT author_id FROM campaign_journal WHERE id = ?').get(NOTE).author_id, 'owner-1');
+    assert.equal(db.prepare('SELECT author_id FROM campaign_journal WHERE id = ?').get(OWN).author_id, null);
+    const page = readCampaign(sql, 0, 10, true, 'all');
+    assert.equal(page.journal.find((row) => row.id === NOTE).authorId, 'owner-1');
+    assert.equal(page.journal.find((row) => row.id === OWN).authorId, null);
 });
 
 test('the journal read parses parent and the export scope', () => {

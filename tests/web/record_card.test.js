@@ -61,3 +61,9 @@ test('the card names up to three connections and counts the rest (N10)', async (
     assert.match(card, /cardTies\(connectionsOf\(now\.id, campaign\.records, campaign\.links\)\)/, 'worded as the record page words them');
     assert.match(card, /<ul v-if="ties\.shown\.length" class="rcard-ties">/, 'nothing when it has none');
 });
+
+test('the Connections head wraps on a phone: the button drops under the label and keeps the right (DF28)', () => {
+    const block = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'apps', 'web', 'src', 'workspace', 'LinksBlock.vue'), 'utf8');
+    assert.match(block, /\.lnk-head \{\s+display: flex;\s+flex-wrap: wrap;/);
+    assert.match(block, /\.lnk-head > \.ui-btn \{\s+margin-left: auto;/);
+});

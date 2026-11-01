@@ -503,12 +503,30 @@ onBeforeUnmount(() => {
     order: 2;
   }
 
+  /* The picks live in the panel, so the panel has to shrink or the row runs off the screen and Close goes with it. */
+  .dice-rail-pop .dice-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .dice-rail-pop .dice-picks {
     flex: 1 1 auto;
     order: 1;
     flex-wrap: wrap;
     justify-content: center;
     row-gap: 4px;
+  }
+
+  .dice-rail-pop .dice-pick {
+    box-sizing: border-box;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  button.ui-btn.dice-rail-x {
+    width: 44px;
+    height: 44px;
   }
 }
 

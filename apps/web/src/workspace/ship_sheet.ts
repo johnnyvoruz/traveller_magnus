@@ -1,5 +1,5 @@
 /**
- * The ship sheet's fields (slice_2_campaign.md K13 part 3; plan §5.3b): the 312 named
+ * The ship sheet's fields (slice_2_campaign.md K13 part 3; plan §5.3b): the 314 named
  * fields of the official PDF, read from rules/ through the generated wrapper, laid out as
  * the PDF lays them out: its sections in page order, its rows by their box's height on the
  * page, numbered series ("Turret Mount 1", "Turret Mount 2", …) as a table. Names are the

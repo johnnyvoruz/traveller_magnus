@@ -22,6 +22,7 @@
  * A place at either end of a distance is a body key or a point. A point's real place is
  * itself, in the primary's frame, at any date.
  */
+import type { CampaignAnchor } from '@voyage/shared';
 import { AU_KM, STAGE_MARGIN, orbitHole, type Plan, type PlanMoon, type PlanStar, type PlanWorld, type View } from './layout.ts';
 import { shortLabel } from './bodies.ts';
 import { bodyAngle, scaleR } from './maths.ts';
@@ -197,6 +198,28 @@ export function placeAtPicture(
 
 /** A body key, or a point in AU from the primary. */
 export type PlaceEnd = string | AuPoint;
+
+/** The plan's mainworld: a world, a belt, or a moon. Null when the plan marks none. */
+export function planMainworldKey(plan: Plan): string | null {
+    for (const world of plan.worlds) {
+        if (world.mainworld || world.mainworldBelt) return world.key;
+        const moon = world.moons.find((item) => item.mainworld);
+        if (moon) return moon.key;
+    }
+    return null;
+}
+
+/**
+ * A system anchor on this picture as an end of a distance.
+ * A body is that body. A point is that point. A bare system is the mainworld: the picture
+ * draws a ship that names no body there, and the estimate uses the same place.
+ */
+export function anchorEnd(anchor: CampaignAnchor, hexKey: string, mainworldKey: string | null): PlaceEnd | null {
+    if (!anchor || anchor.kind !== 'system' || anchor.hexKey !== hexKey) return null;
+    if (anchor.bodyKey) return anchor.bodyKey;
+    if (anchor.point) return { x: anchor.point.x, y: anchor.point.y };
+    return mainworldKey;
+}
 
 function pointPlace(end: AuPoint): { known: true; place: Place | null } | { known: false } {
     if (!finite(end.x) || !finite(end.y)) return { known: false };

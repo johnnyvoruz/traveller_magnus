@@ -87,6 +87,8 @@ test('unticked writes nothing; ticked writes one note in the ledger line\'s own 
     assert.equal(note.body.includes('[[' + VESSEL + '|Beowulf]]'), true);
     assert.deepEqual(note.mentions, ['hex:' + HEX, VESSEL]);
     assert.deepEqual(mentionsOf(note.body), note.mentions);
+    assert.deepEqual(note.anchor, { kind: 'system', hexKey: HEX, locationLabel: 'Mora' }, 'the note is placed at the world the trade was at (DW3 round 5)');
+    assert.equal(tradeLogEntry(args({ hexKey: null })).anchor, null, 'under way, or nowhere the chart knows: no place');
 });
 
 test('a hidden vessel\'s entry is referee-only', () => {

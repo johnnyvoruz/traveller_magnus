@@ -146,16 +146,17 @@ export function mountPlayerRoutes(route: Hono<AppEnv>): void {
         if (owned instanceof Response) return owned;
         if (!await detectPlayers(c.env.DB)) return unavailable(c);
         const live = await c.env.DB.prepare(
-            `SELECT token AS token, created_at AS createdAt, expires_at AS expiresAt
+            `SELECT token AS token, created_at AS createdAt, expires_at AS expiresAt, uses AS uses
              FROM universe_invites
              WHERE universe_id = ? AND revoked_at IS NULL AND token IS NOT NULL AND expires_at > ?`,
-        ).bind(owned.row.id, new Date().toISOString()).first<{ token: string; createdAt: string; expiresAt: string }>();
+        ).bind(owned.row.id, new Date().toISOString()).first<{ token: string; createdAt: string; expiresAt: string; uses: number }>();
         if (!live?.token) return held(c, { link: null });
         return held(c, {
             link: {
                 url: `${new URL(c.req.url).origin}/join/${live.token}`,
                 createdAt: live.createdAt,
                 expiresAt: live.expiresAt,
+                uses: Number(live.uses),
             },
         });
     });

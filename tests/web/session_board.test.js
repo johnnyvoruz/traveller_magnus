@@ -115,7 +115,7 @@ test('the wiring: the head\'s Session button, the board at Full, the board\'s pi
     assert.match(panel, /data-open-session @click="openSession"/);
     assert.match(panel, /<button v-if="isReferee && !headFolded"[^>]*class="camp-timeline camp-session"/, 'at Column it is the menu\'s (DU34)');
     assert.match(panel, /<SessionBoard v-else-if="onSession && isReferee" :read-only="!online" @map="showMap" @journal="goEntry" @open="go" \/>/);
-    assert.match(panel, /watch\(onSession, \(on\) => \{\s+if \(!on \|\| span\.value === 'full'\) return;\s+span\.value = 'full';/);
+    assert.match(panel, /watch\(onSession, \(on\) => \{\s+if \(!on\) return;[\s\S]*?if \(phoneSheet\(\)\) sheetFull\.value = true;\s+if \(span\.value === 'full'\) return;\s+span\.value = 'full';/);
     assert.match(panel, /onProposals\.value \|\| onSession\.value\) \{\s+event\.preventDefault\(\);/, 'Escape leaves the board');
     assert.match(panel, /onProposals\.value \|\| onSession\.value \|\| props\.entryId\) return false;/, 'no first-run card over the board');
     const board = read('apps/web/src/workspace/session/SessionBoard.vue');

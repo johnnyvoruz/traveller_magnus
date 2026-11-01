@@ -449,6 +449,14 @@ function assertLiveParent(sql: Sql, parent: string, selfId: string): void {
     if (!row || bit(row.deleted)) throw new CampaignRefusal('validation', PARENT_REFUSED);
 }
 
+/** A member cannot tell a referee-only parent from one that is not there. */
+function assertMemberParent(sql: Sql, parent: string, selfId: string): void {
+    assertLiveParent(sql, parent, selfId);
+    const row = loadEntry(sql, parent);
+    const visibility = row ? String(row.visibility) : '';
+    if (visibility !== 'players' && visibility !== 'public') throw new CampaignRefusal('validation', PARENT_REFUSED);
+}
+
 /** A reply is a players note. Any other kind, author, or visibility is refused. */
 function assertReplyShape(change: { kind: string; author: string; visibility: string }): void {
     if (change.kind !== 'note' || change.author !== 'players' || change.visibility !== 'players') {
@@ -747,7 +755,12 @@ export function readPlayersCampaign(
     for (const row of rows.links) seqOf.set(`links:${String(row.id)}`, Number(row.seq));
     for (const row of rows.journal) seqOf.set(`journal:${String(row.id)}`, Number(row.seq));
     if (parent) {
-        const children = sql.exec(`SELECT * FROM campaign_journal WHERE parent = ?`, parent);
+        const parentRow = rows.journal.find((row) => String(row.id) === parent);
+        const parentOpen = parentRow != null
+            && (String(parentRow.visibility) === 'players' || String(parentRow.visibility) === 'public');
+        const children = parentOpen
+            ? sql.exec(`SELECT * FROM campaign_journal WHERE parent = ?`, parent)
+            : [];
         for (const row of children) seqOf.set(`journal:${String(row.id)}`, Number(row.seq));
         const view = projectLive(sql, { records: rows.records, links: rows.links, journal: children }, caller);
         const journal = pageKind(view.journal, seqOf, 'journal', afterSeq, cap);
@@ -896,7 +909,7 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
                 assertMemberNote(change);
                 assertMemberAnchor(sql, change.anchor);
                 const parent = requestedParent(change) ?? null;
-                if (parent) assertLiveParent(sql, parent, change.id);
+                if (parent) assertMemberParent(sql, parent, change.id);
                 if (!change.deleted && countPlayerNotes(sql, member.userId) >= PLAYER_NOTES) {
                     throw new CampaignRefusal('too_large', PLAYER_NOTE_SENTENCE);
                 }
@@ -1348,13 +1361,16 @@ export function applyCampaignChanges(
                     change.deleted ? 1 : 0,
                 ];
                 if (journalAuthorReady(sql)) {
+                    // A reply is the referee's. A players note they write is too, so the read can name them.
+                    // A referee entry stays unnamed: it is theirs by its kind.
+                    const wrote = parent || change.author === 'players' ? refereeId : null;
                     sql.exec(
                         `INSERT INTO campaign_journal (
                             id, kind, title, body, when_json, real_date, sequence, author, visibility,
                             anchor, mentions, images, rev, seq, created_at, updated_at, deleted, author_id, parent
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         ...values,
-                        parent ? refereeId : null,
+                        wrote,
                         parent,
                     );
                 } else {

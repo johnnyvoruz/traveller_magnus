@@ -163,6 +163,10 @@ export type SymbolOptions = {
     readonly iconRadius?: number;
     /** Stroke the hexes that carry this code. */
     readonly highlight?: SurfaceCode | null;
+    /** Symbol colour. Omit it and each hex picks a light or dark ink against its ground. */
+    readonly ink?: string;
+    /** Outline colour. Omit it for the screen's hex token. */
+    readonly outlineInk?: string;
 };
 
 /** Hex outlines and symbols. The context is in sheet pixels (scale it for a sharper canvas). */
@@ -180,7 +184,7 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
         return [layout.ox + nx * s, layout.oy + ny * s];
     };
     if (options.outlines !== false) {
-        ctx.strokeStyle = iconPaint('--surface-hex');
+        ctx.strokeStyle = options.outlineInk ?? iconPaint('--surface-hex');
         ctx.lineWidth = options.outlineWidth ?? 0.75;
         ctx.beginPath();
         for (const f of grid.faces) {
@@ -216,7 +220,7 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
             for (let j = 0; i + j <= n; j += 1) {
                 const hex = model.hexes[grid.vid[fi][i * (n + 1) + j]];
                 const [x, y] = at(f, i, j);
-                const ink = inkOn(groundOf(model, hex));
+                const ink = options.ink ?? inkOn(groundOf(model, hex));
                 if (hex.features.includes('farm')) drawCode(ctx, options.set, 'farm', x, y, r, ink, { tint: options.tint });
                 if (hex.features.includes('rural')) drawCode(ctx, options.set, 'rural', x, y, r, ink, { tint: options.tint });
                 const code = symbolOf(hex);

@@ -54,7 +54,7 @@ import SaveImageButton from '../capture/SaveImageButton.vue';
 import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
 import { captionText, captureName, type CaptureArea } from '../capture/paper.ts';
 import { captureSurface, projectionAspect, TOO_LARGE, type SurfaceShot } from '../surface/capture.ts';
-import { printSurfaceInk, screenGround, screenText, surfaceFont } from '../surface/print_theme.ts';
+import { printSurfaceInk, surfaceFont } from '../surface/print_theme.ts';
 import { rememberedVersion } from '../map/chart_version.ts';
 import { campaign } from '../campaign/store.ts';
 import { stardate } from '../workspace/stardate.ts';
@@ -1406,19 +1406,20 @@ async function saveImage(choice: SheetChoice): Promise<void> {
         body: target.body,
         hexKey: target.hexKey,
         symbols: style.value === 'symbols',
+        tint,
         worldName: worldName.value,
     };
     if (shot.mode === 'enhanced' && !shot.model) return;
     saving.value = true;
     try {
         const date = campaign.status === 'ready' && campaign.clock ? stardate(campaign.clock.days).date : null;
+        const ink = printSurfaceInk(el);
         const ok = await captureSurface({
             shot,
             paper: choice.paper,
             look: choice.look,
-            ink: printSurfaceInk(el),
-            ground: screenGround(el),
-            screenText: screenText(el),
+            ink,
+            ground: ink.paper,
             font: surfaceFont(el),
             caption: captionText(area, date, rememberedVersion()),
             fileName: captureName(area, choice.paper),

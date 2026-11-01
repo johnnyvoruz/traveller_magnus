@@ -122,7 +122,8 @@ test('the screens: the entry, the banner, read-only, the referee\'s things hidde
     const panel = read('workspace/CampaignPanel.vue');
     assert.match(panel, /if \(example\.on\) return campaign\.status;\s+if \(!signedIn\.value\) return 'signed-out';/, 'signed out too');
     assert.match(panel, /<SignInCard v-if="!signedIn && !example\.on" \/>/);
-    assert.match(panel, /<ExampleBar v-if="example\.on && status === 'ready'" \/>\s+<ViewAsBar v-if="status === 'ready' && !example\.on" \/>/);
+    assert.match(panel, /<ExampleBar v-if="example\.on && status === 'ready'" \/>\s+<ViewAsBar v-if="status === 'ready' && !example\.on" :place="viewAsInHead \? 'banner' : 'bar'" \/>/);
+    assert.match(panel, /<ViewAsBar v-if="viewAsInHead && !example\.on" place="head"/, 'the head\'s switch is not in the example either (DU36)');
     assert.equal((panel.match(/:read-only="!online \|\| example\.on" :player="isPlayer"/g) || []).length, 2, 'no Add a note');
     assert.match(panel, /const entryReadOnly = computed\(\(\) => !online\.value \|\| example\.on \|\|/);
     assert.match(panel, /const isReferee = computed\(\(\) => campaign\.role === 'owner'/, 'the example is opened as a player: no menu, no Copy for your AI, no invite');

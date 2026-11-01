@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The ship sheet on a vessel's record page (K13 part 3; plan §5.3b): the PDF's 312 fields
+ * The ship sheet on a vessel's record page (K13 part 3; plan §5.3b): the PDF's 314 fields
  * in its sections and page order, edited where they stand and stored as `sheet.fields`
  * under the PDF's own names. The look is the sheet's: chamfered panels, cyan section tabs,
  * rust-red value tags, a thin orange frame line, all tokens. Plain fields; nothing is
@@ -23,7 +23,9 @@ import { isPersonField, newPersonName, peopleOfKind, personOf, SECTION_KIND, wit
 import {
     isTall, sheetSections, sheetWithFields, valueOf, withValue, type Row, type SheetField, type Table,
 } from './ship_sheet.ts';
-import { editedSheet, isManifestField, sheetView, writeTrade } from './vessel_trade.ts';
+import { formatCredits } from '../campaign/money.ts';
+import { fareOfPassageField } from './passenger_fare.ts';
+import { editedSheet, isManifestField, manifestOf, sheetView, writeTrade } from './vessel_trade.ts';
 import type { SheetValues } from './sheet_fields.ts';
 
 const props = defineProps<{
@@ -38,6 +40,14 @@ const record = computed(() => {
 });
 /** The sheet's own values with the Cargo and Passenger rows written from the manifest. */
 const values = computed(() => (record.value ? sheetView(record.value) : null));
+/** The passengers, for the fare under a Passage box (DT3). */
+const lots = computed(() => (record.value ? manifestOf(record.value).passengers : []));
+
+/** "Cr14,000" under a Passage box whose passenger has boarded; nothing otherwise. */
+function fareWords(field: SheetField): string {
+    const fare = fareOfPassageField(lots.value, field.name);
+    return fare === null ? '' : formatCredits(fare);
+}
 
 /**
  * Saves the sheet's values. A Cargo or Passenger row edits the manifest; so does any edit on a vessel
@@ -235,7 +245,7 @@ function columnHeadings(table: Table): string[] {
                   <tbody>
                     <tr v-for="(cells, row) in block.cells" :key="row">
                       <th scope="row" class="sheet-th is-row">{{ rowHeading(block, row) }}</th>
-                      <td v-for="(field, column) in cells" :key="column" :class="{ 'is-person': field && isPersonField(field) }">
+                      <td v-for="(field, column) in cells" :key="column" :class="{ 'is-person': field && isPersonField(field), 'is-fare': field && fareWords(field) !== '' }">
                         <template v-if="field">
                           <PersonField
                             v-if="isPersonField(field)"
@@ -284,6 +294,7 @@ function columnHeadings(table: Table): string[] {
                             @change="onText(field, $event)"
                             @keydown="onKey"
                           >
+                          <small v-if="fareWords(field)" class="sheet-fare" data-sheet-fare>{{ fareWords(field) }}</small>
                         </template>
                       </td>
                     </tr>
@@ -336,6 +347,15 @@ function columnHeadings(table: Table): string[] {
 
 .sheet-table td.is-person .pf {
   display: flex;
+}
+
+/* A Passage box whose passenger has boarded (DT3): the posted fare under the box. */
+.sheet-table td.is-fare .sheet-fare {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font: 500 11px/1.2 var(--font-text);
+  white-space: nowrap;
 }
 
 .sheet-plan .sheet-body {

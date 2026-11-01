@@ -17,18 +17,35 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.5',
+        date: '2026-10-31',
+        title: 'Passengers, freight and mail',
+        story: [
+            'A ship\'s page now finds passengers, freight lots and mail for a destination within its jump, with every roll shown and every fare posted.',
+            'The public ship card keeps your private notes private, the clock moves with the trade, and Save image prints on white.',
+        ],
+        items: [
+            'The public ship card no longer shows a referee-only passage or a mention of a hidden record from a public journal entry, and the Player Pack leaves them out of names and notes too. A ship or campaign name with a dollar sign stays plain text on a link preview, and a hidden character cannot break a referee-only fence.',
+            'Find passengers and freight, a new section on a ship\'s page: choose a destination within the ship\'s jump, roll for passengers by class and take them aboard with their fares, roll for freight lots and take them into the hold, and ask for mail. Deliver on a cargo row posts the pay, late or on time, once the ship has arrived, and Disembark lets passengers off. Fit to the sheet fills the Take boxes with what the staterooms, low berths and hold allow. Each roll shows its dice and every modifier by the rules\' own words.',
+            'Save image: Full colour now prints on white paper with the chart\'s own colours, on the chart, the system map and the world map. The world map On paper is a print with the tile symbols, readable in black and white.',
+            'The clock, beside the trade: a rolled wait and a leg still under way each get a days box, filled with the roll or the days to arrival and yours to change, and an Advance button that moves the campaign date. The Board form opens on the ship\'s next jump, read from its track. The ship sheet has Staterooms and Low Berths. A passenger roll with nobody aboard holding Steward takes the untrained penalty.',
+            'The ship\'s money: the Ledger and the Passengers list fold at ten lines; a payment\'s next due day fills itself from Every; the upkeep says when it was last posted; the empty Ledger says where the starting funds go; the trade log note is placed at the world.',
+            'Smaller: the invite link shows its use count after a reload; the orbit view loads lighter and the chart\'s warm load asks for less; a course laid from a docked ship has its distance and hours; a pasted batch over 200 proposals or 256 KB says so; journal replies and the dice sheet fit a phone; the trade log and the records read a little better.',
+        ],
+    },
+    {
         version: '1.3.4',
         date: '2026-10-29',
         title: 'A cleaner Records tab',
         story: [
-            'The Records tab shows your records, not its controls: one row for search and Add, one row for the kinds your campaign has.',
-            'The invite link survives a reload, the referee\'s replies say so, and a system address shows its chart sooner.',
+            'The Records tab leads with your records: one row for search and Add, and one row for the kinds your campaign has.',
+            'The invite link survives a reload. A reply from the referee says Referee, and a system address shows its chart sooner.',
         ],
         items: [
-            'The Records tab on the Campaign panel keeps the search box, Add, and one row of chips for the kinds your campaign has, with their counts. The campaign date is on the Party tab, and Publish records is in the panel\'s menu. On a phone the chips stay on one line and scroll.',
+            'The Records tab on the Campaign panel keeps the search box, Add, and one row of chips for the kinds your campaign has, with their counts. The campaign date is on the Party tab, and Publish records is in the panel\'s menu. When the panel is narrow, the chips stay on one line and scroll.',
             'The Players section shows a live invite link after a reload, with Copy, Revoke, and the date it works until.',
             'A reply from the referee says Referee over it, with the referee\'s handle when the account has one. A players note says who wrote it, to the referee too, and a reply you just wrote shows your name at once.',
-            'A system address shows its chart sooner. The world map, the print image, and the markets load after the first frame.',
+            'A system address shows its chart sooner. The world map, the print image, and the markets load after the chart appears.',
             'Smaller: when the Campaign panel is narrow, Timeline, Relationships, and Session are in the panel\'s menu. The here chip names the system as soon as the chart knows its name.',
         ],
     },

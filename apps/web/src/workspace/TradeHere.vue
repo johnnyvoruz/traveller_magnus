@@ -9,19 +9,18 @@
  * vessel's record (vessel_trade.ts), as the Cargo and Ledger sections' do.
  */
 import { computed, reactive, ref, watch } from 'vue';
-import { validateTableSet, type CargoLot, type TableSetData } from '@voyage/shared';
+import type { CargoLot } from '@voyage/shared';
 import { addCargo, capacityTons, removeCargo, tonsUsed } from '../campaign/cargo.ts';
 import { postLedger } from '../campaign/ledger.ts';
 import { formatCredits } from '../campaign/money.ts';
 import { newEntryId } from '../campaign/commit.ts';
-import { campaign, transport } from '../campaign/store.ts';
+import { campaign } from '../campaign/store.ts';
 import {
     findSupplier,
     goodsAvailable,
     purchasePrice,
     rollLocalBroker,
     salePrice,
-    tradeChoice,
     tradeGood,
     type BrokerHire,
     type BrokerRoll,
@@ -33,13 +32,16 @@ import {
 } from '../campaign/trade.ts';
 import { cryptoFace } from '../dice/roll.ts';
 import { storageGet, storageSet } from '../platform/browser.ts';
-import { apiFetch } from '../platform/http.ts';
 import { truthAt } from './build/acts.ts';
 import { buildStore } from './build/seam.ts';
+import { entryAt, startMarkets } from './markets_near.ts';
 import { resolveAnchor } from './party.ts';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import { fieldsOf } from './sheet_fields.ts';
 import { boughtLine, boughtLot, brokerFeeLine, citeWords, diceWords, dmWords, goodOfLot, priceWords, signed, soldLine, thirdWords, tradeLogEntry, tradeLogOn, tradeLogSave, tradeWorldOf } from './trade_here.ts';
+import { useTradeSet } from './trade_set.ts';
+import AdvanceClock from './AdvanceClock.vue';
+import { waitDays } from './advance_clock.ts';
 import { dayOf, ledgerOf, manifestOf, statusWithTrade, writeTrade } from './vessel_trade.ts';
 
 const props = defineProps<{
@@ -48,26 +50,9 @@ const props = defineProps<{
     readOnly: boolean;
 }>();
 
-/** The account's trade set, when the campaign chose one that is not the official file. */
-const ownSet = ref<TableSetData | null>(null);
-const rolled = computed(() => {
-    void campaign.seq;
-    return tradeChoice(campaign.settings, ownSet.value ? [ownSet.value] : []);
-});
+/** The campaign's trade tables: the one loader Find passengers and freight uses too (trade_set.ts, DF30). */
+const { rolled } = useTradeSet();
 const tables = computed(() => rolled.value.tables);
-
-let setLoad = 0;
-watch(() => campaign.settings?.tableSets?.trade ?? '', (id) => {
-    const ticket = ++setLoad;
-    ownSet.value = null;
-    if (!id || id === 'official:trade') return;
-    void apiFetch(transport.fetch, '/api/table-sets/' + encodeURIComponent(id)).then(async (res) => {
-        if (ticket !== setLoad || !res.ok) return;
-        const body = await res.json() as { data?: unknown };
-        const checked = validateTableSet(body.data);
-        if (ticket === setLoad && checked.ok && checked.set) ownSet.value = checked.set;
-    }).catch(() => { /* the official file stays, and tradeChoice says so */ });
-}, { immediate: true });
 
 const record = computed(() => {
     void campaign.seq;
@@ -75,7 +60,7 @@ const record = computed(() => {
     return found && !found.deleted && found.type === 'vessel' ? found : null;
 });
 
-/** The world under the ship, as the map knows it (Build's row there, else the chart's). */
+/** The world under the ship, as the map knows it (Build's row there, else the chart's); when the map has not read that sector, the chart's index row (DF29, as Find passengers reads it). */
 const place = computed(() => {
     const now = record.value;
     if (!now) return null;
@@ -86,12 +71,17 @@ const place = computed(() => {
     const store = buildStore();
     if (store) void store.tick();
     const row = store ? store.row(at.hexKey) : null;
-    const entry = row ? (row.state === 'removed' ? null : row.entry) : truthAt(at.hexKey);
+    const entry = row ? (row.state === 'removed' ? null : row.entry) : truthAt(at.hexKey) ?? entryAt(at.hexKey);
     if (!entry || !entry.uwp) return { underway: false as const, hexKey: at.hexKey, name: '', world: null, codes: '' };
     return { underway: false as const, hexKey: at.hexKey, name: entry.name || at.hexKey, world: tradeWorldOf(entry), codes: [entry.uwp, ...entry.tradeCodes].join(' ') };
 });
 const world = computed(() => (place.value && !place.value.underway ? place.value.world : null));
 const worldName = computed(() => (place.value && !place.value.underway ? place.value.name : ''));
+
+// The chart's grid, asked for once the ship stands somewhere, so the index row can answer when the map has not read the sector.
+watch(() => (place.value && !place.value.underway ? place.value.hexKey : null), (key) => {
+    if (key) void startMarkets();
+}, { immediate: true });
 
 /** One tick for Buy and Sell. Off until this device has stored it for this campaign. */
 const logIt = ref(false);
@@ -393,6 +383,7 @@ function gainWords(lot: CargoLot, received: number): string {
           <template v-else> Not found. A new try this month takes DM{{ signed(-1) }} more. The earlier-tries count has gone up by one.</template>
         </p>
         <p v-if="search.allowed" class="th-roll-dice" data-trade-dice>{{ searchWords(search) }}</p>
+        <AdvanceClock v-if="search.found && search.time && waitDays(search.time) !== null" :days="waitDays(search.time)" label="Days the search took" data-trade-advance />
         <p v-if="citeWords(search.cites)" class="th-src">Sources: {{ citeWords(search.cites) }}</p>
         <div v-if="search.found && !goods" class="th-acts">
           <button type="button" class="ui-btn" data-trade-goods @click="showGoods">See the goods on offer</button>

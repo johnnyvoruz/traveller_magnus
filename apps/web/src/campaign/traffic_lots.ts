@@ -7,7 +7,7 @@
  *
  * Read by the caller, not here: both worlds' starport, population code, tech level
  * and zone; the parsecs of the jump; the Effect of the Broker, Carouse or Streetwise
- * check; the highest Steward skill aboard; whether the ship is armed; the highest
+ * check; the highest Steward skill aboard, or none; whether the ship is armed; the highest
  * Naval or Scout rank and SOC DM. A DM label this file cannot read is returned in
  * `unread`, never guessed.
  */
@@ -110,7 +110,10 @@ export type TrafficQuery = {
     parsecs: number;
     /** The Effect of the Average (8+) Broker, Carouse or Streetwise check; 0 if none was made. */
     effect?: number;
-    /** The highest Steward skill aboard (passengers only). */
+    /**
+     * The highest Steward skill aboard (passengers only). Omitted: nobody aboard has
+     * the skill. 0 is a trained level.
+     */
     steward?: number;
     face: () => number;
     set?: TableSetData | null;
@@ -165,7 +168,20 @@ function sharedDms(traffic: Traffic, q: TrafficQuery, unread: string[]): { lines
             continue;
         }
         if (row.label === 'Chief Steward') {
-            lines.push({ label: row.label, dm: q.steward ?? 0, cites: cites(row._src) });
+            // assets/trade.txt:97-98: the DM is the highest Steward skill aboard.
+            // A missing steward means nobody has the skill. Johnny 2026-10-30, question 102
+            // (directives/decisions.md): that is an untrained skill, DM-3. The penalty is his
+            // word; assets/ does not state it. A number, 0 included, is the trained level.
+            const skill = q.steward;
+            if (typeof skill === 'number') {
+                lines.push({ label: row.label, dm: skill, cites: cites(row._src) });
+            } else {
+                lines.push({
+                    label: 'Chief Steward (no steward aboard: untrained, DM-3)',
+                    dm: -3,
+                    cites: cites(row._src, 'directives/decisions.md (2026-10-30, question 102)'),
+                });
+            }
             continue;
         }
         if (typeof row.dm === 'number') { lines.push({ label: row.label, dm: row.dm, cites: cites(row._src) }); continue; }
@@ -189,6 +205,8 @@ function sharedDms(traffic: Traffic, q: TrafficQuery, unread: string[]): { lines
 function rollTraffic(traffic: Traffic, q: TrafficQuery, section: Src | undefined, steward: boolean): TrafficResult {
     if (!Number.isInteger(q.parsecs) || q.parsecs < 1) throw new Error('parsecs must be a whole number, 1 or more');
     const unread: string[] = [];
+    // false is freight. That table has no Chief Steward row. A set that copies the row
+    // in then adds 0, a trained level, and the query's steward is left unread.
     const query = steward ? q : { ...q, steward: 0 };
     const { lines, perKind } = sharedDms(traffic, query, unread);
     const shared = lines.reduce((sum, line) => sum + line.dm, 0);

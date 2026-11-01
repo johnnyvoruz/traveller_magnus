@@ -35,21 +35,25 @@ function authSecret() {
     return value;
 }
 
-function userCookie(userId, email, persistTo, role = 'user') {
+function userCookies(people, persistTo) {
     const now = Date.now();
     const expires = now + 30 * 24 * 60 * 60 * 1000;
-    const token = randomBytes(32).toString('hex');
-    const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
-    const file = path.join(mkdtempSync(path.join(tmpdir(), 'voyage-user-')), 'user.sql');
-    writeFileSync(file, `
+    const cookies = [];
+    const sql = people.map(([userId, email, role = 'user']) => {
+        const token = randomBytes(32).toString('hex');
+        const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
+        const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
+        cookies.push(`__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`);
+        return `
 INSERT INTO user (id, name, email, email_verified, created_at, updated_at, role, banned)
 VALUES ('${userId}', '${userId}', '${email}', 1, ${now}, ${now}, '${role}', 0);
 INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
-VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
-`);
+VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');`;
+    }).join('\n');
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'voyage-user-')), 'user.sql');
+    writeFileSync(file, sql);
     runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', file]);
-    const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
-    return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
+    return cookies;
 }
 
 function sqlFile(persistTo, sql) {
@@ -109,7 +113,7 @@ function record(id) {
         tags: [],
         anchor: null,
         when: null,
-        visibility: 'referee',
+        visibility: 'players',
         playerNotes: null,
         sheet: null,
         status: null,
@@ -130,7 +134,7 @@ async function untilSettled(base, packageId, version, cookie) {
         last = await jsonFetch(`${base}/api/packages/${packageId}/versions/${version}`, { headers: { cookie } });
         const state = last.body?.data?.state;
         if (state === 'done' || state === 'failed') return last;
-        await sleep(250);
+        await sleep(50);
     }
     return last;
 }
@@ -216,9 +220,11 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
             const stamp = randomBytes(4).toString('hex');
             const version = await world(base, persistTo, stamp);
-            const author = userCookie(`cva${stamp}`, `cva${stamp}@localhost`, persistTo);
-            const reader = userCookie(`cvb${stamp}`, `cvb${stamp}@localhost`, persistTo);
-            const admin = userCookie(`cvc${stamp}`, `cvc${stamp}@localhost`, persistTo, 'admin');
+            const [author, reader, admin] = userCookies([
+                [`cva${stamp}`, `cva${stamp}@localhost`],
+                [`cvb${stamp}`, `cvb${stamp}@localhost`],
+                [`cvc${stamp}`, `cvc${stamp}@localhost`, 'admin'],
+            ], persistTo);
             const aHeaders = { 'content-type': 'application/json', cookie: author };
             child = startDev({ port, persistTo, inspectorPort: 19887 });
             await up(base);
@@ -371,7 +377,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 .map((name) => { const [table, column] = name.split('.'); return `ALTER TABLE ${table} DROP COLUMN ${column};`; }).join('\n'));
             const stamp = randomBytes(4).toString('hex');
             const version = await world(base, persistTo, stamp);
-            const author = userCookie(`cvo${stamp}`, `cvo${stamp}@localhost`, persistTo);
+            const [author] = userCookies([[`cvo${stamp}`, `cvo${stamp}@localhost`]], persistTo);
             const aHeaders = { 'content-type': 'application/json', cookie: author };
             child = startDev({ port, persistTo, inspectorPort: 19888 });
             await up(base);

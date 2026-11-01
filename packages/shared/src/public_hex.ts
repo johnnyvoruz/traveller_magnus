@@ -1,3 +1,4 @@
+import { redactString } from './players_view.ts';
 import {
     Track,
     locate,
@@ -201,17 +202,38 @@ export function publicFinishedLegs(
     return legs;
 }
 
+const RECORD_ID = /cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * The players' redaction, for a card anyone can read.
+ * A `:::referee` passage goes. A mention of a record players cannot see loses its label.
+ * A bare id of such a record goes too. With no record list, every record id in the text
+ * is treated as hidden, which is how a card already stored is read.
+ */
+export function redactPublicCardText(text: string, records: readonly CampaignRecord[] = []): string {
+    const hidden: string[] = [];
+    if (records.length > 0) {
+        for (const record of records) {
+            if (record.deleted || record.visibility !== 'players') hidden.push(record.id);
+        }
+    } else {
+        for (const match of text.matchAll(RECORD_ID)) hidden.push(match[0]);
+    }
+    return redactString(text, records, hidden);
+}
+
 /** Public journal entries, newest first, bodies cut, then dropped until the card fits. */
-export function publicCardJournal(entries: readonly JournalLike[]): PublicJournalNote[] {
+export function publicCardJournal(entries: readonly JournalLike[], records: readonly CampaignRecord[] = []): PublicJournalNote[] {
     const notes = entries
         .filter((entry) => !entry.deleted && entry.visibility === 'public')
         .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
         .slice(0, PUBLIC_CARD_ENTRIES)
         .map((entry) => {
             const when = entry.when ? { year: entry.when.year, day: entry.when.day } : null;
+            const body = redactPublicCardText(entry.body, records);
             return {
-                title: entry.title,
-                body: entry.body.length > PUBLIC_CARD_BODY ? entry.body.slice(0, PUBLIC_CARD_BODY) : entry.body,
+                title: redactPublicCardText(entry.title, records),
+                body: body.length > PUBLIC_CARD_BODY ? body.slice(0, PUBLIC_CARD_BODY) : body,
                 when,
                 realDate: entry.realDate,
             };

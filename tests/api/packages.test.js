@@ -36,21 +36,26 @@ function authSecret() {
     return value;
 }
 
-function userCookie(userId, email, persistTo) {
+function sessionRow(userId, email) {
     const now = Date.now();
     const expires = now + 30 * 24 * 60 * 60 * 1000;
     const token = randomBytes(32).toString('hex');
     const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
-    const file = path.join(mkdtempSync(path.join(tmpdir(), 'voyage-user-')), 'user.sql');
-    writeFileSync(file, `
+    const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
+    return {
+        cookie: `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`,
+        sql: `
 INSERT INTO user (id, name, email, email_verified, created_at, updated_at, role, banned)
 VALUES ('${userId}', '${userId}', '${email}', 1, ${now}, ${now}, 'user', 0);
 INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
-VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
-`);
-    runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', file]);
-    const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
-    return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
+VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');`,
+    };
+}
+
+function userCookie(userId, email, persistTo) {
+    const row = sessionRow(userId, email);
+    sqlFile(persistTo, row.sql);
+    return row.cookie;
 }
 
 function sqlFile(persistTo, sql) {
@@ -131,7 +136,7 @@ async function untilSettled(base, packageId, version, cookie) {
         last = await jsonFetch(`${base}/api/packages/${packageId}/versions/${version}`, { headers: { cookie } });
         const state = last.body?.data?.state;
         if (state === 'done' || state === 'failed') return last;
-        await sleep(250);
+        await sleep(50);
     }
     return last;
 }
@@ -150,10 +155,14 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
             const stamp = randomBytes(4).toString('hex');
             const version = `mkt${stamp}`;
-            const owner = userCookie(`mkt${stamp}`, `mkt${stamp}@localhost`, persistTo);
-            const other = userCookie(`mku${stamp}`, `mku${stamp}@localhost`, persistTo);
+            const ownerRow = sessionRow(`mkt${stamp}`, `mkt${stamp}@localhost`);
+            const otherRow = sessionRow(`mku${stamp}`, `mku${stamp}@localhost`);
+            const owner = ownerRow.cookie;
+            const other = otherRow.cookie;
             const headers = { 'content-type': 'application/json', cookie: owner };
             sqlFile(persistTo, `
+${ownerRow.sql}
+${otherRow.sql}
 INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, sectors_total, sectors_done, sectors_failed)
 VALUES ('${version}', '1.1.0', 'M1105', 'TravellerMagnus', '${SETTINGS}', '[]', 'released', '${STAMP_TIME}', '${STAMP_TIME}', 0, 0, '[]');
 `);

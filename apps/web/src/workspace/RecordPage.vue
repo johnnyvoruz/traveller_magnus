@@ -37,6 +37,7 @@ import { registerCommand } from '../shell/registry.ts';
 import { dockShipAt } from './track_actions.ts';
 import TrackBlock from './TrackBlock.vue';
 import TradeHere from './TradeHere.vue';
+import TrafficHere from './TrafficHere.vue';
 import VesselTrade from './VesselTrade.vue';
 import VesselPlan from './VesselPlan.vue';
 import WhereBlock from './WhereBlock.vue';
@@ -85,7 +86,7 @@ function openRich(part: Exclude<BodyPart, { kind: 'text' }>): void {
     });
 }
 
-/** The ship sheet carries the PDF's 312 fields: loaded when a vessel's page first needs it. */
+/** The ship sheet carries the PDF's 314 fields: loaded when a vessel's page first needs it. */
 const ShipSheet = defineAsyncComponent(() => import('./ShipSheet.vue'));
 /** The character sheet carries the PDF's 420 boxes: loaded when a person's page first needs it. */
 const PersonSheet = defineAsyncComponent(() => import('./PersonSheet.vue'));
@@ -378,6 +379,8 @@ watch(() => props.id, () => {
     <VesselTrade v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <TradeHere v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
+
+    <TrafficHere v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <MarketsNearby v-if="record.type === 'vessel'" :hex-key="marketsAt" :no-place="where.underway ? 'Under way: the markets show when it is at a world.' : 'Set where it is to see the markets near it.'" />
 

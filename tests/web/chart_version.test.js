@@ -173,6 +173,7 @@ test('the map boot starts from the remembered version and swaps when the list di
     const vue = readFileSync(new URL('../../apps/web/src/views/MapView.vue', import.meta.url), 'utf8');
     assert.match(vue, /bootChart\(\{/);
     assert.match(vue, /remembered: rememberedVersion\(\)/);
+    assert.match(vue, /versionsAsk\(rememberedVersion\(\)/);
     assert.match(vue, /client\.currentVersion\(\{ fresh: true \}\)/);
     assert.doesNotMatch(vue, /version = await client\.currentVersion\(\)/);
     assert.match(vue, /if \(mine !== chartLoads\) return;/);

@@ -50,6 +50,7 @@ test('cargo, passengers and a ledger line round-trip, and a bad lot fails', () =
         origin: 'Regina',
         destination: 'Jewell',
         note: 'crated',
+        payCr: 40000,
     };
     const passenger = { personId: RECORD, label: 'Ada', class: 'High', note: 'cabin 2' };
     const line = { when: { year: 1105, day: 12 }, amount: -40, memo: 'berth', kind: 'expense' };

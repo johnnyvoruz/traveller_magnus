@@ -281,7 +281,7 @@ defineExpose({ focus: () => { const top = createEl.value || first.value; if (top
           <p id="signin-name-say" class="signin-error" role="alert">{{ nameSay }}</p>
           <div class="signin-acts">
             <button type="submit" class="ui-btn is-primary" data-signin="create-go" :disabled="busy !== '' || !online || !canCreate" :aria-busy="busy === 'create' ? 'true' : undefined">
-              {{ busy === 'create' ? PASSKEY_WAITING : 'Create account' }}
+              {{ busy === 'create' ? PASSKEY_WAITING : 'Create an account' }}
             </button>
             <button type="button" class="ui-btn" :disabled="busy !== ''" @click="show('card')">Cancel</button>
           </div>

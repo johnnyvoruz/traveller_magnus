@@ -136,3 +136,12 @@ test('the passenger view is the first sixteen lots, and the rest are a count', (
     assert.equal(view.more, 2);
     assert.equal(more.length, 18);
 });
+
+test('a freight lot keeps its pay on delivery through a sheet edit (DT6b)', () => {
+    const freight = { label: 'Freight, Major lot', tons: 40, payCr: 40000, origin: 'Regina', destination: 'Ruie', note: 'Cr40,000 on delivery' };
+    const sheet = cargo.sheetFromCargo({}, [freight]);
+    const back = cargo.cargoFromSheet({ ...sheet, 'Cargo Notes 1': 'crated' }, [freight]);
+    assert.equal(back[0].payCr, 40000);
+    assert.equal(back[0].note, 'crated');
+    assert.equal(cargo.cargoFromSheet(sheet, [{ label: 'Computers', tons: 4 }])[0].payCr, undefined);
+});

@@ -63,7 +63,7 @@ async function loadList(): Promise<void> {
     noteSeen();
 }
 
-/** The live link, read once when the section opens: shown unless one was made meanwhile. No link, a 404 or a failed read leaves the section as it is. */
+/** The live link with its uses, read once when the section opens: shown unless one was made meanwhile. No link, a 404 or a failed read leaves the section as it is. */
 async function loadInvite(): Promise<void> {
     const id = campaign.universeId;
     if (!id) return;

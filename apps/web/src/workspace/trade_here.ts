@@ -162,7 +162,8 @@ export function tradeLogEntry(args: {
         sequence: null,
         author: 'referee',
         visibility: args.vessel.visibility === 'players' ? 'players' : 'referee',
-        anchor: null,
+        // The note's place is the world the trade was at (DW3 round 5: the journal said "Nowhere in particular").
+        anchor: args.hexKey ? { kind: 'system', hexKey: args.hexKey, locationLabel: args.worldName } : null,
         mentions: mentionsOf(body),
         rev: 0,
         createdAt: args.whenReal,

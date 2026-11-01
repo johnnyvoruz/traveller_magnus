@@ -96,6 +96,12 @@ function objectResponse(object: R2ObjectBody): Response {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     if (!headers.get('content-type')) headers.set('content-type', 'image/webp');
+    if (!headers.get('content-disposition')) {
+        const leaf = object.key.split('/').pop() ?? '';
+        const name = HASH.test(leaf) ? `${leaf}.webp` : 'image.webp';
+        headers.set('content-disposition', `inline; filename="${name}"`);
+    }
+    headers.set('x-content-type-options', 'nosniff');
     headers.set('cache-control', 'private, immutable');
     return new Response(object.body, { status: 200, headers });
 }

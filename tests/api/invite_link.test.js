@@ -119,7 +119,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.ok(live.body.data.link.createdAt.length > 0);
             assert.equal(Object.hasOwn(live.body.data.link, 'token'), false);
             assert.equal(Object.hasOwn(live.body.data.link, 'role'), false);
-            assert.equal(Object.hasOwn(live.body.data.link, 'uses'), false);
+            assert.equal(live.body.data.link.uses, 0);
+            assert.equal(live.body.data.link.uses, made.body.data.uses);
             assert.equal(live.body.data.link.url.includes(token), true);
 
             const again = await jsonFetch(readUrl, { headers: { cookie: owner } });
@@ -132,6 +133,11 @@ if (process.env.RUN_API_TESTS !== '1') {
                 body: JSON.stringify({ token }),
             });
             assert.equal(joined.status, 200, JSON.stringify(joined.body));
+
+            const used = await jsonFetch(readUrl, { headers: { cookie: owner } });
+            assert.equal(used.status, 200, JSON.stringify(used.body));
+            assert.equal(used.body.data.link.uses, 1);
+            assert.equal(used.body.data.link.url, live.body.data.link.url);
 
             const memberRead = await jsonFetch(readUrl, { headers: { cookie: member } });
             assert.equal(memberRead.status, 404, JSON.stringify(memberRead.body));

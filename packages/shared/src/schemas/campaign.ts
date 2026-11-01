@@ -160,18 +160,22 @@ export const CargoLot = z.object({
     origin: z.string().optional(),
     destination: z.string().optional(),
     note: z.string().optional(),
+    /** Freight (DT6b): the credits owed on delivery, posted when the referee marks the lot delivered. */
+    payCr: z.number().finite().nonnegative().optional(),
 }).strict();
 export type CargoLot = z.infer<typeof CargoLot>;
 
 /**
  * One passenger (§5.3), plus the sheet's Notes box.
  * `class` is the Passage box. `personId` points at a person record when set.
+ * `fareCr` is the fare posted to the ship's ledger when the passenger boarded (DT3); absent until then.
  */
 export const PassengerLot = z.object({
     personId: z.string().regex(RECORD_ID).optional(),
     label: z.string(),
     class: z.string(),
     note: z.string().optional(),
+    fareCr: z.number().finite().nonnegative().optional(),
 }).strict();
 export type PassengerLot = z.infer<typeof PassengerLot>;
 

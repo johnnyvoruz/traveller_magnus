@@ -29,8 +29,44 @@
 
   .camp .ui-btn.is-icon,
   .camp .camp-locate,
-  .camp .lnk-x {
+  .camp .camp-add-more,
+  .camp .lnk-x,
+  .camp .dice-pick,
+  .camp .here-locate,
+  .camp .mkt-locate {
     min-width: 44px;
+  }
+
+  .camp .dice-pick {
+    justify-content: center;
+  }
+
+  /* Icon locates are 28 px square. On a phone the hit is 44, and the row keeps the text clear of it. */
+  .camp .here-locate,
+  .camp .mkt-locate {
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+  }
+
+  .camp .here-rows li.has-locate,
+  .camp .mkt-rows li.has-locate {
+    min-height: 44px;
+  }
+
+  .camp .here-rows li.has-locate .here-row,
+  .camp .mkt-rows li.has-locate .mkt-row {
+    padding-right: 60px;
+  }
+
+  .camp .mkt-range-btn {
+    min-height: 44px;
+  }
+
+  .camp .sess-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 
   /*

@@ -62,6 +62,10 @@ export default defineConfig({
             { name: 'vendor', test: /[\\/]node_modules[\\/]/, tags: ['$initial'], priority: 30 },
             { name: 'chart', test: /[\\/](map|engines)[\\/]/, tags: ['$initial'], priority: 25 },
             { name: 'index', tags: ['$initial'], priority: 20 },
+            // CF10. chatter.ts is the one module the orbit picture and the receiver
+            // both import. Left in the route group, that share merged the receiver
+            // into the picture chunk, and the picture then downloaded the line pools.
+            { name: 'chatter', test: /[\\/]living[\\/]chatter\.ts$/, priority: 5 },
             {
               name: 'route',
               priority: 0,

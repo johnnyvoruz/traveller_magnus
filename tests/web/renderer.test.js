@@ -130,23 +130,24 @@ test('a sector of the referee\'s draws its overlay, and forty sectors stay withi
     renderer.draw(cam);
     assert.equal(renderer.draw(cam).sectorsOnScreen.length, 41);
     function fastest() {
+        renderer.draw(cam);
+        calls.length = 0;
         let best = Infinity;
-        for (let n = 0; n < 9; n += 1) best = Math.min(best, renderer.draw(cam).ms);
+        for (let n = 0; n < 3; n += 1) best = Math.min(best, renderer.draw(cam).ms);
         return best;
     }
-    calls.length = 0;
     const before = fastest();
-    const chartRects = calls.filter((call) => call[0] === 'fillRect').length / 9;
+    const chartRects = calls.filter((call) => call[0] === 'fillRect').length / 3;
     renderer.setDotOverlay(new Map(published.map((sector) => [sector.slug, sector.cells])));
     calls.length = 0;
     const same = fastest();
-    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 3, chartRects);
     const overlay = new Map(published.map((sector) => [sector.slug, sector.cells]));
     overlay.set(ownId, cellsOf(['0101']));
     renderer.setDotOverlay(overlay);
     calls.length = 0;
     const after = fastest();
-    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 9, chartRects + 1);
+    assert.equal(calls.filter((call) => call[0] === 'fillRect').length / 3, chartRects + 1);
     t.diagnostic(`40 sectors overview ms: chart ${before.toFixed(3)}, same string ${same.toFixed(3)}, own sector ${after.toFixed(3)}`);
     assert.ok(Math.abs(same - before) < 1, `same string ${same} chart ${before}`);
     assert.ok(after - before < 1, `overlay ${after} chart ${before}`);

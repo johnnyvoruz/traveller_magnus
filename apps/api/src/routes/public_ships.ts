@@ -1,4 +1,5 @@
 import { PublicShipCard } from '@voyage/shared';
+import { redactPublicCardText } from '../../../../packages/shared/src/public_hex.ts';
 import { courseReady, detectPublicCards, publicCardsReady, shipClassReady } from '../auth/public_schema';
 import { requireUser, type AppContext } from '../auth/session';
 import { fail } from '../http';
@@ -87,5 +88,12 @@ export async function getPublicShip(c: AppContext): Promise<Response> {
         ...(classOn ? { shipClass: shipClass || null } : {}),
     });
     if (!parsed.success) return fail(c, 404, 'not_found', 'No such ship.');
-    return c.json(parsed.data);
+    return c.json({
+        ...parsed.data,
+        journal: parsed.data.journal.map((note) => ({
+            ...note,
+            title: redactPublicCardText(note.title),
+            body: redactPublicCardText(note.body),
+        })),
+    });
 }

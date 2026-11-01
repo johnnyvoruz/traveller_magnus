@@ -491,4 +491,10 @@ body {
   --print-surface-high: #3a4150;     /* mountains */
   --print-surface-grid: #8a8f98;     /* the hex grid, light on purpose */
   --print-surface-coast: #16181c;    /* the coastline */
+  /* CP9: water on the paper sheet is a pale wash, not a mark. It stays under 3:1 on white
+     on purpose, so a mono print is not a dark field. Land is the page; symbols carry it. */
+  --print-surface-wash: #c5d2e0;         /* deep water */
+  --print-surface-wash-shallow: #d5e0ea; /* shallows */
+  --print-surface-wash-land: #e7edf2;    /* vanilla land, the pale step */
+  --print-surface-wash-ice: #f7f9fb;     /* vanilla ice, the lightest step */
 }

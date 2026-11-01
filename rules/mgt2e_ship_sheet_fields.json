@@ -3151,6 +3151,30 @@
       "section": "Crew"
     },
     {
+      "name": "Staterooms",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 516.657,
+        "y": 306.455,
+        "w": 127.471,
+        "h": 10.293
+      },
+      "section": "Passengers"
+    },
+    {
+      "name": "Low Berths",
+      "page": 2,
+      "type": "text",
+      "box": {
+        "x": 644.128,
+        "y": 306.455,
+        "w": 132.471,
+        "h": 10.293
+      },
+      "section": "Passengers"
+    },
+    {
       "name": "Passenger Capactiy",
       "page": 2,
       "type": "text",

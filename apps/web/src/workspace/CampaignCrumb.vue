@@ -114,4 +114,30 @@ function trail(parts: readonly CrumbPart[]): string {
 .camp-crumb-here {
   color: var(--text-0);
 }
+
+/* A phone trail wraps onto another line so Campaign, Journal and the page name stay whole words. */
+@media (max-width: 599px) {
+  .panel-eyebrow:has(.camp-crumb),
+  .panel-eyebrow-line:has(.camp-crumb) {
+    overflow: visible;
+    height: auto;
+  }
+
+  .panel-eyebrow-line:has(.camp-crumb) {
+    flex-wrap: wrap;
+  }
+
+  .camp-crumb {
+    flex-wrap: wrap;
+  }
+
+  .panel-eyebrow .camp-crumb .doss-crumb,
+  .panel-eyebrow .camp-crumb .camp-crumb-here {
+    flex: 0 0 auto;
+    min-width: min-content;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+}
 </style>

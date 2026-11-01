@@ -257,10 +257,17 @@ function onKey(event: KeyboardEvent): void {
     button.click();
 }
 
+/** The phone sheet's breakpoint. Focusing the title or the body scrolls the author line away. */
+function phoneSheet(): boolean {
+    const view = document.defaultView;
+    return view ? view.matchMedia('(max-width: 599px)').matches : false;
+}
+
 function greet(): void {
     const made = justMade.value;
     if (!made || made.id !== props.id) return;
     justMade.value = null;
+    if (phoneSheet()) return;
     void nextTick(() => {
         if (made.focus === 'body' && bodyField.value) bodyField.value.edit();
         else if (titleField.value) titleField.value.edit(true);
@@ -441,6 +448,30 @@ watch(() => props.id, greet, { immediate: true });
 .jn-entry[data-beside="no"] .jn-mentioned { order: 7; }
 .jn-entry[data-beside="no"] .rec-foot { order: 8; }
 
+/* A phone: the beside grid's 220 px side was leaving the title a few pixels wide. One column, as the journal page. */
+@media (max-width: 599px) {
+  .jn-entry[data-beside="yes"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .jn-entry[data-beside="yes"] .jn-side {
+    display: contents;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .jn-entry[data-beside="yes"] .camp-strip { order: 0; }
+  .jn-entry[data-beside="yes"] .rec-ident { order: 1; }
+  .jn-entry[data-beside="yes"] .jn-dates { order: 2; }
+  .jn-entry[data-beside="yes"] .where { order: 3; }
+  .jn-entry[data-beside="yes"] .jn-body-block { order: 4; }
+  .jn-entry[data-beside="yes"] .jn-images { order: 5; }
+  .jn-entry[data-beside="yes"] .jn-replies-block { order: 6; }
+  .jn-entry[data-beside="yes"] .jn-mentioned { order: 7; }
+  .jn-entry[data-beside="yes"] .rec-foot { order: 8; }
+}
+
 .rec-ident.is-players {
   padding: 8px;
   border-radius: var(--r-2);
@@ -578,5 +609,32 @@ watch(() => props.id, greet, { immediate: true });
 
 .jn-replies-block .ui-heading {
   margin-bottom: 2px;
+}
+
+/* After the video look above, so a phone can wrap the dates and keep the letter-spacing inside the box. */
+@media (max-width: 599px) {
+  /* The visibility group was one row and "Public" was cut at 360. The last word wraps. */
+  .jn-entry .rec-meta .ui-seg {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .jn-dates label {
+    white-space: normal;
+    max-width: 100%;
+  }
+
+  .jn-dates .clock-date {
+    flex-wrap: wrap;
+    max-width: 100%;
+    min-width: max-content;
+  }
+
+  .jn-dates .clock-date b {
+    padding-right: calc(8px + 0.12em);
+  }
 }
 </style>

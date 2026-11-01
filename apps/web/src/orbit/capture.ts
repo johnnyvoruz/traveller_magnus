@@ -172,7 +172,7 @@ export async function captureOrbit(input: OrbitCapture): Promise<boolean> {
     ctx.globalAlpha = 1;
     ctx.fillStyle = input.theme.space;
     ctx.fillRect(0, px.height - CAPTURE_FOOT, px.width, CAPTURE_FOOT);
-    if (input.look === 'paper') drawKey(ctx, legendFor(input.shot.plan, frame.picture, input.shot.layers), input.theme, px.width, px.height);
+    drawKey(ctx, legendFor(input.shot.plan, frame.picture, input.shot.layers), input.theme, px.width, px.height);
     drawCaption(ctx, input.caption, px.width, px.height, input.theme.fontText, input.theme.textMuted);
     const blob = await canvasToBlob(canvas);
     if (!blob) return false;

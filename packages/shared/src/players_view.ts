@@ -123,18 +123,29 @@ function hideBareIds(text: string, hiddenIds: readonly string[]): string {
     return raw;
 }
 
+/**
+ * A fence line, once format characters (Unicode Cf: zero-width, bidi, word joiner, BOM)
+ * are ignored. Whitespace still trims, as before.
+ */
+export function refereeFenceLine(line: string): 'open' | 'close' | null {
+    const text = line.replace(/\p{Cf}/gu, '').trim();
+    if (text === ':::referee') return 'open';
+    if (text === ':::') return 'close';
+    return null;
+}
+
 /** A `:::referee` line through its closer, or through the end when it never closes. */
 export function stripRefereeBlocks(text: string): string {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
     const kept: string[] = [];
     for (let i = 0; i < lines.length; i++) {
-        if (lines[i].replace(/\r$/, '').trim() !== ':::referee') {
+        if (refereeFenceLine(lines[i]) !== 'open') {
             kept.push(lines[i]);
             continue;
         }
         let close = -1;
         for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].replace(/\r$/, '').trim() === ':::') {
+            if (refereeFenceLine(lines[j]) === 'close') {
                 close = j;
                 break;
             }
@@ -145,7 +156,8 @@ export function stripRefereeBlocks(text: string): string {
     return kept.join('\n');
 }
 
-function redactString(text: string, records: readonly CampaignRecord[], hiddenIds: readonly string[]): string {
+/** Fences, then tokens, then a bare hidden id. The Player Pack calls this rather than keeping a second copy. */
+export function redactString(text: string, records: readonly CampaignRecord[], hiddenIds: readonly string[]): string {
     return hideBareIds(redactPlayersText(stripRefereeBlocks(text), records), hiddenIds);
 }
 

@@ -1,7 +1,7 @@
-// Parked until Johnny turns it on.
 /**
- * Pure social-tag rewrite (Epic L, L5).
+ * Social tags for the live pages (`/join/*`, `/ship/*`, and the chart and package cards).
  * The tags Lane C put in apps/web/index.html are replaced in place. Missing tags are not added.
+ * A name is inserted by a function, so `$` in it stays text.
  */
 
 /** True when text/html or xhtml outranks every other concrete type. A wildcard alone does not count as a preference. */
@@ -38,15 +38,14 @@ function escapeAttr(value: string): string {
 
 function setMeta(html: string, attr: 'name' | 'property', key: string, content: string): string {
     const pattern = new RegExp(`(<meta\\s+${attr}="${key}"\\s+content=")[^"]*(")`, 'i');
-    if (!pattern.test(html)) return html;
-    return html.replace(pattern, `$1${content}$2`);
+    return html.replace(pattern, (_match, open: string, close: string) => `${open}${content}${close}`);
 }
 
 /** Replace the existing title, description, and image tags. Missing tags are not added. */
 export function applyTags(html: string, tags: { title: string; description: string; image?: string }): string {
     const title = escapeText(tags.title);
     const description = escapeAttr(tags.description);
-    let next = html.replace(/<title>[^<]*<\/title>/i, `<title>${title}</title>`);
+    let next = html.replace(/<title>[^<]*<\/title>/i, () => `<title>${title}</title>`);
     next = setMeta(next, 'name', 'description', description);
     next = setMeta(next, 'property', 'og:title', escapeAttr(tags.title));
     next = setMeta(next, 'property', 'og:description', description);

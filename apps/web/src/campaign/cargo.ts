@@ -85,7 +85,7 @@ export function sheetFromCargo(values: SheetValues, cargo: readonly CargoLot[]):
     return next;
 }
 
-/** The lots named by the sixteen Cargo rows. `kept` supplies itemId, value, origin and destination for that row. */
+/** The lots named by the sixteen Cargo rows. `kept` supplies itemId, value, origin, destination and the freight pay for that row. */
 export function cargoFromSheet(values: SheetValues, kept: readonly CargoLot[] = []): CargoLot[] {
     const lots: CargoLot[] = [];
     for (let i = 0; i < MANIFEST_ROWS; i += 1) {
@@ -100,6 +100,7 @@ export function cargoFromSheet(values: SheetValues, kept: readonly CargoLot[] = 
         if (prior?.value != null) lot.value = prior.value;
         if (prior?.origin) lot.origin = prior.origin;
         if (prior?.destination) lot.destination = prior.destination;
+        if (prior?.payCr != null) lot.payCr = prior.payCr;
         if (note) lot.note = note;
         lots.push(lot);
     }
@@ -147,6 +148,7 @@ export function passengersFromSheet(values: SheetValues, kept: readonly Passenge
         const prior = kept[i];
         const lot: PassengerLot = { label, class: passage };
         if (prior?.personId) lot.personId = prior.personId;
+        if (typeof prior?.fareCr === 'number') lot.fareCr = prior.fareCr;
         if (note) lot.note = note;
         lots.push(lot);
     }

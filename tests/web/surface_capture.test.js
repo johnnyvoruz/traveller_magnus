@@ -53,6 +53,16 @@ test('the capture draws at the paper pixels through the renderer size path and l
     assert.match(capture, /createChunkedMap\(/);
     assert.match(capture, /layoutFor\(/);
     assert.match(capture, /outlines: false/);
+    assert.match(capture, /outlines: true/);
+    assert.match(capture, /icons: true/);
+    assert.match(capture, /ink: ink\.text/);
+    assert.match(capture, /outlineInk: ink\.grid/);
+    assert.match(capture, /iconRadius: cell \* 0\.4/);
+    assert.match(capture, /hex\.terrain === 'OC'/);
+    assert.match(capture, /ink\.wash/);
+    assert.doesNotMatch(capture, /fillStyle = terrainInk/);
+    assert.match(capture, /input\.ink\.grid, 1\.4/);
+    assert.match(capture, /input\.ink\.coast, 1\.8/);
     assert.equal(/TOO_LARGE = 'This browser can\\'t make an image that large\. Try a smaller paper\.'/.test(capture), true);
     assert.doesNotMatch(capture, /window|document|getComputedStyle|sheetEl|canvas\.width/);
     assert.match(chunks, /size: \{ width: number; height: number \}/);
@@ -62,6 +72,11 @@ test('the capture draws at the paper pixels through the renderer size path and l
     assert.match(stage, /The whole surface/);
     assert.match(stage, /showToast\(TOO_LARGE\)/);
     assert.match(stage, /printSurfaceInk/);
+    assert.match(stage, /ground: ink\.paper/);
+    assert.doesNotMatch(stage.slice(stage.indexOf('async function saveImage')), /screenGround|screenText/);
+    assert.match(capture, /ctx\.fillStyle = input\.look === 'paper' \? input\.ink\.paper : input\.ground/);
+    assert.match(capture, /drawCaption\(ctx, input\.caption, px\.width, px\.height, input\.font, input\.ink\.muted\)/);
+    assert.doesNotMatch(capture, /screenText/);
     assert.match(stage, /rememberedVersion\(\)/);
     assert.doesNotMatch(stage.slice(stage.indexOf('async function saveImage')), /canvas\.width|sheetEl\.value\.width/);
 });

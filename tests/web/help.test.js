@@ -74,6 +74,11 @@ describe('rendered', { concurrency: 1 }, () => {
             'System Comms',
             'Invite your players',
             'What players see',
+            'Relationships',
+            'Session',
+            'Characters',
+            'The journal',
+            'The timeline',
         ]) {
             assert.match(html, new RegExp(heading));
         }
@@ -110,6 +115,17 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /No AI runs here/);
         assert.match(html, /Paste your AI&#39;s reply/);
         assert.match(html, /A token reaches this one campaign only/);
+        assert.match(html, /<h3>Relationships<\/h3>/);
+        assert.match(html, /Select Org chart/);
+        assert.match(html, /<h3>Session<\/h3>/);
+        assert.match(html, /Start a session/);
+        assert.match(html, /<h3>Characters<\/h3>/);
+        assert.match(html, /Share by link/);
+        assert.match(html, /The book says what each box means/);
+        assert.match(html, /<h3>The journal<\/h3>/);
+        assert.match(html, /New session/);
+        assert.match(html, /<h3>The timeline<\/h3>/);
+        assert.match(html, /Only this ship/);
         assert.equal(html.toLowerCase().includes('snapshot'), false);
         assert.match(html, /Lower DM and Raise DM/);
         assert.match(html, /Boon keeps the best two of three dice/);

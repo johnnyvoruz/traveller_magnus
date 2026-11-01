@@ -14,6 +14,7 @@ import {
     Proposal,
     ProposalBatchSubmit,
     ProposalResolveResult,
+    PROPOSAL_LIMITS,
 } from '@voyage/shared';
 
 type RecordRow = ReturnType<typeof CampaignRecord.parse>;
@@ -30,6 +31,8 @@ import { campaign, transport } from './store.ts';
 
 const NO_BLOCK = 'No proposals found. Your AI\'s reply should end with one ```json block holding the batch.';
 const NOT_JSON = 'The ```json block is not valid JSON. Ask your AI to give the whole block again.';
+const BATCH_COUNT = 'A batch holds at most 200 proposals.';
+const BATCH_BYTES = 'A batch is at most 256 KB.';
 const MAX_SENTENCES = 20;
 const CONFLICT_TOAST = 'Saved changes conflicted with a newer copy. The server copy is now shown.';
 
@@ -119,6 +122,14 @@ export function pastedBatch(text: string): PastedBatch {
         value = JSON.parse(found.json);
     } catch {
         return { ok: false, code: 'not_json', problems: [], sentences: [NOT_JSON] };
+    }
+    // Count, then bytes, before the shape check. Same order as the server's refusal.
+    const rows = isObject(value) ? (value as RawProposal).proposals : undefined;
+    if (Array.isArray(rows) && rows.length > PROPOSAL_LIMITS.perBatch) {
+        return { ok: false, code: 'invalid', problems: [], sentences: [BATCH_COUNT] };
+    }
+    if (new TextEncoder().encode(found.json).length > PROPOSAL_LIMITS.batchBytes) {
+        return { ok: false, code: 'invalid', problems: [], sentences: [BATCH_BYTES] };
     }
     const parsed = ProposalBatchSubmit.safeParse(value);
     if (parsed.success) {

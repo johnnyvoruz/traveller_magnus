@@ -63,7 +63,9 @@ test('a published copy drops referee text, player notes, the fuel mark and a lon
     assert.equal(hidden.details, '');
     assert.equal(hidden.playerNotes, null);
     assert.equal(hidden.sheet, null);
-    assert.deepEqual(hidden.status, {});
+    assert.equal(hidden.status, null);
+    assert.equal(hidden.images, null);
+    assert.equal(hidden.provenance, null);
     const packed = JSON.stringify(hidden);
     assert.equal(packed.includes('lantern'), false);
     assert.equal(packed.includes('Do not print'), false);

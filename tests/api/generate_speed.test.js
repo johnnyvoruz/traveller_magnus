@@ -96,9 +96,10 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('generate speed on the worker', { skip: 'set RUN_API_TESTS=1' }, () => {});
 } else {
     test('a job matches the generator byte for byte, stop and undo hold, and the budget answers', { timeout: 180000 }, async () => {
-        const persistTo = mkdtempSync(path.join(tmpdir(), 'voyage-speed-'));
-        const port = 18846;
-        const inspectorPort = 19846;
+        const ownedPersist = !process.env.VOYAGE_PERSIST_TO;
+        const persistTo = process.env.VOYAGE_PERSIST_TO || mkdtempSync(path.join(tmpdir(), 'voyage-speed-'));
+        const port = Number(process.env.VOYAGE_API_PORT || 18846);
+        const inspectorPort = Number(process.env.VOYAGE_INSPECTOR_PORT || 19846);
         const base = `http://127.0.0.1:${port}`;
         let child = null;
         try {
@@ -201,11 +202,12 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(small.status, 200, JSON.stringify(small.body));
             assert.equal(small.body.data.restored, 2);
 
-            let limited = null;
-            for (let index = 0; index < 121; index += 1) {
-                limited = await jsonFetch(`${base}/api/universes/${id}/jobs/${posted.body.data.jobId}/stop`, { method: 'POST', headers });
-            }
-            assert.equal(limited.status, 429, JSON.stringify(limited.body));
+            const burst = await Promise.all(Array.from({ length: 121 }, () => jsonFetch(
+                `${base}/api/universes/${id}/jobs/${posted.body.data.jobId}/stop`,
+                { method: 'POST', headers },
+            )));
+            const limited = burst.find((item) => item.status === 429);
+            assert.ok(limited, `budget missing: ${[...new Set(burst.map((item) => item.status))].join(',')}`);
             assert.equal(limited.body.error.message, 'Too many requests.');
             const refused = await jsonFetch(`${base}/api/universes/${id}/generate`, {
                 method: 'POST',
@@ -216,7 +218,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(refused.body.error.message, 'Too many requests.');
         } finally {
             if (child) stopDev(child.pid);
-            removeTree(persistTo);
+            if (ownedPersist) removeTree(persistTo);
         }
     });
 }

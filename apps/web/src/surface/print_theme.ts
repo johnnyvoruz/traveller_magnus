@@ -13,9 +13,14 @@ export type SurfaceInk = {
     high: string;
     grid: string;
     coast: string;
+    /** Pale water and the vanilla ramp (CP9). Not marks: they stay light on the page. */
+    wash: string;
+    washShallow: string;
+    washLand: string;
+    washIce: string;
 };
 
-const NAMES = ['paper', 'text', 'muted', 'sea', 'shallow', 'ice', 'land', 'high', 'grid', 'coast'] as const;
+const NAMES = ['paper', 'text', 'muted', 'sea', 'shallow', 'ice', 'land', 'high', 'grid', 'coast', 'wash', 'washShallow', 'washLand', 'washIce'] as const;
 
 const TOKEN: Record<(typeof NAMES)[number], string> = {
     paper: '--print-paper',
@@ -28,6 +33,10 @@ const TOKEN: Record<(typeof NAMES)[number], string> = {
     high: '--print-surface-high',
     grid: '--print-surface-grid',
     coast: '--print-surface-coast',
+    wash: '--print-surface-wash',
+    washShallow: '--print-surface-wash-shallow',
+    washLand: '--print-surface-wash-land',
+    washIce: '--print-surface-wash-ice',
 };
 
 /** The print tokens as the page has resolved them. */
@@ -39,12 +48,12 @@ export function printSurfaceInk(el: Element): SurfaceInk {
     return ink;
 }
 
-/** The page behind a full-colour surface. */
+/** The screen's own ground. A saved image does not use it: both looks are drawn on the paper token. */
 export function screenGround(el: Element): string {
     return getComputedStyle(el).getPropertyValue('--bg-0').trim();
 }
 
-/** Words on that page. The print text is ink for white paper, so the colour sheet uses this. */
+/** Words on the screen. A saved image uses the print text tokens, which can be read on white. */
 export function screenText(el: Element): string {
     return getComputedStyle(el).getPropertyValue('--text-0').trim();
 }

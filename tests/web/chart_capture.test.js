@@ -170,7 +170,10 @@ test('the button, the sheet, the command and the menu entry', () => {
     assert.match(view, /if \(id === 'save-image'\) \{\s+openSaveSheet\(\);\s+return;\s+\}/, 'the menu\'s entry is the map\'s act');
     assert.match(view, /label: 'What\\'s on screen'/);
     assert.match(view, /showToast\(TOO_LARGE\)/);
-    assert.match(view, /\{ \.\.\.readTheme\(el\), tFast: 0 \} : printTheme\(el\)/, 'the screen look keeps its colours, with no title fade');
+    assert.match(view, /const white = choice\.look === 'screen' \? whiteTheme\(el, \{ traffic: readTrafficInk\(el\)\.traffic \}\) : null;\s+const theme = white \?\? printTheme\(el\);/, 'both looks on the paper (DP1d): the screen colours on white, or the print inks; the traffic ink through its own reader');
+    assert.match(view, /ring: \{ line: theme\.signal, fill: theme\.signal \}/, 'the ring in the theme\'s signal, both looks');
+    assert.match(read('capture/SaveImageSheet.vue'), /'Ink on white, for printing\.' : 'Colour on white, for printing\.'/, 'the note names the white in both looks');
+    assert.doesNotMatch(read('capture/SaveImageSheet.vue'), /As the screen shows it/);
     const commands = read('workspace/build/commands.ts');
     assert.match(commands, /items\.push\(\{ id: 'save-image', label: 'Save image…', icon: 'file-export', rule: true \}\);/);
     assert.match(commands, /if \(id === 'save-image'\) return;\s+if \(!canBuild\(id, keys\)\) return;/, 'never Build\'s last branch (remove)');

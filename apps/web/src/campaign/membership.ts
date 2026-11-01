@@ -87,11 +87,13 @@ export async function createInvite(): Promise<PlayerInvite | null> {
 }
 
 /**
- * The live invite after a reload (DU33; contracts/b_players.md "Invite link, read"): the url and the
- * expiry, or null when there is none, the read fails, or the body is not the link's shape. The read
- * sends no uses count. A 401 signs the store out, as every read does.
+ * The live invite after a reload (DU33; contracts/b_players.md "Invite link, read"): the url, the
+ * expiry and how often the link has been used (B's BU35; DU33b), or null when there is none, the read
+ * fails, or the body is not the link's shape. A body without a count, or with one that is not a whole
+ * number, gives the link without `uses`, and the line stops at the date. A 401 signs the store out, as
+ * every read does.
  */
-export async function readInvite(): Promise<{ url: string; expiresAt: string } | null> {
+export async function readInvite(): Promise<{ url: string; expiresAt: string; uses?: number } | null> {
     const path = universePath('/invite');
     if (!path) return null;
     let res: Response;
@@ -104,9 +106,9 @@ export async function readInvite(): Promise<{ url: string; expiresAt: string } |
     if (!data || typeof data !== 'object') return null;
     const link = (data as { link?: unknown }).link;
     if (!link || typeof link !== 'object') return null;
-    const { url, expiresAt } = link as { url?: unknown; expiresAt?: unknown };
+    const { url, expiresAt, uses } = link as { url?: unknown; expiresAt?: unknown; uses?: unknown };
     if (typeof url !== 'string' || !url || typeof expiresAt !== 'string') return null;
-    return { url, expiresAt };
+    return typeof uses === 'number' && Number.isInteger(uses) && uses >= 0 ? { url, expiresAt, uses } : { url, expiresAt };
 }
 
 /** Revokes the live invite. */

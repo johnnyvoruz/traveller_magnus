@@ -58,7 +58,7 @@ import { PUBLIC_GAMES_LABEL } from './public_games.ts';
       </li>
       <li class="ui-step">
         <h3>News</h3>
-        <p>On a world, select News. You can also open the command palette and select How fast does news travel from here. The days run from that date out to 60 days. Hover a world to read when the news arrives. Where the party is, select How old is the news here. Nothing in the rules sets how long a message waits at a station, so this picture adds no wait.</p>
+        <p>On a world, select News. You can also open the command palette and select How fast does news travel from here. The days run from that date out to 60 days. Point at a world to read when the news arrives. Where the party is, select How old is the news here. Nothing in the rules sets how long a message waits at a station, so this picture adds no wait.</p>
       </li>
       <li class="ui-step">
         <h3>System Comms</h3>
@@ -69,6 +69,26 @@ import { PUBLIC_GAMES_LABEL } from './public_games.ts';
         <p>Ask every player before you record. Ask everyone when the players are in different places. These places require everyone's agreement for a conversation: California, Delaware, Florida, Illinois, Maryland, Massachusetts, Montana, Nevada, New Hampshire, Pennsylvania, and Washington. Michigan is contested. Oregon and Missouri require everyone's agreement for an in-person conversation. Connecticut and Nevada require it for a call. Germany requires it, under section 201 of its criminal code. New South Wales requires it. Canada and United States federal law let one person in the conversation agree. In the United Kingdom and the European Union, a private recording can fall under the household exemption. Uploading that recording to a cloud service may not.</p>
         <p>Record on your own phone or computer. Traveller.voyage does not receive the recording or the transcript. Open Campaign and select Copy for your AI. It copies your whole campaign, including referee notes. Give that text only to your own AI. Install the voyage-session-ingest skill from the skill folder, and give the skill to that AI with the copied text and your notes from the session.</p>
         <p>No AI runs here. Proposals come back in one of two ways. Your AI sends them with a token you make under Agent access. Open Account at the foot of the rail, then Agent access, and select Make a token. A token reaches this one campaign only. Or open Proposals and select Paste your AI's reply. A proposal waits until you accept it, edit it, or drop it.</p>
+      </li>
+      <li class="ui-step">
+        <h3>Relationships</h3>
+        <p>Open Campaign, then Relationships. Linked records appear as a web. Point at a record to see where it is. Select one to open it. Select Locate to show that place on the map. To add a link, open a record and use Connections. Select a record type or a link kind to hide it. Select Org chart for the same links as a chart, and Web to come back.</p>
+      </li>
+      <li class="ui-step">
+        <h3>Session</h3>
+        <p>Open Campaign, then Session. Select Start a session. The board shows the clock, where the party is, the dice, and a new session entry for your notes. Select +1 hour, +1 day, or +1 week to move the clock forward. Select Back to it to return to the campaign date. Select Move the party to change where you are. Select End the session. If the clock moved, the question is Advance the campaign date? Choose Advance to that date, or keep the campaign date. The session stays in the journal either way. The campaign date changes only when you advance it.</p>
+      </li>
+      <li class="ui-step">
+        <h3>Characters</h3>
+        <p>Open Account at the foot of the rail, then Characters. Select New character, type a name, and select Create. Your characters are under Mine. Characters other people share with you are under Shared with me. Open one to fill in its sheet. The book says what each box means. Select Share by link so one person can edit the sheet. Select Copy, and send the address. The line under the link says when it stops working. Select Revoke to stop that link. Select Duplicate to make a copy. Select Make pregens to make several copies at once.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The journal</h3>
+        <p>Open Campaign, then Journal. Select New session to write a session. It takes the campaign date and where the party is. Select New note for a note. A note waits until you date it. Select Handout or rumour, then Handout or Rumour. Players select Add a note. The referee can read that note too. Search the journal narrows the list. All, Sessions, Notes, Handouts, and Rumours choose a kind. Select Download the Player Pack to save a copy for your players.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The timeline</h3>
+        <p>Open Campaign, then Timeline. It lists dated journal entries, dated records, a ship's legs, and where the party is, by year and day. Today is the campaign date. Select a row to open it. Choose All types, or one record type. Select Only this ship to keep the party's ship. With no campaign date, select Set the campaign date. With nothing dated yet, select Open the Journal.</p>
       </li>
     </ol>
   </div>

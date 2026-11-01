@@ -1,4 +1,5 @@
 /** Colours and fonts from tokens.css. No colour literal lives in this file. */
+import { readableOn } from './ink.ts';
 
 export type ChartColours = {
     world: string;
@@ -162,5 +163,74 @@ export function printTheme(el: HTMLElement): MapTheme {
         },
         routeColours: routes,
         fillScale: Number.isFinite(fill) && fill > 0 ? fill : 1,
+    };
+}
+
+/** The mark-level ratio a colour must reach on the paper (tests/web/contrast.test.js MARK). */
+const MARK_RATIO = 3;
+
+export type WhiteTheme = MapTheme & {
+    /** The screen's traffic and news inks, darkened for the paper when needed. */
+    traffic: string;
+    news: string;
+    /** The screen inks that were darkened to read on the paper, by token name ("traffic" for the traffic layer's ink). Empty when every one read as it is. */
+    darkened: string[];
+};
+
+/**
+ * Colour on white (DP1d): the saved image in the screen's colours on --print-paper. The print theme's
+ * shape: the paper, the print text, line, grid and caption inks (the chart's text and its world discs
+ * are one ink on the chart, so they take the print world ink: white cannot be darkened into itself);
+ * the screen's water, zones, selection, routes, the public diamond, the signal (the party, its ships,
+ * the ring), the traffic and the news as on screen, each darkened in place when it would not read on
+ * the paper at the mark level, and listed in `darkened`; polity and region fills at the print share. The
+ * traffic ink is the caller's (the traffic layer reads its own token, map/traffic.ts `readTrafficInk`).
+ */
+export function whiteTheme(el: HTMLElement, screen: { traffic: string }): WhiteTheme {
+    const style = getComputedStyle(el);
+    const paper = token(style, '--print-paper');
+    const darkened: string[] = [];
+    const readable = (name: string, raw: string): string => {
+        const out = readableOn(raw, paper, MARK_RATIO);
+        if (out !== raw) darkened.push(name);
+        return out;
+    };
+    const ink = (name: string): string => readable(name, token(style, name));
+    const routes: Record<string, string> = {};
+    for (const code of ROUTE_COLOUR_CODES) routes[code] = ink(routeToken(code));
+    const fill = Number.parseFloat(printToken(style, 'fill'));
+    return {
+        bg0: paper,
+        line1: printToken(style, 'line-1'),
+        line2: printToken(style, 'line-2'),
+        signal: ink('--signal'),
+        signalDim: ink('--signal-dim'),
+        text1: printToken(style, 'text'),
+        textMuted: printToken(style, 'text-muted'),
+        fontDisplay: token(style, '--font-display'),
+        fontData: token(style, '--font-data'),
+        fontText: token(style, '--font-text'),
+        tFast: 0,
+        tag: paper,
+        tPulse: 0,
+        signalEdge: ink('--signal-dim'),
+        chart: {
+            world: printToken(style, 'world'),
+            water: ink('--chart-water'),
+            zoneAmber: ink('--chart-zone-amber'),
+            zoneRed: ink('--chart-zone-red'),
+            grid: printToken(style, 'grid'),
+            selected: ink('--chart-selected'),
+            routeXboat: ink('--chart-route-xboat'),
+            routeOther: ink('--chart-route-other'),
+            titleText: printToken(style, 'title-text'),
+            titlePill: paper,
+            publicGame: ink('--chart-public'),
+        },
+        routeColours: routes,
+        fillScale: Number.isFinite(fill) && fill > 0 ? fill : 1,
+        traffic: readable('traffic', screen.traffic),
+        news: ink('--chart-news'),
+        darkened,
     };
 }

@@ -1,7 +1,7 @@
 import { PackageHex, PackageManifest, sha256Hex, stable, type PackageHex as HexRow } from '@voyage/shared';
 import type { Env } from '../env';
 import { chartTree, ownSectorKey, sectorOf } from '../universe/hexes.ts';
-import type { PublishSources } from '../universe/publish_read.ts';
+import { linkForPublish, type PublishSources } from '../universe/publish_read.ts';
 
 const HASH = /^[0-9a-f]{64}$/;
 
@@ -112,7 +112,7 @@ async function ownSectorSlots(env: Env, universeId: string, hexKeys: string[]): 
  * F16. The live links of the source campaign whose two ends are both published records,
  * read page by page from the universe's object, sorted by id.
  */
-async function publishedLinks(env: Env, universeId: string, recordIds: string[]): Promise<Record<string, unknown>[]> {
+async function publishedLinks(env: Env, universeId: string, recordIds: string[], peers: readonly unknown[]): Promise<Record<string, unknown>[]> {
     const ends = new Set(recordIds);
     if (ends.size < 2) return [];
     const stub = env.UNIVERSE.get(env.UNIVERSE.idFromName(universeId));
@@ -124,7 +124,7 @@ async function publishedLinks(env: Env, universeId: string, recordIds: string[])
         if (!response.ok || !parsed.data) throw new Error('Publish read failed.');
         for (const link of parsed.data.links ?? []) {
             if (link.deleted === true || typeof link.from !== 'string' || typeof link.to !== 'string') continue;
-            if (ends.has(link.from) && ends.has(link.to)) out.push(link);
+            if (ends.has(link.from) && ends.has(link.to)) out.push(linkForPublish(link, peers) as Record<string, unknown>);
         }
         if (parsed.data.done !== false || typeof parsed.data.seq !== 'number' || parsed.data.seq <= after) break;
         after = parsed.data.seq;
@@ -321,6 +321,7 @@ export async function runPublish(env: Env, message: { packageId: string; version
          FROM package_versions WHERE package_id = ? AND version = ?`,
     ).bind(message.packageId, message.version).first<VersionRow>();
     if (!versionRow) throw new Error('No such version.');
+    // A done version is the bytes already stored. A later publish is a new version.
     if (versionRow.state === 'done') return;
     await env.DB.prepare(
         `UPDATE package_versions SET state = 'running', error = NULL WHERE package_id = ? AND version = ? AND state != 'done'`,
@@ -364,7 +365,7 @@ export async function runPublish(env: Env, message: { packageId: string; version
     const recordsText = stable(resolved.records);
     const contentHash = await sha256Hex(recordsText);
     await putAddressed(env.PUBLIC_BUCKET, contentHash, recordsText);
-    const links = await publishedLinks(env, pkg.universeId, recordIds);
+    const links = await publishedLinks(env, pkg.universeId, recordIds, resolved.records);
     const linksText = links.length ? stable(links) : '';
     const linksHash = links.length ? await sha256Hex(linksText) : '';
     if (links.length) await putAddressed(env.PUBLIC_BUCKET, linksHash, linksText);

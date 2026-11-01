@@ -24,7 +24,7 @@ import { MapRenderer, type PublicShipHit } from '../map/MapRenderer.ts';
 import { dossierRoute, homeRect, targetFor, type DossierRoute } from '../map/routes.ts';
 import { bindBuilder } from '../builder/bind.ts';
 import { subsectorHexes, subsectorLetter, subsectorPath } from '../builder/address.ts';
-import { printTheme, readMotion, readTheme } from '../map/theme.ts';
+import { printTheme, readMotion, readTheme, whiteTheme } from '../map/theme.ts';
 import { captionText, captureChart, captureName, TOO_LARGE } from '../map/capture.ts';
 import SaveImageButton from '../capture/SaveImageButton.vue';
 import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
@@ -32,7 +32,7 @@ import { orientationFor, type CaptureArea } from '../capture/paper.ts';
 import { readTrafficInk, TrafficLayer } from '../map/traffic.ts';
 import { PPP_NAMES, tierFor, type Tier } from '../map/tiers.ts';
 import { TruthClient } from '../map/truth_client.ts';
-import { bootChart, rememberedVersion } from '../map/chart_version.ts';
+import { bootChart, rememberedVersion, versionsAsk } from '../map/chart_version.ts';
 import { holdChart } from '../search/chart_hold.ts';
 import { paletteOpen } from '../search/palette_state.ts';
 import { dropPublicShip, publicGamesOverlay, publicOverview, watchPublicGames, watchPublicOverview } from '../map/public_games.ts';
@@ -1311,16 +1311,25 @@ async function loadChart(next: string): Promise<void> {
 
 /**
  * The chart starts from the version this device last saw, without waiting for the versions list.
- * The list is asked beside it, past the browser cache. When it names another version the chart
- * swaps to that one (loadChart), so a release shows within one round trip; until then the files on
- * screen are a released version's own. A version that cannot be read falls back to the list.
+ * When one is remembered, the list is asked on the frame after that chart is up, past the browser
+ * cache, so the first chart frame does not carry it. When the list names another version the chart
+ * swaps to that one. A version that cannot be read falls back to the list.
  */
 async function boot(): Promise<void> {
+    let shown = (): void => {};
+    const chartShown = new Promise<void>((resolve) => { shown = resolve; });
+    const afterChart = (): Promise<void> => chartShown.then(() => new Promise((resolve) => { nextFrame(() => resolve()); }));
     try {
         await bootChart({
             remembered: rememberedVersion(),
-            ask: () => client.currentVersion({ fresh: true }),
-            load: loadChart,
+            ask: () => versionsAsk(rememberedVersion(), () => client.currentVersion({ fresh: true }), afterChart),
+            load: async (version) => {
+                try {
+                    await loadChart(version);
+                } finally {
+                    shown();
+                }
+            },
             late: () => undefined, // The chart on screen is still a released version; keep it.
         });
     } catch (err) {
@@ -1605,16 +1614,15 @@ async function saveImage(choice: SheetChoice): Promise<void> {
     saving.value = true;
     try {
         const style = getComputedStyle(el);
-        const onScreen = choice.look === 'screen';
-        // On screen: the live theme with no title fade (one frame). On paper: the print tokens.
-        const theme = onScreen ? { ...readTheme(el), tFast: 0 } : printTheme(el);
-        const inks = onScreen
-            ? { traffic: readTrafficInk(el), ring: ringInk, news: newsInk }
-            : {
-                traffic: { traffic: style.getPropertyValue('--print-chart-traffic').trim(), own: theme.signal, bg: theme.bg0, font: theme.fontData },
-                ring: { line: theme.signal, fill: theme.signal },
-                news: { line: style.getPropertyValue('--print-chart-news').trim(), bg: theme.bg0, font: theme.fontData },
-            };
+        // Every saved image is on the paper (DP1d): On paper in the print inks; Full colour in the screen's colours,
+        // darkened where they would not read on white. No dark background leaves the app.
+        const white = choice.look === 'screen' ? whiteTheme(el, { traffic: readTrafficInk(el).traffic }) : null;
+        const theme = white ?? printTheme(el);
+        const inks = {
+            traffic: { traffic: white ? white.traffic : style.getPropertyValue('--print-chart-traffic').trim(), own: theme.signal, bg: theme.bg0, font: theme.fontData },
+            ring: { line: theme.signal, fill: theme.signal },
+            news: { line: white ? white.news : style.getPropertyValue('--print-chart-news').trim(), bg: theme.bg0, font: theme.fontData },
+        };
         const date = campaign.status === 'ready' && campaign.clock ? stardate(markDay()).date : null;
         const ok = await captureChart({
             renderer,

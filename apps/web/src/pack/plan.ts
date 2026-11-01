@@ -130,6 +130,15 @@ function afterClock(when: { year: number; day: number }, clock: { year: number; 
     return when.day > clock.day;
 }
 
+/** A name the file shows. The same redaction as every other pack string. */
+function shownName(
+    name: string,
+    records: Readonly<Record<string, CampaignRecord>>,
+    counts: PackCounts,
+): string {
+    return redactText(name, records, counts);
+}
+
 function placeOf(
     anchor: CampaignAnchor,
     records: Readonly<Record<string, CampaignRecord>>,
@@ -144,39 +153,34 @@ function placeOf(
         return bits.join(' · ');
     }
     const host = playersRecord(records[anchor.id]);
-    if (host) return host.name;
+    if (host) return shownName(host.name, records, counts);
     counts.places += 1;
     return null;
 }
 
-function hiddenIds(records: Readonly<Record<string, CampaignRecord>>): string[] {
-    const ids: string[] = [];
-    for (const record of Object.values(records)) {
-        if (!playersRecord(record)) ids.push(record.id);
-    }
-    return ids;
-}
-
-/** A status object with hidden record ids replaced, then read as text. */
+/**
+ * A status read as one line. The naval or scout mark stays off the line.
+ * The players projection drops that key on the object; the pack has no object, so the key is deleted before the line is read.
+ */
 function statusText(
     status: CampaignRecord['status'],
     records: Readonly<Record<string, CampaignRecord>>,
     counts: PackCounts,
-    hidden: readonly string[],
 ): string | null {
     if (!status) return null;
+    const copy = { ...status };
+    delete copy.fuelMark;
     let raw = '';
     try {
-        raw = JSON.stringify(status);
+        raw = JSON.stringify(copy);
     } catch {
         return null;
     }
     if (!raw || raw === '{}') return null;
-    for (const id of hidden) raw = raw.split(id).join('a record');
     return redactText(raw, records, counts);
 }
 
-function sheetText(record: CampaignRecord, records: Readonly<Record<string, CampaignRecord>>, counts: PackCounts, hidden: readonly string[]): string | null {
+function sheetText(record: CampaignRecord, records: Readonly<Record<string, CampaignRecord>>, counts: PackCounts): string | null {
     if (record.type !== 'person' || record.sheet == null) return null;
     let raw = '';
     try {
@@ -185,7 +189,6 @@ function sheetText(record: CampaignRecord, records: Readonly<Record<string, Camp
         return null;
     }
     if (!raw) return null;
-    for (const id of hidden) raw = raw.split(id).join('a record');
     return redactText(raw, records, counts);
 }
 
@@ -227,7 +230,6 @@ export function planPack(input: PackInput): PackPlan {
         ship: 0,
         timeline: 0,
     };
-    const hidden = hiddenIds(input.records);
     const clock = clockDay(input.clockDays);
     const records: PackRecord[] = [];
 
@@ -245,15 +247,15 @@ export function planPack(input: PackInput): PackPlan {
             type: record.type,
             typeName: typeInfo(record.type).one,
             kind: redactText(record.kind, input.records, counts),
-            name: record.name,
+            name: shownName(record.name, input.records, counts),
             summary,
             details,
             tags: record.tags.map((tag) => redactText(tag, input.records, counts)),
             when: record.when ? whenText(record.when.start) + (record.when.end ? ' to ' + whenText(record.when.end) : '') : null,
             place: placeOf(record.anchor, input.records, counts),
             playerNotes: notes,
-            sheet: sheetText(record, input.records, counts, hidden),
-            status: statusText(record.status, input.records, counts, hidden),
+            sheet: sheetText(record, input.records, counts),
+            status: statusText(record.status, input.records, counts),
         });
     }
     records.sort((a, b) => a.typeName.localeCompare(b.typeName) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
@@ -296,8 +298,8 @@ export function planPack(input: PackInput): PackPlan {
         links.push({
             fromId: shownFrom.id,
             toId: shownTo.id,
-            fromName: shownFrom.name,
-            toName: shownTo.name,
+            fromName: shownName(shownFrom.name, input.records, counts),
+            toName: shownName(shownTo.name, input.records, counts),
             kind: linkKind(link.kind),
         });
     }
@@ -313,7 +315,7 @@ export function planPack(input: PackInput): PackPlan {
                 counts.partyMembers += 1;
                 continue;
             }
-            const listed = { id: record.id, name: record.name };
+            const listed = { id: record.id, name: shownName(record.name, input.records, counts) };
             party.members.push(listed);
             playersMembers.push(listed);
         }
@@ -327,7 +329,7 @@ export function planPack(input: PackInput): PackPlan {
                 continue;
             }
             const onBoard = playersMembers.filter((member) => aboard[member.id] === vesselId);
-            party.ships.push({ id: vessel.id, name: vessel.name, aboard: onBoard });
+            party.ships.push({ id: vessel.id, name: shownName(vessel.name, input.records, counts), aboard: onBoard });
         }
         party.ship = party.ships[0] ? { id: party.ships[0].id, name: party.ships[0].name } : null;
         const listedIds = new Set(party.ships.flatMap((ship) => ship.aboard.map((member) => member.id)));
@@ -351,7 +353,7 @@ export function planPack(input: PackInput): PackPlan {
             id: record.id,
             date: whenText(record.when.start),
             weekday: stardate(totalDays(record.when.start.year, record.when.start.day)).weekday,
-            title: record.name,
+            title: shownName(record.name, input.records, counts),
             kind: typeInfo(record.type).one,
             place: shown ? shown.place : null,
         });

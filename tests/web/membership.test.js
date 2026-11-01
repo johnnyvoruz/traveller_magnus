@@ -434,14 +434,20 @@ test('DU33: the live link read after a reload: the url and the expiry; no link, 
     resetCampaign();
     campaign.universeId = 'uni-play';
     campaign.role = 'owner';
-    let answer = { status: 200, body: { ok: true, data: { link: { url: 'https://traveller.voyage/join/kept-token', createdAt: STAMP, expiresAt: '2026-11-16T00:00:00.000Z' } } } };
+    let answer = { status: 200, body: { ok: true, data: { link: { url: 'https://traveller.voyage/join/kept-token', createdAt: STAMP, expiresAt: '2026-11-16T00:00:00.000Z', uses: 0 } } } };
     const seen = [];
     transport.fetch = async (url, init = {}) => {
         seen.push((init.method || 'GET') + ' ' + String(url));
         return jsonResponse(answer.status, answer.body);
     };
-    assert.deepEqual(await readInvite(), { url: 'https://traveller.voyage/join/kept-token', expiresAt: '2026-11-16T00:00:00.000Z' }, 'the uses count is not on the read');
+    assert.deepEqual(await readInvite(), { url: 'https://traveller.voyage/join/kept-token', expiresAt: '2026-11-16T00:00:00.000Z', uses: 0 }, 'a new link reads 0 uses (BU35, DU33b)');
     assert.deepEqual(seen, ['GET /api/universes/uni-play/invite']);
+    answer.body.data.link.uses = 3;
+    assert.equal((await readInvite()).uses, 3, 'the count after three joins');
+    delete answer.body.data.link.uses;
+    assert.deepEqual(await readInvite(), { url: 'https://traveller.voyage/join/kept-token', expiresAt: '2026-11-16T00:00:00.000Z' }, 'a body without the count: the link without it, no guess');
+    answer.body.data.link.uses = 'many';
+    assert.equal('uses' in await readInvite(), false, 'a count that is not a whole number is left out');
     answer = { status: 200, body: { ok: true, data: { link: null } } };
     assert.equal(await readInvite(), null, 'no live link');
     answer = { status: 404, body: { ok: false, error: { code: 'not_found', message: 'No such universe.' } } };

@@ -6,7 +6,7 @@
 
 export type Paper = 'A4' | 'Letter' | 'A3' | 'Tabloid';
 export type Orientation = 'portrait' | 'landscape';
-/** Ink on white from the print tokens, or the chart as the screen shows it. */
+/** Ink on white from the print tokens, or the screen's colours on the same white (DP1d: no saved image has a dark background). */
 export type Look = 'paper' | 'screen';
 
 export const PAPERS: readonly Paper[] = ['A4', 'Letter', 'A3', 'Tabloid'];

@@ -11,24 +11,32 @@
  * ship's shares and each one's part of the total, the payment as typed with when it is due and Pay now,
  * and the upkeep, one figure with its parts; Fuel shows what is aboard against the Fuel Capacity, and a
  * refuel fills it. Passengers (DT3b): the list the sheet's Passenger rows edit, and Roll a passenger
- * from the rules file's table (Lane A's campaign/passengers.ts; passenger_roll.ts says and keeps it).
+ * from the rules file's table (Lane A's campaign/passengers.ts; passenger_roll.ts says and keeps it). Each
+ * passenger's Passage is one of the rules file's classes, and Board posts the fare for the jump to the
+ * ledger from the file's fares table (DT3; passenger_fare.ts).
  * Typed by the referee, but for that one roll: no rule of its own. Money is written by
  * campaign/money.ts. Saves ride the record's save; no server of its own.
  */
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { CampaignRecord, CargoLot, LedgerLine, OwnerShare, ShipPayment } from '@voyage/shared';
+import type { CampaignRecord, CargoLot, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
 import { addCargo, capacityTons, removeCargo, tonsUsed } from '../campaign/cargo.ts';
 import { ledgerBalance, ledgerByPeriod, postLedger } from '../campaign/ledger.ts';
 import { formatCredits } from '../campaign/money.ts';
 import { fuelCapacityTons, fuelOffers, fuelTonsOf, monthlyLines, MONTHLY_COST_FIELDS, refuelLine, tonsToFill, type FuelOffer } from '../campaign/refuel.ts';
 import { payNow, paymentWhenFromClock, shareParts, typedPaymentAmount, upkeep } from '../campaign/ship_finance.ts';
 import { rollPassenger, type RolledPassenger } from '../campaign/passengers.ts';
+import { lateReduction } from '../campaign/traffic_lots.ts';
+import { cryptoFace } from '../dice/roll.ts';
 import { commit, newLinkId, newRecordId } from '../campaign/commit.ts';
+import { trackOf } from '../campaign/track.ts';
+import { marketsChart, sectorAtOf, startMarkets } from './markets_near.ts';
 import { atPane } from '../shell/pane.ts';
 import { justCreated } from './actions.ts';
 import { createdLink } from './links.ts';
+import { boarded, boardStart, fareFor, fareLine, fareParsecs, isBoarded, nextJump, passageClasses, unboarded, withClass, type PassageClass } from './passenger_fare.ts';
 import { keptPassenger, rollWords } from './passenger_roll.ts';
+import { deliveredLine, disembarked, disembarkWords, dueFrom, isFreight, lastUpkeep, periodsShown, shownRows, upkeepPostedWords } from './traffic_here.ts';
 import { created } from './records.ts';
 import RecordPicker from './RecordPicker.vue';
 import { starport } from '../map/uwp.ts';
@@ -62,6 +70,10 @@ const over = computed(() => capacity.value !== null && used.value > capacity.val
 const balance = computed(() => ledgerBalance(ledger.value));
 /** Newest day first, as a register reads. */
 const periods = computed(() => ledgerByPeriod(ledger.value).reverse());
+/** The Ledger folds after its first ten lines (DU38, as the freight list does); Show all unfolds it; a new line unfolds nothing. */
+const allLines = ref(false);
+const linesShown = computed(() => shownRows(ledger.value.length, allLines.value));
+const periodsCut = computed(() => periodsShown(periods.value, linesShown.value.shown));
 const today = computed((): Day => dayOf(campaignDays(campaign.clock)));
 /** Where the vessel is now, in the Party tab's words: a new lot's "where". */
 const here = computed(() => {
@@ -120,6 +132,32 @@ function dropLot(index: number): void {
     writeTrade(now, { status: statusWithTrade(now, { cargo: removeCargo(cargo.value, index) }) });
 }
 
+// ---- Deliver freight (DT6b) --------------------------------------------------------------------------------
+
+/** The cargo row whose Deliver form is open. */
+const delivering = ref<number | null>(null);
+const deliver = reactive({ late: false });
+const deliverError = ref('');
+
+function openDeliver(i: number): void {
+    delivering.value = i;
+    deliver.late = false;
+    deliverError.value = '';
+}
+
+/** Deliver: the pay on the ledger as income (less the file's late cut when ticked, rolled now), the lot out of the hold, one commit. */
+function deliverNow(): void {
+    const now = record.value;
+    const i = delivering.value;
+    const item = i === null ? null : cargo.value[i];
+    if (!now || i === null || !item || !isFreight(item) || props.readOnly) return;
+    const late = deliver.late ? lateReduction(cryptoFace) : null;
+    if (deliver.late && !late) { deliverError.value = 'The trade tables have no late-delivery cut.'; return; }
+    const line = deliveredLine(item, today.value, late, world.value ? world.value.name : undefined);
+    writeTrade(now, { status: statusWithTrade(now, { cargo: removeCargo(cargo.value, i), ledger: postLedger(ledger.value, line) }) });
+    delivering.value = null;
+}
+
 // ---- Add a line -----------------------------------------------------------------------------------------
 
 const lineOpen = ref(false);
@@ -156,6 +194,13 @@ function addLine(): void {
  * The world under the ship, as the map knows it (Build's row there, else the chart's): its name and its
  * starport class. Null under way, at a hex the map has not read, or at an empty hex.
  */
+/** The ship is between places at the campaign date (a leg under way): nothing is delivered or disembarked. */
+const underway = computed(() => {
+    const now = record.value;
+    if (!now) return false;
+    void campaign.seq;
+    return vesselWhere(now, campaign.records, campaignDays(campaign.clock)).underway;
+});
 const world = computed(() => {
     const now = record.value;
     if (!now) return null;
@@ -251,6 +296,8 @@ function setMark(event: Event): void {
 const month = computed(() => (record.value ? monthlyLines(fieldsOf(record.value.sheet), today.value) : []));
 const monthTotal = computed(() => ledgerBalance(month.value));
 const monthSaid = ref('');
+/** When the upkeep was last posted, from the Ledger's recurring cost lines (DU43); no month length is assumed. */
+const monthLast = computed(() => upkeepPostedWords(lastUpkeep(ledger.value, MONTHLY_COST_FIELDS), today.value));
 
 function postMonth(): void {
     const now = record.value;
@@ -266,8 +313,124 @@ function postMonth(): void {
 const route = useRoute();
 const router = useRouter();
 const passengers = computed(() => (record.value ? manifestOf(record.value).passengers : []));
+/** The Passengers list folds after its first ten (DU38); the rows keep their places, so a row's actions work on the same indexes. */
+const allPassengers = ref(false);
+const passengersShown = computed(() => shownRows(passengers.value.length, allPassengers.value));
 const rolled = ref<RolledPassenger | null>(null);
 const rollError = ref('');
+
+// ---- Passage and the fare (DT3) ----------------------------------------------------------------------------
+
+/** The rules file's passage classes and the jumps its fares table prices. */
+const classes: PassageClass[] = passageClasses();
+const jumps: number[] = fareParsecs();
+/** The lot whose Board form is open. */
+const boarding = ref<number | null>(null);
+const board = reactive({ parsecs: '' });
+const boardError = ref('');
+
+/** The passenger's name: the person's when the lot holds a live one, else the lot's label. */
+function passengerName(lot: PassengerLot): string {
+    const person = lot.personId ? campaign.records[lot.personId] : null;
+    return person && !person.deleted ? person.name : lot.label;
+}
+
+/** A Passage word the file does not name, so the select can still show it chosen. */
+function strayClass(lot: PassengerLot): string {
+    return lot.class && !classes.some((one) => one.name === lot.class) ? lot.class : '';
+}
+
+/** The Passage chosen on a row: written to the manifest at once, as a sheet box is. */
+function setClass(i: number, event: Event): void {
+    const now = record.value;
+    const target = event.target;
+    if (!now || props.readOnly || !(target instanceof HTMLSelectElement)) return;
+    writeTrade(now, { status: statusWithTrade(now, { passengers: withClass(passengers.value, i, target.value) }) });
+}
+
+/** The ship's next jump on its track (DT3d), once the chart's grid is in to measure it. */
+const nextLeg = computed(() => {
+    const now = record.value;
+    const sectors = marketsChart.sectors;
+    return now && sectors ? nextJump(trackOf(now), campaignDays(campaign.clock), sectorAtOf(sectors)) : null;
+});
+
+/** "Next leg, Regina system to Efate system: 2 parsecs." Where the form's jump came from. */
+const nextLegWords = computed((): string => {
+    const next = nextLeg.value;
+    if (!next) return '';
+    const words = 'Next leg, ' + anchorName(next.from, campaign.records) + ' to ' + anchorName(next.to, campaign.records) + ': ' + next.parsecs + (next.parsecs === 1 ? ' parsec.' : ' parsecs.');
+    return boardStart(next, jumps) ? words : words + ' The fares table has no row for that jump.';
+});
+
+function openBoard(i: number): void {
+    boarding.value = i;
+    board.parsecs = boardStart(nextLeg.value, jumps);
+    boardError.value = '';
+    if (record.value && trackOf(record.value)) void startMarkets();
+}
+
+// The grid may arrive after the form opened: an empty jump then takes the next leg's.
+watch(nextLeg, (next) => {
+    if (boarding.value !== null && !board.parsecs) board.parsecs = boardStart(next, jumps);
+});
+
+/** The fare the form would post: the lot's class over the chosen jump, from the file. */
+const boardFare = computed(() => {
+    const i = boarding.value;
+    const lot = i === null ? null : passengers.value[i];
+    const parsecs = Number(board.parsecs);
+    return lot && parsecs ? fareFor(lot.class, parsecs) : null;
+});
+
+const boardWords = computed((): string => {
+    const i = boarding.value;
+    const lot = i === null ? null : passengers.value[i];
+    if (!lot) return '';
+    if (!classes.some((one) => one.key === lot.class.trim().toLowerCase())) return 'Choose a passage the fares table names: ' + classes.map((one) => one.name).join(', ') + '.';
+    if (!board.parsecs) return 'Choose the jump to see the fare.';
+    const found = boardFare.value;
+    if (!found) return 'The fares table has no row for that jump.';
+    return lot.class + ' passage, ' + board.parsecs + (board.parsecs === '1' ? ' parsec: ' : ' parsecs: ') + credits(found.credits) + '. It posts to the Ledger as income, dated ' + dayWords(today.value) + '.';
+});
+
+// ---- Arrival (DW3 round 5): boarded passengers leave the ship; their fares stay on the Ledger. ----
+const boardedCount = computed(() => passengers.value.filter((one) => isBoarded(one)).length);
+const passSaid = ref('');
+function disembarkOne(i: number): void {
+    const now = record.value;
+    if (!now || props.readOnly || underway.value) return;
+    writeTrade(now, { status: statusWithTrade(now, { passengers: disembarked(passengers.value, i) }) });
+    passSaid.value = disembarkWords(1, world.value ? world.value.name : '');
+}
+function disembarkAll(): void {
+    const now = record.value;
+    const count = boardedCount.value;
+    if (!now || props.readOnly || underway.value || !count) return;
+    writeTrade(now, { status: statusWithTrade(now, { passengers: disembarked(passengers.value) }) });
+    passSaid.value = disembarkWords(count, world.value ? world.value.name : '');
+}
+
+/** A ledger line removed (DT3c): the line goes, and the passenger it boarded, if any, is unboarded, one commit. */
+function dropLine(line: LedgerLine): void {
+    const now = record.value;
+    if (!now || props.readOnly) return;
+    writeTrade(now, { status: statusWithTrade(now, { ledger: ledger.value.filter((one) => one !== line), passengers: unboarded(passengers.value, line, passengerName) }) });
+}
+
+/** Board: the fare on the lot and the ledger line, one commit. */
+function boardNow(): void {
+    const now = record.value;
+    const i = boarding.value;
+    if (!now || i === null || props.readOnly) return;
+    const lot = passengers.value[i];
+    const parsecs = Number(board.parsecs);
+    const found = lot && parsecs ? fareFor(lot.class, parsecs) : null;
+    if (!lot || !found) { boardError.value = 'Choose a passage the fares table names, and the jump.'; return; }
+    const line = fareLine(passengerName(lot), lot.class, parsecs, found.credits, today.value);
+    writeTrade(now, { status: statusWithTrade(now, { passengers: boarded(passengers.value, i, lot.class, found.credits), ledger: postLedger(ledger.value, line) }) });
+    boarding.value = null;
+}
 
 function rollOne(): void {
     if (props.readOnly) return;
@@ -367,6 +530,16 @@ const payOpen = ref(false);
 const pay = reactive({ amount: '', every: '', day: '', year: '', payee: '' });
 const payError = ref('');
 const paySaid = ref('');
+/** The referee has typed the due day or year of a new payment: Every no longer fills them (DU42). */
+const payDayTyped = ref(false);
+watch(() => pay.every, (text) => {
+    if (payDayTyped.value || payment.value) return;
+    const every = number(text);
+    const due = every === null ? null : dueFrom(today.value, every);
+    if (!due) return;
+    pay.day = String(due.day);
+    pay.year = String(due.year);
+});
 
 /** Set a payment, or change it. A new one's amount starts from the Mortgage Cost box; no period is assumed. */
 function openPay(): void {
@@ -377,6 +550,7 @@ function openPay(): void {
     pay.day = String(now ? now.nextDueDay.day : today.value.day);
     pay.year = String(now ? now.nextDueDay.year : today.value.year);
     pay.payee = now && now.payee ? now.payee : '';
+    payDayTyped.value = false;
     payError.value = '';
     paySaid.value = '';
     payOpen.value = true;
@@ -436,7 +610,18 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
             <template v-if="item.destination"> · to {{ item.destination }}</template>
             <template v-if="item.note"> · {{ item.note }}</template>
           </span>
+          <button v-if="isFreight(item) && delivering !== i && !underway" type="button" class="ui-btn" :disabled="readOnly" data-deliver @click="openDeliver(i)">Deliver</button>
+          <span v-else-if="isFreight(item) && underway" class="vt-fine" data-deliver-wait>Deliver when the ship arrives.</span>
           <button type="button" class="ui-btn vt-drop" :disabled="readOnly" :aria-label="'Remove ' + (item.label || 'this lot')" title="Remove this lot" @click="dropLot(i)"><Icon name="xmark" :size="11" /></button>
+          <form v-if="delivering === i" class="vt-form is-inline vt-deliver" data-deliver-form @submit.prevent="deliverNow">
+            <label class="vt-check"><input v-model="deliver.late" type="checkbox" data-deliver-late /> Delivered late: the file's cut, 1D+4 x 10%, comes off the pay (rolled on post)</label>
+            <p class="vt-fine" data-deliver-words>Posts {{ credits(item.payCr ?? 0) }} to the ledger as income, dated {{ dayWords(today) }}; the lot leaves the hold.</p>
+            <p v-if="deliverError" class="vt-err" role="alert">{{ deliverError }}</p>
+            <div class="vt-acts">
+              <button type="button" class="ui-btn" @click="delivering = null">Cancel</button>
+              <button type="submit" class="ui-btn is-primary" :disabled="readOnly" data-deliver-post>Deliver, post the pay</button>
+            </div>
+          </form>
         </li>
       </ol>
       <p v-else-if="!lotOpen" class="vt-none">Nothing in the hold. The ship sheet's Cargo rows are this list too.</p>
@@ -445,7 +630,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         <label class="vt-fld"><span>Tons</span><input v-model="lot.tons" class="vt-box vt-num" inputmode="decimal" /></label>
         <label class="vt-fld"><span>Paid (Cr)</span><input v-model="lot.paid" class="vt-box vt-num" inputmode="decimal" /></label>
         <label class="vt-fld vt-wide"><span>Where</span><input v-model="lot.where" class="vt-box" maxlength="120" /></label>
-        <label v-if="lot.paid.trim()" class="vt-check"><input v-model="lot.post" type="checkbox" /> Post the payment to the ledger, dated {{ dayWords(today) }}</label>
+        <label v-if="lot.paid.trim()" class="vt-check"><input v-model="lot.post" type="checkbox" /> Post the payment to the Ledger, dated {{ dayWords(today) }}</label>
         <p v-if="lotError" class="vt-err" role="alert">{{ lotError }}</p>
         <div class="vt-acts">
           <button type="button" class="ui-btn" @click="lotOpen = false">Cancel</button>
@@ -479,24 +664,28 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         </div>
       </form>
       <div v-if="periods.length" class="vt-days">
-        <section v-for="period in periods" :key="period.year + '-' + period.day" class="vt-day-group">
+        <section v-for="period in periodsCut" :key="period.year + '-' + period.day" class="vt-day-group">
           <h4 class="vt-day-head"><span class="ui-date">{{ dayWords({ year: period.year, day: period.day }) }}</span> <span class="vt-num" :class="{ 'is-minus': period.balance < 0 }">{{ credits(period.balance) }}</span></h4>
           <ul class="vt-rows">
-            <li v-for="(item, i) in period.lines" :key="i" class="vt-row is-line">
+            <li v-for="(item, i) in period.lines" :key="i" class="vt-row is-line" data-ledger-line>
               <span class="vt-main">{{ item.memo }} <small class="vt-kind">{{ KIND_WORDS[item.kind] }}</small></span>
               <span class="vt-num vt-amount" :class="{ 'is-minus': item.amount < 0 }">{{ credits(item.amount) }}</span>
+              <button type="button" class="ui-btn vt-drop" :disabled="readOnly" aria-label="Remove this line" title="Remove this line" data-drop-line @click="dropLine(item)"><Icon name="xmark" :size="11" /></button>
             </li>
           </ul>
         </section>
+        <button v-if="linesShown.more" type="button" class="vt-more" data-ledger-more @click="allLines = true">Show all {{ ledger.length }} lines</button>
       </div>
-      <p v-else-if="!lineOpen" class="vt-none">No lines yet. Post what the ship takes in and pays out; the balance is their sum.</p>
+      <p v-else-if="!lineOpen" class="vt-none">No lines yet. Post what the ship takes in and pays out; the balance is their sum. The ship's starting funds go in as an Income line.</p>
     </section>
 
     <section class="vt-sec ui-frame" data-vessel-passengers aria-labelledby="vt-pass-h">
       <div class="vt-head">
         <h3 id="vt-pass-h" class="ui-frame-label">Passengers <span v-if="passengers.length" class="ui-frame-count">{{ passengers.length }}</span></h3>
+        <button v-if="!rolled && boardedCount && !underway" type="button" class="ui-btn" :disabled="readOnly" data-disembark-all @click="disembarkAll">Disembark all</button>
         <button v-if="!rolled" type="button" class="ui-btn" :disabled="readOnly" data-roll-passenger @click="rollOne">Roll a passenger</button>
       </div>
+      <p v-if="passSaid" class="vt-said" role="status" data-disembark-said>{{ passSaid }}</p>
       <div v-if="rolled" class="vt-roll" data-passenger-roll>
         <span class="vt-dice" aria-hidden="true"><span v-for="(face, i) in rolled.dice" :key="i" class="vt-die">{{ face }}</span></span>
         <p class="vt-roll-words" role="status">{{ rollWords(rolled) }}</p>
@@ -508,14 +697,37 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       </div>
       <p v-if="rollError" class="vt-err" role="alert">{{ rollError }}</p>
       <ul v-if="passengers.length" class="vt-rows">
-        <li v-for="(item, i) in passengers" :key="i" class="vt-row is-line">
+        <li v-for="(item, i) in passengers.slice(0, passengersShown.shown)" :key="i" class="vt-row is-line vt-pass" :class="{ 'is-boarded': isBoarded(item) }" data-passenger-row>
           <span class="vt-main">
             <button v-if="item.personId && campaign.records[item.personId] && !campaign.records[item.personId].deleted" type="button" class="vt-link" @click="openRecord(item.personId)">{{ campaign.records[item.personId].name }}</button>
             <b v-else>{{ item.label || 'Unnamed passenger' }}</b>
           </span>
-          <span v-if="item.class" class="vt-meta">{{ item.class }}</span>
+          <select class="vt-box vt-class" :value="item.class" :disabled="readOnly" :aria-label="'Passage for ' + (passengerName(item) || 'this passenger')" data-passage @change="setClass(i, $event)">
+            <option value="">Passage</option>
+            <option v-for="one in classes" :key="one.key" :value="one.name">{{ one.name }}</option>
+            <option v-if="strayClass(item)" :value="strayClass(item)">{{ strayClass(item) }}</option>
+          </select>
+          <span v-if="isBoarded(item)" class="vt-fare" data-fare>Boarded, {{ credits(item.fareCr ?? 0) }}</span>
+          <button v-if="isBoarded(item) && !underway" type="button" class="ui-btn" :disabled="readOnly" data-disembark @click="disembarkOne(i)">Disembark</button>
+          <button v-else-if="boarding !== i" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard(i)">Board</button>
+          <form v-if="boarding === i" class="vt-form is-inline vt-board" data-board-form @submit.prevent="boardNow">
+            <p v-if="nextLegWords" class="vt-fine vt-leg" data-board-leg>{{ nextLegWords }}</p>
+            <label class="vt-fld vt-jump"><span>Jump</span>
+              <select v-model="board.parsecs" class="vt-box" data-board-jump>
+                <option value="">Choose</option>
+                <option v-for="n in jumps" :key="n" :value="String(n)">{{ n }} {{ n === 1 ? 'parsec' : 'parsecs' }}</option>
+              </select>
+            </label>
+            <p class="vt-fine" data-board-fare>{{ boardWords }}</p>
+            <p v-if="boardError" class="vt-err" role="alert">{{ boardError }}</p>
+            <div class="vt-acts">
+              <button type="button" class="ui-btn" @click="boarding = null">Cancel</button>
+              <button type="submit" class="ui-btn is-primary" :disabled="readOnly || !boardFare" data-board-post>Board, post the fare</button>
+            </div>
+          </form>
         </li>
       </ul>
+      <button v-if="passengersShown.more" type="button" class="vt-more" data-passengers-more @click="allPassengers = true">Show all {{ passengers.length }} passengers</button>
       <p v-else-if="!rolled" class="vt-none">No passengers. The ship sheet's Passenger rows are this list too.</p>
     </section>
 
@@ -572,8 +784,8 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         <form v-if="payOpen" class="vt-form is-inline" data-payment-form @submit.prevent="savePay">
           <label class="vt-fld"><span>Amount (Cr)</span><input v-model="pay.amount" class="vt-box vt-num" inputmode="decimal" required /></label>
           <label class="vt-fld"><span>Every (days)</span><input v-model="pay.every" class="vt-box vt-num" inputmode="numeric" required /></label>
-          <label class="vt-fld"><span>Next due, day</span><input v-model="pay.day" class="vt-box vt-num" inputmode="numeric" required /></label>
-          <label class="vt-fld"><span>Year</span><input v-model="pay.year" class="vt-box vt-num" inputmode="numeric" required /></label>
+          <label class="vt-fld"><span>Next due, day</span><input v-model="pay.day" class="vt-box vt-num" inputmode="numeric" required data-pay-day @input="payDayTyped = true" /></label>
+          <label class="vt-fld"><span>Year</span><input v-model="pay.year" class="vt-box vt-num" inputmode="numeric" required data-pay-year @input="payDayTyped = true" /></label>
           <label class="vt-fld is-wide"><span>To (optional)</span><input v-model="pay.payee" class="vt-box" placeholder="The bank, a patron" /></label>
           <p v-if="payError" class="vt-err" role="alert">{{ payError }}</p>
           <div class="vt-acts">
@@ -594,7 +806,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
             </li>
           </ul>
         </template>
-        <p v-else class="vt-none">Write the ship's recurring costs on the ship sheet (Mortgage, Maintenance, Life Support, Salary, Running) to see its upkeep.</p>
+        <p v-else class="vt-none">Write the ship's recurring costs on the ship sheet ({{ MONTHLY_COST_FIELDS.join(', ') }}) to see its upkeep.</p>
       </div>
     </section>
 
@@ -646,6 +858,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       <div class="vt-part" data-month>
         <h4 class="vt-part-head">This month's upkeep</h4>
         <template v-if="month.length">
+          <p class="vt-fine" data-month-last>{{ monthLast }}</p>
           <ul class="vt-rows">
             <li v-for="item in month" :key="item.memo" class="vt-row is-line">
               <span class="vt-main">{{ item.memo }}</span>
@@ -672,9 +885,15 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
 
 .vt-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+/* On a phone the head's button drops under the label when the two do not fit, and stays at the right (DT3). */
+.vt-head > .ui-btn {
+  margin-left: auto;
 }
 
 .vt-head .ui-frame-label {
@@ -889,6 +1108,21 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
   color: var(--signal);
 }
 
+/* The fold on a long list (DU38), in the track's look, as the freight list's. */
+.vt-more {
+  margin: 6px 0 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--signal);
+  font: 500 12.5px/1.4 var(--font-text);
+  cursor: pointer;
+}
+
+.vt-more:hover {
+  color: var(--signal-bright);
+}
+
 /* Owners and payment (DT1c): a part's head with its button; a holder's shares as a small box. */
 .vt-part-row {
   display: flex;
@@ -987,6 +1221,51 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
 .vt-rows.is-parts .vt-row {
   padding: 3px 0;
   color: var(--text-muted);
+}
+
+/* A passenger row (DT3): the name, the Passage as a small select, then the fare or Board; the form below. */
+.vt-class {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.vt-fare {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.vt-pass.is-boarded .vt-fare {
+  color: var(--signal);
+}
+
+.vt-board {
+  flex: 1 1 100%;
+  order: 4;
+}
+
+.vt-fld.vt-jump {
+  flex: 0 1 140px;
+}
+
+/* Deliver (DT6b): the form takes the cargo row's full width under the lot. */
+.vt-deliver {
+  flex: 1 1 100%;
+  order: 4;
+}
+
+/* The next leg's words (DT3d) sit above the jump, the form's first line. */
+.vt-board .vt-leg {
+  order: -1;
+  color: var(--text);
+}
+
+/* A ledger line (DT3c): the memo gives way so the amount and its remove keep the line's row on a phone. */
+.vt-days .vt-row .vt-main {
+  flex: 1 1 80px;
 }
 
 @media (max-width: 640px) {

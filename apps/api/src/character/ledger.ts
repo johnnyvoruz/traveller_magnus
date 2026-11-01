@@ -159,6 +159,7 @@ export function postLedger(
     if (!memoOk(input.memo) || !amountOk(input.amount)) return INVALID;
     const whenDay = dayOf(input.whenDay);
     if (whenDay === false) return INVALID;
+    if (typeof input.linkId === 'string' && input.linkId.length > MEMO_MAX) return INVALID;
     const kind = input.kind;
     let linkId: string | null = null;
     if (kind === 'transfer') {

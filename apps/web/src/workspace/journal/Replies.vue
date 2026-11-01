@@ -458,10 +458,12 @@ function onBoxKey(event: KeyboardEvent): void {
   margin-top: 6px;
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 599px) {
   .jn-replies-toggle,
+  .jn-replies[data-depth="1"] .jn-replies-toggle,
   .jn-reply-act,
   .jn-reply-acts .ui-btn {
+    min-width: 44px;
     min-height: 44px;
   }
 }

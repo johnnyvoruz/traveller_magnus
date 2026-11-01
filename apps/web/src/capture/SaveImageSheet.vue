@@ -87,7 +87,7 @@ onMounted(() => {
             <button type="button" :aria-pressed="look === 'screen'" :disabled="busy" @click="look = 'screen'">Full colour</button>
           </div>
         </div>
-        <p class="save-img-note">{{ look === 'paper' ? 'Ink on white, for printing.' : 'As the screen shows it.' }}</p>
+        <p class="save-img-note">{{ look === 'paper' ? 'Ink on white, for printing.' : 'Colour on white, for printing.' }}</p>
         <div class="save-img-acts">
           <button ref="cancelEl" type="button" class="ui-btn" :disabled="busy" data-save-image-cancel @click="cancel()">Cancel</button>
           <button type="submit" class="ui-btn is-primary" :disabled="busy || !areaId" data-save-image-save>{{ busy ? 'Saving…' : 'Save' }}</button>

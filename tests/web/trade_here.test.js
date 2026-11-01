@@ -103,9 +103,9 @@ describe('trade here', { concurrency: 1 }, () => {
     });
 });
 
-test('the vessel page shows Trade here before Markets', () => {
+test('the vessel page shows Trade here, then Find passengers and freight (DT6), before Markets', () => {
     const page = read('workspace/RecordPage.vue');
-    assert.match(page, /<TradeHere v-if="record\.type === 'vessel'" :id="id" :read-only="readOnly" \/>\s+<MarketsNearby/);
+    assert.match(page, /<TradeHere v-if="record\.type === 'vessel'" :id="id" :read-only="readOnly" \/>\s+<TrafficHere v-if="record\.type === 'vessel'" :id="id" :read-only="readOnly" \/>\s+<MarketsNearby/);
 });
 
 test('Buy and Sell write the vessel\'s cargo and ledger in one save; one price roll per good; dice from the app\'s roller', () => {
@@ -114,7 +114,10 @@ test('Buy and Sell write the vessel\'s cargo and ledger in one save; one price r
     assert.match(screen, /let lines = postLedger\(ledger\.value, soldLine\(item\.lot, slot\.price\.price, worldName\.value, when\)\);[\s\S]{0,300}?cargo: removeCargo\(cargo\.value, item\.index\),\s+ledger: lines,/);
     assert.match(screen, /<div v-if="!buys\[lot\.d66\]\.price" class="th-acts">/, 'the price button goes once rolled');
     assert.match(screen, /import \{ cryptoFace \} from '\.\.\/dice\/roll\.ts';/);
-    assert.match(screen, /tradeChoice\(campaign\.settings/);
+    assert.match(screen, /const \{ rolled \} = useTradeSet\(\);/, 'one loader for the trade set (DF30)');
+    assert.doesNotMatch(screen, /tradeChoice\(|validateTableSet|apiFetch\(/, 'no loader of its own');
+    assert.match(read('workspace/trade_set.ts'), /tradeChoice\(campaign\.settings, ownSet\.value \? \[ownSet\.value\] : \[\]\)/);
+    assert.match(read('workspace/TrafficHere.vue'), /const \{ ownSet, rolled \} = useTradeSet\(\);/);
     assert.match(screen, /data-trade-set>\{\{ rolled\.label \}\}/);
     assert.match(screen, /here: !!lot\.origin && lot\.origin === worldName\.value/, 'a lot bought here is not sold here');
     assert.match(screen, /if \(free\.value !== null && tons > free\.value\)/, 'not past the hold');
@@ -128,4 +131,13 @@ test('the broker (DT5b): the fixer for the black market, the skill the referee s
     assert.match(screen, /if \(slot\.fee && slot\.price\.brokerFee !== null\) lines = postLedger\(lines, brokerFeeLine\(/);
     assert.match(screen, /A natural 2\. \{\{ informerWords \}\}/, 'the file\'s own words for the informer');
     assert.match(screen, /broker: withBroker \}, cryptoFace, tables\.value\)/);
+});
+
+test('the world under the ship falls back to the chart index row when the map has not read the sector (DF29)', async () => {
+    const screen = read('workspace/TradeHere.vue');
+    assert.match(screen, /truthAt\(at\.hexKey\) \?\? entryAt\(at\.hexKey\)/, 'the same read as Find passengers');
+    assert.match(screen, /if \(key\) void startMarkets\(\);/, 'the grid is asked for once the ship stands somewhere');
+    const { entryAt } = await import('../../apps/web/src/workspace/markets_near.ts');
+    assert.equal(entryAt('Spinward_Marches/1910'), null, 'nothing before the grid is in');
+    assert.equal(entryAt('nonsense'), null);
 });

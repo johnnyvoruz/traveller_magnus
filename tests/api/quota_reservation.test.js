@@ -62,20 +62,21 @@ function sqlFile(persistTo, sql) {
     runWrangler(['d1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--file', file]);
 }
 
-function jsonFrom(text) {
-    const start = text.indexOf('[');
-    const objectStart = text.indexOf('{');
-    const at = start === -1 ? objectStart : objectStart === -1 ? start : Math.min(start, objectStart);
-    if (at === -1) throw new Error(text);
-    return JSON.parse(text.slice(at));
+async function bytesOf(base, id, cookie) {
+    const read = await jsonFetch(`${base}/api/universes/${id}`, { headers: { cookie } });
+    assert.equal(read.status, 200, JSON.stringify(read.body));
+    return read.body.data.objectBytes;
 }
 
-function objectBytes(persistTo, id) {
-    const rows = jsonFrom(runWrangler([
-        'd1', 'execute', 'voyage', '--local', '--persist-to', persistTo, '--json', '--command',
-        `SELECT object_bytes AS n FROM universes WHERE id = '${id}'`,
-    ]));
-    return Number(rows[0].results[0].n);
+async function waitBytes(base, id, cookie, expected, label, timeoutMs = 30000) {
+    const deadline = Date.now() + timeoutMs;
+    let got = await bytesOf(base, id, cookie);
+    while (got !== expected && Date.now() < deadline) {
+        await sleep(200);
+        got = await bytesOf(base, id, cookie);
+    }
+    assert.equal(got, expected, `${label}: ${got} !== ${expected}`);
+    return got;
 }
 
 function sleep(ms) {
@@ -197,9 +198,10 @@ if (process.env.RUN_API_TESTS !== '1') {
                 body: JSON.stringify({ hexKeys: ['blank/1910'], edition: 'MgT2E', generator: 'top-down', roll: 0, baseRev: 0 }),
             });
             assert.equal(first.status, 200, JSON.stringify(first.body));
-            assert.equal(objectBytes(persistTo, id), treeSize('blank/1910'));
+            await waitBytes(base, id, cookie, treeSize('blank/1910'), 'first generate');
 
             sqlFile(persistTo, `UPDATE universes SET object_bytes = ${QUOTA} WHERE id = '${id}';`);
+            await waitBytes(base, id, cookie, QUOTA, 'filled to the cap');
             const alone = await jsonFetch(`${base}/api/universes/${id}/generate`, {
                 method: 'POST',
                 headers,
@@ -208,12 +210,13 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(alone.status, 400, JSON.stringify(alone.body));
             assert.equal(alone.body.error.code, 'too_large');
             assert.equal(alone.body.error.message, QUOTA_SENTENCE);
-            assert.equal(objectBytes(persistTo, id), QUOTA);
+            await waitBytes(base, id, cookie, QUOTA, 'a refused generate adds nothing');
 
             const left = webp(1000, 1);
             const right = webp(2000, 2);
             const room = left.length + right.length - 1;
             sqlFile(persistTo, `UPDATE universes SET object_bytes = ${QUOTA - room} WHERE id = '${id}';`);
+            await waitBytes(base, id, cookie, QUOTA - room, 'room for one image');
             const put = (bytes) => fetch(`${base}/api/universes/${id}/objects/${sha(bytes)}`, {
                 method: 'PUT',
                 headers: { cookie, 'content-type': 'image/webp' },
@@ -226,12 +229,12 @@ if (process.env.RUN_API_TESTS !== '1') {
             const refusedBody = bodies[raced.findIndex((item) => item.status === 400)];
             assert.equal(refusedBody.error.message, QUOTA_SENTENCE);
             const winner = raced[0].status === 201 ? left.length : right.length;
-            const afterRace = objectBytes(persistTo, id);
-            assert.equal(afterRace, QUOTA - room + winner);
+            const afterRace = await waitBytes(base, id, cookie, QUOTA - room + winner, 'after the race');
             assert.ok(afterRace <= QUOTA);
 
             const slice = treeSize('blank/0101') + treeSize('blank/0102');
             sqlFile(persistTo, `UPDATE universes SET object_bytes = ${QUOTA - slice} WHERE id = '${id}';`);
+            await waitBytes(base, id, cookie, QUOTA - slice, 'room for the slice');
             const posted = await jsonFetch(`${base}/api/universes/${id}/generate`, {
                 method: 'POST',
                 headers,
@@ -256,7 +259,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             const heldBody = await held.json();
             assert.equal(held.status, 400, JSON.stringify(heldBody));
             assert.equal(heldBody.error.message, QUOTA_SENTENCE);
-            assert.equal(objectBytes(persistTo, id), QUOTA - slice);
+            await waitBytes(base, id, cookie, QUOTA - slice, 'a held put adds nothing');
             while (Date.now() < hold.expiresAt + 250) await sleep(50);
             const expiredImage = webp(64, 10);
             const expired = await put(expiredImage);
@@ -266,13 +269,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(finished.state, 'done', JSON.stringify(finished));
             // The reservation this test read has ended. The image stored after that stays,
             // and finishCounts then adds the slice, so the universe is over the cap by that image.
-            const chargeBy = Date.now() + 90000;
-            let charged = objectBytes(persistTo, id);
-            while (charged !== QUOTA + expiredImage.length && Date.now() < chargeBy) {
-                await sleep(200);
-                charged = objectBytes(persistTo, id);
-            }
-            assert.equal(charged, QUOTA + expiredImage.length);
+            await waitBytes(base, id, cookie, QUOTA + expiredImage.length, 'charged after the hold', 90000);
         } finally {
             if (child) stopDev(child.pid);
             if (ownedPersist) removeTree(persistTo);

@@ -49,16 +49,15 @@ test('two thousand records filter inside one frame', () => {
             tags: i === 50 ? ['courier'] : [],
         });
     }
-    // One run warms the engine; the best of five is the filter's own time, not the machine's load
-    // (the whole suite runs files side by side).
+    // One warm-up, then the best of three. The budget stays 50 ms (AQ3).
     let hits = filterMentions(records, 'courier');
-    let elapsed = Infinity;
-    for (let run = 0; run < 5; run++) {
+    let best = Infinity;
+    for (let run = 0; run < 3; run += 1) {
         const started = performance.now();
         hits = filterMentions(records, 'courier');
-        elapsed = Math.min(elapsed, performance.now() - started);
+        best = Math.min(best, performance.now() - started);
     }
-    assert.ok(elapsed < 50, 'filter took ' + elapsed.toFixed(1) + ' ms');
+    assert.ok(best < 50, 'the best of three filters took ' + best.toFixed(1) + ' ms');
     assert.deepEqual(hits.map((hit) => hit.name), ['Person 0050', 'Person 1999']);
     assert.equal(filterMentions(records, '').length, 8);
     assert.equal(filterMentions({}, '').length, 0);

@@ -52,6 +52,26 @@ defineEmits<{ toggle: [] }>();
   margin: 0;
 }
 
+/* A phone: the kicker's spacing was wider than the slot left beside the tools, so the title clipped. */
+@media (max-width: 599px) {
+  .doss-fold-head {
+    flex-wrap: wrap;
+  }
+
+  .doss-fold-head .ui-heading {
+    flex-basis: 100%;
+    min-width: min(100%, max-content);
+  }
+
+  .doss-fold-toggle {
+    min-height: 44px;
+  }
+
+  .doss-fold-toggle span {
+    padding-right: 0.4em;
+  }
+}
+
 .doss-fold-toggle {
   display: flex;
   align-items: center;

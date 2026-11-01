@@ -147,9 +147,10 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('demo campaign on the worker', { skip: 'wrangler is absent' }, () => {});
 } else {
     test('demo campaign on the worker', { timeout: 180000 }, async () => {
-        const persistTo = path.join(root, '.tmp', 'lane-b-demo');
-        removeTree(persistTo);
-        const port = 18901;
+        const ownedPersist = !process.env.VOYAGE_PERSIST_TO;
+        const persistTo = process.env.VOYAGE_PERSIST_TO || mkdtempSync(path.join(tmpdir(), 'voyage-demo-'));
+        const port = Number(process.env.VOYAGE_API_PORT || 18901);
+        const inspectorPort = Number(process.env.VOYAGE_INSPECTOR_PORT || 19901);
         const base = `http://127.0.0.1:${port}`;
         let child;
         try {
@@ -163,7 +164,7 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
 `);
             const ownerId = `dmo${stamp}`;
             const owner = userCookie(ownerId, `${ownerId}@localhost`, persistTo);
-            child = startDev({ port, persistTo, inspectorPort: 19901 });
+            child = startDev({ port, persistTo, inspectorPort });
             await up(base);
             const origin = base;
             const headers = { 'content-type': 'application/json', cookie: owner, origin };
@@ -248,38 +249,39 @@ UPDATE universes SET demo = 1, created_at = '2026-10-02T00:00:00.000Z' WHERE id 
             assert.equal(published.body.ok, true);
             const data = published.body.data;
             assert.deepEqual(Object.keys(data).sort(), ['clock', 'journal', 'links', 'records', 'settings']);
-            assert.equal('pendingProposals' in data, false);
+            assert.equal('pendingProposals' in data, false, 'pendingProposals');
             assert.equal(data.records.length, 1);
             assert.equal(data.records[0].name, 'Open barge');
             assert.equal(data.records[0].status.fuelTons, 12);
             assert.equal(data.records[0].status.fuelMark, undefined);
-            assert.equal('rev' in data.records[0], false);
-            assert.equal('provenance' in data.records[0], false);
+            assert.equal('rev' in data.records[0], false, 'record rev');
+            assert.equal('provenance' in data.records[0], false, 'provenance');
             assert.equal(data.journal.length, 1);
             assert.equal(data.journal[0].title, 'Heard at the port');
-            assert.equal('rev' in data.journal[0], false);
-            assert.equal('authorId' in data.journal[0], false);
-            assert.equal('authorName' in data.journal[0], false);
+            assert.equal('rev' in data.journal[0], false, 'journal rev');
+            assert.equal('authorId' in data.journal[0], false, 'authorId');
+            assert.equal('authorName' in data.journal[0], false, 'authorName');
+            assert.equal('authorRole' in data.journal[0], false, 'authorRole');
             const packed = JSON.stringify(published.body);
-            assert.equal(packed.includes(ownerId), false);
-            assert.equal(packed.includes('Secret patron'), false);
-            assert.equal(packed.includes('The patron is a plant.'), false);
-            assert.equal(packed.includes('do-not-publish'), false);
-            assert.equal(packed.includes('uni_secret_origin'), false);
-            assert.equal(packed.includes('rec_secret_origin'), false);
-            assert.equal(packed.includes('Do not tell the players'), false);
-            assert.equal(packed.includes('Other ship'), false);
-            assert.equal(packed.includes(olderId), false);
-            assert.equal(packed.includes(newerId), false);
-            assert.equal(packed.includes(INSIDE), false);
-            assert.equal(packed.includes(':::referee'), false);
-            assert.equal(packed.includes('\n:::'), false);
+            assert.equal(packed.includes(ownerId), false, 'owner id');
+            assert.equal(packed.includes('Secret patron'), false, 'secret name');
+            assert.equal(packed.includes('The patron is a plant.'), false, 'secret body');
+            assert.equal(packed.includes('do-not-publish'), false, 'dossier');
+            assert.equal(packed.includes('uni_secret_origin'), false, 'origin universe');
+            assert.equal(packed.includes('rec_secret_origin'), false, 'origin record');
+            assert.equal(packed.includes('Do not tell the players'), false, 'hidden title');
+            assert.equal(packed.includes('Other ship'), false, 'other ship');
+            assert.equal(packed.includes(olderId), false, 'older id');
+            assert.equal(packed.includes(newerId), false, 'newer id');
+            assert.equal(packed.includes(INSIDE), false, 'referee block');
+            assert.equal(packed.includes(':::referee'), false, 'referee fence');
+            assert.equal(packed.includes('\n:::'), false, 'fence');
             assert.equal(packed.includes(OUTSIDE), true);
             assert.match(data.records[0].details, /Still The port is open\./);
             assert.match(data.records[0].summary, /The port is open\./);
-            assert.equal(data.records[0].summary.includes('Still'), false);
+            assert.equal(data.records[0].summary.includes('Still'), false, 'summary still');
             assert.match(data.journal[0].body, /Still The port is open\./);
-            assert.equal(data.journal[0].body.includes(INSIDE), false);
+            assert.equal(data.journal[0].body.includes(INSIDE), false, 'journal inside');
 
             sqlFile(persistTo, `UPDATE universes SET deleted_at = '${STAMP}' WHERE id = '${olderId}';`);
             const later = await jsonFetch(`${base}/api/demo/campaign`);
@@ -287,10 +289,12 @@ UPDATE universes SET demo = 1, created_at = '2026-10-02T00:00:00.000Z' WHERE id 
             assert.equal(later.body.data.records.length, 1);
             assert.equal(later.body.data.records[0].name, 'Other ship');
 
-            let limited = null;
-            for (let n = 0; n < 61; n += 1) {
-                limited = await jsonFetch(`${base}/api/demo/campaign`, { headers: { 'cf-connecting-ip': '203.0.113.50' } });
-            }
+            const burstIp = '203.0.113.50';
+            const burst = await Promise.all(Array.from({ length: 61 }, () => jsonFetch(`${base}/api/demo/campaign`, {
+                headers: { 'cf-connecting-ip': burstIp },
+            })));
+            const limited = burst.find((item) => item.status === 429);
+            assert.ok(limited, `rate limit missing: ${burst.map((item) => item.status).join(',')}`);
             assert.equal(limited.status, 429, JSON.stringify(limited.body));
             assert.equal(limited.body.error.code, 'rate_limited');
             assert.equal(limited.body.error.message, 'Too many requests.');
@@ -300,7 +304,7 @@ UPDATE universes SET demo = 1, created_at = '2026-10-02T00:00:00.000Z' WHERE id 
             assert.equal(otherIp.body.data.records[0].name, 'Other ship');
         } finally {
             stopDev(child?.pid);
-            removeTree(persistTo);
+            if (ownedPersist) removeTree(persistTo);
         }
     });
 }

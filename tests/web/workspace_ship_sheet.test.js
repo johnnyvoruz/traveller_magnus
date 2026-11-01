@@ -1,5 +1,5 @@
 /**
- * The ship sheet's fields (apps/web/src/workspace/ship_sheet.ts): the 312 fields of the
+ * The ship sheet's fields (apps/web/src/workspace/ship_sheet.ts): the 314 fields of the
  * PDF through the generated wrapper, laid out in the PDF's sections and order, numbered
  * series as tables, values stored under the PDF's own names beside the deck plan.
  */
@@ -9,8 +9,8 @@ import {
     fieldNamed, fieldsOf, filledCount, isTall, SHEET_RULES, sheetSections, sheetWithFields, valueOf, withValue,
 } from '../../apps/web/src/workspace/ship_sheet.ts';
 
-test('the 312 fields come through the generated wrapper, with the PDF as their source', () => {
-    assert.equal(SHEET_RULES.fields.length, 312);
+test('the 314 fields come through the generated wrapper, with the PDF as their source', () => {
+    assert.equal(SHEET_RULES.fields.length, 314);
     assert.match(SHEET_RULES.source, /Ship Sheet 2026_fillable\.pdf$/);
     assert.equal(SHEET_RULES.fields.filter((f) => f.type === 'checkbox').length, 66);
     assert.equal(fieldNamed('Hull Points').type, 'text');
@@ -28,8 +28,11 @@ test('the sections come in page order and keep the PDF’s spellings', () => {
         '2 Passengers', '2 Crew', '2 Systems', '2 Notes',
     ]);
     const every = sections.flatMap((s) => s.blocks.flatMap((b) => (b.kind === 'row' ? b.cells.map((c) => c.field) : b.cells.flat().filter(Boolean))));
-    assert.equal(every.length, 312, 'every field is laid out once');
-    assert.equal(new Set(every.map((f) => f.name)).size, 312);
+    assert.equal(every.length, 314, 'every field is laid out once');
+    assert.equal(new Set(every.map((f) => f.name)).size, 314);
+    const passengers = sections.find((s) => s.name === 'Passengers');
+    const roomRow = passengers.blocks.find((b) => b.kind === 'row' && b.cells.some((c) => c.field.name === 'Staterooms'));
+    assert.deepEqual(roomRow.cells.map((c) => c.field.name), ['Staterooms', 'Low Berths']);
 });
 
 test('numbered series are tables: weapons across the page, the critical hits as rows of ticks', () => {

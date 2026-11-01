@@ -10,6 +10,7 @@ import { eligible } from '../chatter.ts';
 import type { SystemFacts } from '../facts.ts';
 import { portStaffed, type ProceduralContext, type RadioChannel, type RadioEvent } from './events.ts';
 import { pairFrom, rosterFor, seeded } from './roster.ts';
+import { resolveSlots } from './slots.ts';
 import { flavorLines } from '../lines/flavor.ts';
 import { broadcastAdvertIds, broadcastLines, broadcastSources } from '../lines/broadcasts.ts';
 import { spaceWeatherRevisions } from '../lines/revisions.ts';
@@ -91,27 +92,7 @@ export function corpusPool(lines: readonly ChatterLineData[], f: SystemFacts): C
     return lines.filter((line) => corpusGate(line, f) && resolveSlots(line.text, f, ['a', 'b']) !== null);
 }
 
-/** Fill the slots; null when one cannot be filled (the line then never plays). */
-export function resolveSlots(text: string, f: SystemFacts, ships: readonly [string, string] | readonly string[]): string | null {
-    let missing = false;
-    const out = text.replace(/\{(\w+)\}/g, (_, slot: string) => {
-        let value: string | undefined;
-        switch (slot) {
-            case 'world': value = f.name || f.hexKey; break;
-            case 'port': value = f.name + (f.highport === true ? ' Highport' : ' Downport'); break;
-            case 'starport': value = f.starport; break;
-            case 'ship': value = ships[0]; break;
-            case 'ship2': value = ships[1]; break;
-            case 'sector': value = f.sector; break;
-            case 'subsector': value = f.subsector; break;
-            case 'date': value = `${String(f.day).padStart(3, '0')}-1105`; break;
-            case 'gasGiant': case 'belt': case 'moon': case 'body': value = f.bodies[slot]; break;
-        }
-        if (!value) missing = true;
-        return value ?? '';
-    });
-    return missing ? null : out;
-}
+export { resolveSlots };
 
 function stationOf(f: SystemFacts): string {
     if (f.highport === true) return `${f.name} Highport`;

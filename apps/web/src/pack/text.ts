@@ -1,66 +1,44 @@
 /**
- * Text the Player Pack is allowed to show. A token is read with the journal's
- * splitter. A hidden record becomes the words "a record", and the label stored
- * in the token is ignored. A hex token keeps the label the referee wrote, or
- * the hex key when that label is empty. Nothing here looks up a world's name.
+ * Text the Player Pack is allowed to show. The words come from the players
+ * projection (`redactString`): a fence is dropped, a hidden record's token
+ * becomes "a record", a players record's token becomes its name, a hex token
+ * keeps the label the referee wrote or the hex key, and a bare hidden id is
+ * replaced. The mention count is the pack's own: the projection does not count.
  */
-import type { CampaignRecord } from '@voyage/shared';
+import { redactString, stripRefereeBlocks, type CampaignRecord } from '@voyage/shared';
 import { bodyParts } from '../workspace/journal/body.ts';
-
-const TOKEN = /\[\[(cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:[^/\]|]+\/\d{4})(?:\|([^\]]*))?\]\]/gi;
 
 export type RedactCounts = { mentions: number };
 
-function playersRecord(records: Readonly<Record<string, CampaignRecord>>, id: string): CampaignRecord | null {
-    const found = records[id];
-    if (!found || found.deleted || found.visibility !== 'players') return null;
-    return found;
+function hiddenIds(records: Readonly<Record<string, CampaignRecord>>): string[] {
+    const ids: string[] = [];
+    for (const record of Object.values(records)) {
+        if (!record || record.deleted || record.visibility !== 'players') ids.push(record.id);
+    }
+    return ids;
 }
 
-/** Written hex labels, in the order the tokens appear. An empty string means the token had none. */
-function hexLabels(text: string): string[] {
-    const labels: string[] = [];
-    for (const match of text.matchAll(TOKEN)) {
-        const target = match[1] ?? '';
-        if (!target.startsWith('hex:')) continue;
-        labels.push(match[2] ? match[2].trim() : '');
+/** Hidden record tokens in text that has already had its referee fences removed. */
+function hiddenMentions(open: string, records: Readonly<Record<string, CampaignRecord>>): number {
+    let n = 0;
+    for (const part of bodyParts(open, () => null)) {
+        if (part.kind !== 'record') continue;
+        const found = records[part.id];
+        if (!found || found.deleted || found.visibility !== 'players') n += 1;
     }
-    return labels;
+    return n;
 }
 
 /**
- * The text a player may read. `nameOf` inside the journal splitter returns a
- * player record's current name, and null for a hex and for anything hidden.
+ * The text a player may read. `counts.mentions` grows by each hidden record
+ * token. A hex token is not a mention.
  */
 export function redactText(
     text: string,
     records: Readonly<Record<string, CampaignRecord>>,
     counts: RedactCounts,
 ): string {
-    const parts = bodyParts(text, (target) => {
-        if (target.startsWith('hex:')) return null;
-        const found = playersRecord(records, target);
-        return found ? found.name : null;
-    });
-    const labels = hexLabels(text);
-    let hexAt = 0;
-    let out = '';
-    for (const part of parts) {
-        if (part.kind === 'text') {
-            out += part.text;
-            continue;
-        }
-        if (part.kind === 'hex') {
-            const written = labels[hexAt] ?? '';
-            hexAt += 1;
-            out += written || part.hexKey;
-            continue;
-        }
-        if (playersRecord(records, part.id)) out += playersRecord(records, part.id)!.name;
-        else {
-            out += 'a record';
-            counts.mentions += 1;
-        }
-    }
-    return out;
+    const open = stripRefereeBlocks(text);
+    counts.mentions += hiddenMentions(open, records);
+    return redactString(text, Object.values(records), hiddenIds(records));
 }

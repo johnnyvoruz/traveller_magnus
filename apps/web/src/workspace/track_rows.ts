@@ -19,6 +19,8 @@ export type TrackRow = {
     moves: boolean;
     departs: string;
     arrives: string;
+    /** The arrival as the clock counts it (days with a fraction), for Advance to the arrival (DU39). */
+    arrivesDays: number;
     /** "2 G" for a flight that says its acceleration, else empty. */
     accel: string;
     note: string;
@@ -63,6 +65,7 @@ export function trackRows(legs: readonly TrackLeg[], records: Readonly<Record<st
             moves: from !== to,
             departs: whenWords(leg.departs),
             arrives: whenWords(leg.arrives),
+            arrivesDays: leg.arrives,
             accel: leg.mode === 'flight' && leg.accelG ? leg.accelG + ' G' : '',
             note: leg.note ?? '',
         };

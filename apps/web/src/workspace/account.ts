@@ -6,7 +6,7 @@ import { ref } from 'vue';
 import type { SessionUser } from '../account/session.ts';
 
 /** What an account is for, in one sentence. The second says the viewer needs none. */
-export const SIGN_IN_PITCH = 'Keep a private campaign on top of this map: people, places, jobs, your ship.';
+export const SIGN_IN_PITCH = 'Keep a private campaign on top of this map: people, places, jobs, and your ship.';
 export const SIGN_IN_FREE = 'The map works the same without an account.';
 /** The card opened from the rail's switched-off Build item: what Build is, in place of the campaign's line. */
 export const SIGN_IN_PITCH_BUILD = 'Sign in to use Build. It generates systems on a copy of the map that’s yours.';

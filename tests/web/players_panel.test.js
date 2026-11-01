@@ -126,7 +126,7 @@ test('the panel: player screens in place of the referee\'s; the journal\'s one w
     assert.match(panel, /if \(isPlayer\.value && kind !== 'note'\) return;/);
     assert.match(panel, /<p v-if="status === 'gone'" class="camp-strip is-error" role="alert" data-campaign-gone>\{\{ NOT_IN_CAMPAIGN \}\}<\/p>/);
     assert.match(panel, /watch\(\(\) => props\.open && status\.value === 'ready' && !viewAs\.on, \(on\) => \{ watchCampaignPanel\(on\); \}, \{ immediate: true \}\);/);
-    assert.match(panel, /<ViewAsBar v-if="status === 'ready' && !example\.on" \/>/, 'not in the example campaign (DL8)');
+    assert.match(panel, /<ViewAsBar v-if="status === 'ready' && !example\.on" :place="viewAsInHead \? 'banner' : 'bar'" \/>/, 'not in the example campaign (DL8)');
     const journal = read('workspace/journal/JournalList.vue');
     assert.match(journal, /<button v-if="player"[^>]*data-player-add-note[^>]*>\s*<Icon name="plus" :size="13" \/>Add a note/);
     assert.match(journal, /<div v-if="!first && !player" class="jn-pack">/, 'the Player Pack and its counts are the referee\'s');

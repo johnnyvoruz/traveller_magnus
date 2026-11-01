@@ -1,7 +1,7 @@
 /**
  * One surface map, off screen, at the paper's pixels (CS11). The live canvases are not
- * touched. Paper is ink on white. Full colour is the painted sheet, without the hover tags
- * and without the day-and-night layer, which is the WebGL pass.
+ * touched. Both looks sit on the paper token: no dark page. Full colour keeps the painted
+ * terrain. The words are the print text. Hover tags and the day-and-night layer stay off.
  */
 import { captionY, CAPTION_PX, FILL, paperPixels, type Look, type Paper } from '../capture/paper.ts';
 import { createCanvas, canvasToBlob, now, saveBlob } from '../platform/browser.ts';
@@ -9,7 +9,7 @@ import { CONTINENTAL_DEFINITION, COASTLINE_COMPLEXITY, VANILLA_MASTER_SEED, diam
 import { createHybridPaint } from './hybrid/paint.ts';
 import { layoutFor, type SheetLayout } from './hybrid/field.ts';
 import { latticeNet, NET_HEIGHT, NET_WIDTH } from './hybrid/grid.ts';
-import { drawCode, type IconSet } from './hybrid/icons.ts';
+import { drawCode, type IconSet, type Tinter } from './hybrid/icons.ts';
 import { CODE_TABLE, type SurfaceCode } from './hybrid/codes.ts';
 import type { HexRecord, HybridModel } from './hybrid/model.ts';
 import { drawSymbols, legendBlocks, legendGroups } from './hybrid/symbols.ts';
@@ -34,6 +34,8 @@ export type SurfaceShot = {
     hexKey: string;
     /** Symbols are on in the view. The saved full-colour sheet draws them, and not the hover. */
     symbols: boolean;
+    /** Recolours an icon to the ink. The paper sheet asks for the text ink. */
+    tint?: Tinter;
     worldName: string;
 };
 
@@ -82,12 +84,15 @@ function channels(colour: string): [number, number, number] {
     return [22, 24, 28];
 }
 
-/** Four grey steps from the print tokens. Pale ground becomes ice; the darkest water stays sea. */
+/**
+ * Four pale steps (CP9). The vanilla sheet has no hex model, so it cannot carry symbols.
+ * The ramp stays light and the steps stay apart in grey. The page shows through empty pixels.
+ */
 function greyTerrain(pixels: Uint8ClampedArray, ink: SurfaceInk): void {
-    const sea = channels(ink.sea);
-    const shallow = channels(ink.shallow);
-    const land = channels(ink.land);
-    const ice = channels(ink.ice);
+    const sea = channels(ink.wash);
+    const shallow = channels(ink.washShallow);
+    const land = channels(ink.washLand);
+    const ice = channels(ink.washIce);
     const paper = channels(ink.paper);
     for (let i = 0; i < pixels.length; i += 4) {
         if (pixels[i + 3] < 16) {
@@ -106,12 +111,11 @@ function greyTerrain(pixels: Uint8ClampedArray, ink: SurfaceInk): void {
     }
 }
 
-function terrainInk(hex: HexRecord, ink: SurfaceInk): string {
-    if (hex.terrain === 'SI' || hex.terrain === 'IF' || hex.terrain === 'IC' || hex.terrain === 'FR') return ink.ice;
-    if (hex.terrain === 'SH') return ink.shallow;
-    if (hex.water) return ink.sea;
-    if (hex.accents.includes('MT')) return ink.high;
-    return ink.land;
+/** Ocean and shallows only. Ice and land stay the page and carry a symbol. */
+function paperWash(hex: HexRecord, ink: SurfaceInk): string | null {
+    if (hex.terrain === 'SH') return ink.washShallow;
+    if (hex.terrain === 'OC') return ink.wash;
+    return null;
 }
 
 function swatchInk(code: SurfaceCode, ink: SurfaceInk): string {
@@ -126,7 +130,7 @@ function swatchInk(code: SurfaceCode, ink: SurfaceInk): string {
 
 type Point = [number, number];
 
-function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout: SheetLayout, ink: SurfaceInk, worldName: string, font: string): void {
+function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout: SheetLayout, ink: SurfaceInk, iconSet: IconSet | null, tint: Tinter | undefined, worldName: string, font: string): void {
     const grid = model.grid;
     const n = grid.n;
     const s = layout.side;
@@ -147,8 +151,10 @@ function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout:
                 for (const tri of tris) {
                     const hex = hexAt(fi, tri[0][0], tri[0][1]);
                     if (!hex) continue;
+                    const wash = paperWash(hex, ink);
+                    if (!wash) continue;
                     const p = tri.map(([a, b]) => at(face, a, b));
-                    ctx.fillStyle = terrainInk(hex, ink);
+                    ctx.fillStyle = wash;
                     ctx.beginPath();
                     ctx.moveTo(p[0][0], p[0][1]);
                     ctx.lineTo(p[1][0], p[1][1]);
@@ -191,6 +197,17 @@ function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout:
     ctx.strokeStyle = ink.coast;
     ctx.lineWidth = Math.max(0.7, (s / n) * 0.07);
     strokeEdges(true);
+    const cell = s / n;
+    drawSymbols(ctx, model, layout, {
+        set: iconSet,
+        tint,
+        outlines: true,
+        icons: true,
+        ink: ink.text,
+        outlineInk: ink.grid,
+        outlineWidth: Math.max(0.35, cell * 0.045),
+        iconRadius: cell * 0.4,
+    });
     if (model.starportHex === null || !worldName) return;
     grid.faces.forEach((face, fi) => {
         for (let i = 0; i <= n; i += 1) {
@@ -211,11 +228,11 @@ function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout:
     });
 }
 
-function drawLegend(ctx: CanvasRenderingContext2D, model: HybridModel, iconSet: IconSet | null, ink: SurfaceInk, frame: { x: number; y: number; w: number; h: number }, font: string, look: Look, screenText: string): void {
+function drawLegend(ctx: CanvasRenderingContext2D, model: HybridModel, iconSet: IconSet | null, ink: SurfaceInk, frame: { x: number; y: number; w: number; h: number }, font: string, look: Look, tint: Tinter | undefined): void {
     const codes = legendBlocks(legendGroups(model).here).flatMap((block) => block.codes);
     if (codes.length === 0) return;
     const cols = codes.length > 18 ? 4 : 3;
-    const rowH = 14;
+    const rowH = look === 'paper' ? 18 : 14;
     const colW = frame.w / cols;
     const top = frame.y + frame.h + 10;
     ctx.font = '11px ' + font;
@@ -224,11 +241,15 @@ function drawLegend(ctx: CanvasRenderingContext2D, model: HybridModel, iconSet: 
     codes.forEach((code, index) => {
         const x = frame.x + (index % cols) * colW;
         const y = top + Math.floor(index / cols) * rowH;
-        ctx.fillStyle = look === 'paper' ? swatchInk(code, ink) : ink.text;
-        ctx.fillRect(x, y - 5, 10, 10);
-        if (look === 'screen') drawCode(ctx, iconSet, code, x + 5, y, 5, ink.text);
-        ctx.fillStyle = look === 'paper' ? ink.text : screenText;
-        ctx.fillText(CODE_TABLE[code].name, x + 14, y);
+        if (look === 'paper') {
+            drawCode(ctx, iconSet, code, x + 8, y, 6.5, ink.text, { tint });
+        } else {
+            ctx.fillStyle = swatchInk(code, ink);
+            ctx.fillRect(x, y - 5, 10, 10);
+            drawCode(ctx, iconSet, code, x + 5, y, 5, ink.text, { tint });
+        }
+        ctx.fillStyle = ink.text;
+        ctx.fillText(CODE_TABLE[code].name, look === 'paper' ? x + 18 : x + 14, y);
     });
 }
 
@@ -249,9 +270,8 @@ export type SurfaceCaptureInput = {
     paper: Paper;
     look: Look;
     ink: SurfaceInk;
+    /** The page. Both looks pass the paper token: the saved image has no dark background. */
     ground: string;
-    /** Words on the full-colour page. Paper uses the print text tokens. */
-    screenText: string;
     font: string;
     caption: string;
     fileName: string;
@@ -279,7 +299,7 @@ export async function captureSurface(input: SurfaceCaptureInput): Promise<boolea
             ctx.save();
             ctx.translate(frame.x, frame.y);
             const layout = layoutFor(frame.w, frame.h, frame.h / NET_HEIGHT);
-            drawPaperNet(ctx, model, layout, input.ink, input.shot.worldName, input.font);
+            drawPaperNet(ctx, model, layout, input.ink, input.shot.iconSet, input.shot.tint, input.shot.worldName, input.font);
             ctx.restore();
         } else {
             const layout = layoutFor(dw, dh, dh / NET_HEIGHT);
@@ -289,11 +309,11 @@ export async function captureSurface(input: SurfaceCaptureInput): Promise<boolea
             if (!painted) return false;
             painted.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, dw, dh), 0, 0);
             if (input.shot.symbols) {
-                drawSymbols(painted, model, layout, { set: input.shot.iconSet, outlines: false, icons: true });
+                drawSymbols(painted, model, layout, { set: input.shot.iconSet, tint: input.shot.tint, outlines: false, icons: true });
             }
             ctx.drawImage(scratch, frame.x, frame.y, frame.w, frame.h);
         }
-        drawLegend(ctx, model, input.shot.iconSet, input.ink, frame, input.font, input.look, input.screenText);
+        drawLegend(ctx, model, input.shot.iconSet, input.ink, frame, input.font, input.look, input.shot.tint);
     } else {
         const spec = diamondMapSpec(input.shot.body, input.shot.hexKey);
         if (!spec) return false;
@@ -319,9 +339,9 @@ export async function captureSurface(input: SurfaceCaptureInput): Promise<boolea
             ctx.translate(frame.x, frame.y);
             ctx.save();
             applyDiamondClip(ctx, frame.w, frame.h, 5);
-            drawHexGrid(ctx, frame.w, frame.h, sizeCode, 5, input.ink.grid, 0.6);
+            drawHexGrid(ctx, frame.w, frame.h, sizeCode, 5, input.ink.grid, 1.4);
             ctx.restore();
-            drawDiamondSeparators(ctx, frame.w, frame.h, 5, input.ink.coast, 1);
+            drawDiamondSeparators(ctx, frame.w, frame.h, 5, input.ink.coast, 1.8);
             ctx.font = '12px ' + input.font;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -335,7 +355,7 @@ export async function captureSurface(input: SurfaceCaptureInput): Promise<boolea
     }
 
     ctx.setTransform(px.dpr, 0, 0, px.dpr, 0, 0);
-    drawCaption(ctx, input.caption, px.width, px.height, input.font, input.look === 'paper' ? input.ink.muted : input.screenText);
+    drawCaption(ctx, input.caption, px.width, px.height, input.font, input.ink.muted);
     const blob = await canvasToBlob(canvas);
     if (!blob) return false;
     saveBlob(blob, input.fileName);

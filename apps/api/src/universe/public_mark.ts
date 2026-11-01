@@ -98,7 +98,7 @@ export async function writePublicMark(env: Env, universeId: string, truthVersion
         for (const record of document.records) recordMap[record.id] = record;
         const days = document.clock ? document.clock.days : PUBLIC_DEFAULT_DAYS;
         const meta = publicCardsReady() ? await readCardMeta(env, universeId) : null;
-        const journal = meta ? publicCardJournal(document.journal) : [];
+        const journal = meta ? publicCardJournal(document.journal, document.records) : [];
         const storeCourse = await courseReady(env.DB);
         const showCourse = storeCourse ? await readShowCourse(env, universeId) : true;
         const storeClass = await shipClassReady(env.DB);

@@ -56,10 +56,37 @@ test('passengers: an empty red-zone world and a long jump find nobody', () => {
         from: world({ starport: 'X', population: 0, zone: 'red' }), to: world({ starport: 'E', population: 1 }), parsecs: 3, face,
     });
     assert.equal(face.left(), 0, 'a 0 row rolls no dice');
-    assert.equal(r.sharedDm, -4 - 3 - 4 - 4 - 1 - 2);
+    assert.equal(r.sharedDm, -4 - 3 - 4 - 4 - 1 - 2 - 3);
+    assert.equal(r.sharedDms.find((d) => d.label.startsWith('Chief Steward')).dm, -3);
     assert.deepEqual(r.rolls.map((x) => x.count), [0, 0, 0, 0]);
     assert.deepEqual(r.rolls.map((x) => x.row), ['1 or less', '1 or less', '1 or less', '1 or less']);
     assert.ok(r.sharedDms.some((d) => d.label === 'Each parsec of destination past the first (2)' && d.dm === -2));
+});
+
+test('Chief Steward: no skill is DM-3, and Steward 0 and Steward 2 add the level', () => {
+    const base = {
+        from: world({ starport: 'X', population: 0, zone: 'red' }),
+        to: world({ starport: 'X', population: 0, zone: 'red' }),
+        parsecs: 1,
+    };
+    const quiet = () => faces(6, 6, 6, 6, 6, 6, 6, 6);
+    const line = (r) => r.sharedDms.find((d) => d.label.startsWith('Chief Steward'));
+    const none = passengerTraffic({ ...base, face: quiet() });
+    const zero = passengerTraffic({ ...base, steward: 0, face: quiet() });
+    const two = passengerTraffic({ ...base, steward: 2, face: quiet() });
+    assert.equal(line(none).label, 'Chief Steward (no steward aboard: untrained, DM-3)');
+    assert.equal(line(none).dm, -3);
+    assert.ok(line(none).cites.includes('assets/trade.txt:97-98'));
+    assert.ok(line(none).cites.includes('directives/decisions.md (2026-10-30, question 102)'));
+    assert.equal(line(zero).label, 'Chief Steward');
+    assert.equal(line(zero).dm, 0);
+    assert.deepEqual(line(zero).cites, ['assets/trade.txt:97-98']);
+    assert.equal(line(two).label, 'Chief Steward');
+    assert.equal(line(two).dm, 2);
+    assert.deepEqual(line(two).cites, ['assets/trade.txt:97-98']);
+    assert.equal(zero.sharedDm - none.sharedDm, 3);
+    assert.equal(two.sharedDm - zero.sharedDm, 2);
+    assert.equal(none.rolls.every((roll) => roll.count === 0), true);
 });
 
 test('freight: three rolls, Incidental to Major, then each lot\'s tons', () => {

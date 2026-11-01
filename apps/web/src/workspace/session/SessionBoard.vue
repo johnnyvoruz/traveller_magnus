@@ -433,6 +433,12 @@ watch(() => [now.value !== null, entry.value !== null, campaign.status] as const
   font-variant-numeric: var(--tabular);
 }
 
+@media (max-width: 599px) {
+  .sess-steps .ui-btn {
+    min-height: 44px;
+  }
+}
+
 /* The party: the Where block as the Party tab has it, then each ship with who is aboard. */
 .sess-party .where {
   margin-top: 0;

@@ -486,7 +486,7 @@ function onGrabClick(): void {
     place-items: center;
     flex: 0 0 auto;
     width: 100%;
-    height: 32px;
+    height: 44px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -504,13 +504,17 @@ function onGrabClick(): void {
     cursor: grabbing;
   }
 
-  /* The date sits under the search, still above the sheet. Wider windows keep it hidden. */
+  /* The date sits under the search, still above the half sheet. A full sheet covers that place. */
   .app .stardate {
     display: inline-flex;
     z-index: 6;
     top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
     left: auto;
     right: var(--chrome-inset);
+  }
+
+  .app:has(.panel.is-open.is-sheet-full) .stardate {
+    visibility: hidden;
   }
 }
 

@@ -127,6 +127,7 @@ test('each kind posts, a transfer keeps its link, and the guards refuse the rest
         { kind: 'pay', amount: 10, memo: 'ok', whenDay: DAY_MAX + 1 },
         { kind: 'pay', amount: 10, memo: 'ok', whenDay: 1.2 },
         { kind: 'transfer', amount: 10, memo: 'ok', linkId: 4 },
+        { kind: 'transfer', amount: 10, memo: 'ok', linkId: 'z'.repeat(81) },
     ];
     for (const body of edges) {
         const refused = postLedger(sql, body, 'owner', NOW, 0, ids);

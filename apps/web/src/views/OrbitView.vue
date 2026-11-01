@@ -6,9 +6,9 @@
  * the body chips. All clock arithmetic is orbit/clock.ts and the picture is
  * orbit/OrbitCanvas.vue; this file holds the clock's number, the frame loop and the wiring.
  */
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import type { SectorHex, SectorIndex, TreeEnvelope, TruthOverview } from '@voyage/shared';
+import type { ChatterLineData, SectorHex, SectorIndex, TreeEnvelope, TruthOverview } from '@voyage/shared';
 import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName, type HexBody, type SystemDoc, type TreeRow } from '../dossier/model.ts';
@@ -29,7 +29,7 @@ import { appendLeg, removeLastLeg, replaceLegsFrom, trackOf } from '../campaign/
 import type { CampaignAnchor } from '@voyage/shared';
 import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
-import { pointWords, realDistanceKmBetween, realPositionAu, type PlaceEnd } from '../orbit/distance.ts';
+import { anchorEnd, planMainworldKey, pointWords, realDistanceKmBetween, realPositionAu, type PlaceEnd } from '../orbit/distance.ts';
 import {
     appendedTail, courseLegs, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, picturePreview, planCourse, routeFixed, routePreview, samePlace,
     storedRoute, tagWords, toGoWords, underwayWords, type EditedTail, type PlannedLeg, type Waypoint,
@@ -59,7 +59,7 @@ import { presentTree } from '../orbit/hand_present.ts';
 import { treeAsk } from '../orbit/tree_source.ts';
 import TimeControls from '../orbit/TimeControls.vue';
 import { noteDriverState, registerClockDriver } from '../orbit/sim_clock.ts';
-import { cancelFrame, later, nextFrame, now, observeSize, pageOrigin } from '../platform/browser.ts';
+import { cancelFrame, later, nextFrame, now, observeSize, pageOrigin, whenOrbitPaints } from '../platform/browser.ts';
 import { nextTick } from 'vue';
 import { askPaneEscape, setFrame } from '../shell/frame.ts';
 import { addressPane, atPane, hostsCampaign, withQuery } from '../shell/pane.ts';
@@ -68,11 +68,9 @@ import Rail from '../shell/Rail.vue';
 import { loadSession, session } from '../account/session.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
 import { publishViewDay, resetViewDay, viewDay, viewReset } from '../campaign/view_day.ts';
-import CommsReceiver from '../living/CommsReceiver.vue';
 import { systemFacts } from '../living/facts.ts';
 import { maydayKeyPresent, pageMayday } from '../living/comms/mayday.ts';
 import { device, deviceComms, deviceTraffic, livingShown, setCommsShown, setTrafficShown } from '../living/quiet.ts';
-import { corpusLines, sampleLines } from '../living/lines.ts';
 import { FAST_DAYS_PER_SECOND, trafficAtRest, trafficSchedule, type TrafficBody } from '../living/traffic.ts';
 import { bindBuilder, builderEpoch } from '../builder/bind.ts';
 import { buildStore } from '../workspace/build/seam.ts';
@@ -87,7 +85,11 @@ import SaveImageButton from '../capture/SaveImageButton.vue';
 import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
 import { captionText, captureName, orientationFor, type CaptureArea } from '../capture/paper.ts';
 import { captureOrbit, fittedOrientation, TOO_LARGE } from '../orbit/capture.ts';
-import { printOrbitTheme, readOrbitTheme } from '../orbit/theme.ts';
+import { printOrbitTheme, readOrbitTheme, screenOnPaper } from '../orbit/theme.ts';
+
+/** The receiver. Its chunk starts once the picture has paint. */
+const CommsReceiver = defineAsyncComponent(() => import('../living/CommsReceiver.vue'));
+const showComms = ref(false);
 
 const route = useRoute();
 const router = useRouter();
@@ -660,7 +662,18 @@ function placedBodies(plan: Plan, days: number): TrafficBody[] {
     return out;
 }
 
-const chatterPool = computed(() => [...sampleLines(), ...corpusLines()]);
+/** Filled once the picture has paint. Empty until then, so the picture does not wait on the line files. */
+const chatterPool = shallowRef<ChatterLineData[]>([]);
+let stopOrbitPaint: (() => void) | null = null;
+onMounted(() => {
+    stopOrbitPaint = whenOrbitPaints(() => {
+        showComms.value = true;
+        void import('../living/lines.ts').then((mod) => {
+            chatterPool.value = [...mod.sampleLines(), ...mod.corpusLines()];
+        });
+    });
+});
+onBeforeUnmount(() => { if (stopOrbitPaint) stopOrbitPaint(); });
 
 const backgroundTracks = computed(() => {
     if (!canSetDate.value || !campaignTraffic.value || !deviceTraffic.shown) return [];
@@ -941,11 +954,10 @@ const commsFacts = computed(() => {
 /** The plotter is live: a press on the picture lays a waypoint. Until a thrust is set, or laying has ended, a press is an ordinary selection. */
 const live = computed(() => laying.value && plotAccel.value !== null);
 
-/** An anchor of this system as an end of the distance sum: its body, or its point; null for anywhere else. */
+/** An anchor of this system as an end of the distance sum: its body, its point, or the mainworld when it names neither. */
 function endOf(anchor: CampaignAnchor): PlaceEnd | null {
-    if (!anchor || anchor.kind !== 'system' || anchor.hexKey !== hexKey.value) return null;
-    if (anchor.bodyKey) return anchor.bodyKey;
-    return anchor.point ? { x: anchor.point.x, y: anchor.point.y } : null;
+    const plan = searchPlan.value;
+    return anchorEnd(anchor, hexKey.value, plan ? planMainworldKey(plan) : null);
 }
 
 function distanceBetween(a: PlaceEnd, aDays: number, b: PlaceEnd, bDays: number): number | null {
@@ -2106,7 +2118,9 @@ async function saveImage(choice: SheetChoice): Promise<void> {
     if (choice.area !== 'framed' && choice.area !== 'fitted') return;
     saving.value = true;
     try {
-        const theme = choice.look === 'screen' ? readOrbitTheme(el) : printOrbitTheme(el);
+        const read = choice.look === 'screen' ? readOrbitTheme(el) : printOrbitTheme(el);
+        // Full colour keeps the discs and the orbits, on the paper, with light inks darkened.
+        const theme = choice.look === 'screen' ? screenOnPaper(read, el).theme : read;
         const date = campaign.status === 'ready' && campaign.clock ? stardate(campaign.clock.days).date : null;
         const area = systemArea();
         const ok = await captureOrbit({
@@ -2418,6 +2432,7 @@ async function saveImage(choice: SheetChoice): Promise<void> {
             @transitionend="onCommsFade"
           >
           <CommsReceiver
+            v-if="showComms"
             :facts="commsFacts"
             :truth-version="version"
             :campaign-key="campaign.universeId || 'none'"

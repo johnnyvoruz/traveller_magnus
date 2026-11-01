@@ -111,9 +111,10 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('session ingest on the worker', { skip: 'wrangler is absent' }, () => {});
 } else {
     test('session ingest on the worker', { timeout: 180000 }, async () => {
-        const persistTo = path.join(root, '.tmp', 'lane-b-si1');
-        removeTree(persistTo);
-        const port = 18893;
+        const ownedPersist = !process.env.VOYAGE_PERSIST_TO;
+        const persistTo = process.env.VOYAGE_PERSIST_TO || mkdtempSync(path.join(tmpdir(), 'voyage-si-'));
+        const port = Number(process.env.VOYAGE_API_PORT || 18893);
+        const inspectorPort = Number(process.env.VOYAGE_INSPECTOR_PORT || 19893);
         const base = `http://127.0.0.1:${port}`;
         const stamp = randomBytes(3).toString('hex');
         const version = `si${stamp}`;
@@ -138,7 +139,7 @@ INSERT INTO access_tokens (
     '["campaign:read","proposals:write"]', NULL, '${STAMP}', '2020-01-01T00:00:00.000Z', NULL, NULL
 );
 `);
-            child = startDev({ port, persistTo, inspectorPort: 19893 });
+            child = startDev({ port, persistTo, inspectorPort });
             await up(base);
             const cookie = { 'content-type': 'application/json', cookie: owner, origin: base };
             const freshMcp = await jsonFetch(`${base}/mcp`, {
@@ -621,7 +622,7 @@ INSERT INTO access_tokens (
             assert.equal(resumed.status, 200, JSON.stringify(resumed.body));
         } finally {
             stopDev(child?.pid);
-            removeTree(persistTo);
+            if (ownedPersist) removeTree(persistTo);
         }
     });
 }

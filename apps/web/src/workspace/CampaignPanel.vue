@@ -17,6 +17,7 @@ import { campaign } from '../campaign/store.ts';
 import { isOnline, observeSize, onOnlineChange } from '../platform/browser.ts';
 import Icon from '../design/Icon.vue';
 import Panel from '../shell/Panel.vue';
+import { sheetFull } from '../shell/pane_back.ts';
 import { onSpan, readSpan, writeSpan, type PanelSpan } from '../shell/panel_state.ts';
 import { createRecord, justCreated, recentlyDeleted } from './actions.ts';
 import CampaignCrumb from './CampaignCrumb.vue';
@@ -104,6 +105,10 @@ const onSession = computed(() => addressPane(route.path, route.query).pane.kind 
 const sessionLive = computed(() => liveFor(campaign.universeId) !== null);
 /** At Column the referee's Timeline, Relationships and Session go under the head's menu (DU34); a player, with no menu, keeps the buttons. */
 const headFolded = computed(() => span.value === 'column' && isReferee.value);
+/** The tabs row: on the list screens, and at Full always (a record or entry opens beside the list). */
+const headShown = computed(() => status.value === 'ready' && ((!props.recordId && !props.entryId) || span.value === 'full'));
+/** View as players sits in the head at Half and Full (DU36); at Column, or with no head, its bar stays above. */
+const viewAsInHead = computed(() => headShown.value && span.value !== 'column');
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -345,8 +350,17 @@ function openSession(): void {
     pushPane({ kind: 'session' });
 }
 
+/** The phone sheet's breakpoint (shell/Panel.vue), read from document.defaultView. */
+function phoneSheet(): boolean {
+    const view = document.defaultView;
+    return view ? view.matchMedia('(max-width: 599px)').matches : false;
+}
+
 watch(onSession, (on) => {
-    if (!on || span.value === 'full') return;
+    if (!on) return;
+    // On a phone, Full is the sheet over the map. Half leaves the clock under the markets.
+    if (phoneSheet()) sheetFull.value = true;
+    if (span.value === 'full') return;
     span.value = 'full';
     void nextTick(publish);
 }, { immediate: true });
@@ -491,6 +505,11 @@ watch(() => props.recordId, (now, was) => {
     });
 });
 
+watch(() => props.entryId, (id) => {
+    // A journal entry is longer than the half sheet: the reply box was clipped, and the author line scrolled away.
+    if (id && phoneSheet()) sheetFull.value = true;
+}, { immediate: true });
+
 watch(() => props.entryId, (now, was) => {
     if (!props.open || props.tab !== 'journal') return;
     if (now && justMade.value && justMade.value.id === now) return;
@@ -578,8 +597,8 @@ defineExpose({ remeasure: publish });
         <SignInCard v-if="!signedIn && !example.on" />
         <template v-else>
           <ExampleBar v-if="example.on && status === 'ready'" />
-          <ViewAsBar v-if="status === 'ready' && !example.on" />
-          <div v-if="status === 'ready' && ((!recordId && !entryId) || span === 'full')" class="camp-head">
+          <ViewAsBar v-if="status === 'ready' && !example.on" :place="viewAsInHead ? 'banner' : 'bar'" />
+          <div v-if="headShown" class="camp-head">
           <div class="camp-tabs" role="tablist" aria-label="Campaign">
             <button type="button" role="tab" class="camp-tab" :aria-selected="tab === 'records' ? 'true' : 'false'" :tabindex="tab === 'records' ? 0 : -1" @click="showTab('records')" @keydown="onTabKey">
               <Icon name="book-sparkles" :size="12" />Records <b>{{ recordCount }}</b>
@@ -591,6 +610,7 @@ defineExpose({ remeasure: publish });
               <Icon name="book-atlas" :size="12" />Journal <b>{{ journalCount }}</b>
             </button>
           </div>
+            <ViewAsBar v-if="viewAsInHead && !example.on" place="head" :words="span === 'full'" />
             <button v-if="!headFolded" type="button" class="camp-timeline" :aria-pressed="onTimeline ? 'true' : 'false'" @click="openTimeline">Timeline</button>
             <button v-if="!headFolded" type="button" class="camp-timeline" :aria-pressed="onWeb ? 'true' : 'false'" data-open-web @click="openWeb">Relationships</button>
             <button v-if="isReferee && !headFolded" type="button" class="camp-timeline camp-session" :class="{ 'is-live': sessionLive }" :aria-pressed="onSession ? 'true' : 'false'" data-open-session @click="openSession"><i v-if="sessionLive" class="camp-live" aria-hidden="true"></i>Session</button>

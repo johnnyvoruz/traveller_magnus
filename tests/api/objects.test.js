@@ -11,14 +11,6 @@ import { withDevServer, wranglerBin } from './server.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const QUOTA = 250 * 1024 * 1024;
 
-function jsonFrom(text) {
-    const start = text.indexOf('[');
-    const objectStart = text.indexOf('{');
-    const at = start === -1 ? objectStart : objectStart === -1 ? start : Math.min(start, objectStart);
-    if (at === -1) throw new Error(text);
-    return JSON.parse(text.slice(at));
-}
-
 function authSecret() {
     const text = readFileSync(path.join(root, 'apps', 'api', '.dev.vars'), 'utf8');
     const line = text.split(/\r?\n/).find((item) => item.startsWith('BETTER_AUTH_SECRET='));
@@ -30,24 +22,26 @@ function authSecret() {
     return value;
 }
 
-function userCookie(userId, email) {
+function userCookies(people) {
     const now = Date.now();
     const expires = now + 30 * 24 * 60 * 60 * 1000;
-    const token = randomBytes(32).toString('hex');
-    const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
-    const sql = `
+    const cookies = [];
+    const sql = people.map(([userId, email]) => {
+        const token = randomBytes(32).toString('hex');
+        const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
+        const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
+        cookies.push(`__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`);
+        return `
 INSERT INTO user (id, name, email, email_verified, created_at, updated_at, role, banned)
 VALUES ('${userId}', '${userId}', '${email}', 1, ${now}, ${now}, 'user', 0)
 ON CONFLICT(id) DO UPDATE SET updated_at = ${now};
 INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
-VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
-`;
+VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');`;
+    }).join('\n');
     const dir = mkdtempSync(path.join(tmpdir(), 'voyage-user-'));
-    const file = path.join(dir, 'user.sql');
-    writeFileSync(file, sql);
-    runWrangler(['d1', 'execute', 'voyage', '--local', '--file', file]);
-    const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
-    return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
+    writeFileSync(path.join(dir, 'user.sql'), sql);
+    runWrangler(['d1', 'execute', 'voyage', '--local', '--file', path.join(dir, 'user.sql')]);
+    return cookies;
 }
 
 function execute(sql) {
@@ -57,12 +51,11 @@ function execute(sql) {
     runWrangler(['d1', 'execute', 'voyage', '--local', '--file', file]);
 }
 
-function objectBytes(id) {
-    const rows = jsonFrom(runWrangler([
-        'd1', 'execute', 'voyage', '--local', '--json', '--command',
-        `SELECT object_bytes AS n FROM universes WHERE id = '${id}'`,
-    ]));
-    return Number(rows[0].results[0].n);
+async function objectBytes(base, id, cookie) {
+    const response = await fetch(`${base}/api/universes/${id}`, { headers: { cookie } });
+    const body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    return body.data.objectBytes;
 }
 
 function sha(bytes) {
@@ -92,8 +85,10 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('universe objects', { timeout: 180000 }, async () => {
         await withDevServer(async (base) => {
             const stamp = randomBytes(4).toString('hex');
-            const owner = userCookie(`k14a${stamp}`, `k14a${stamp}@localhost`);
-            const other = userCookie(`k14b${stamp}`, `k14b${stamp}@localhost`);
+            const [owner, other] = userCookies([
+                [`k14a${stamp}`, `k14a${stamp}@localhost`],
+                [`k14b${stamp}`, `k14b${stamp}@localhost`],
+            ]);
             const headers = { cookie: owner };
             const created = await jsonFetch(`${base}/api/universes`, {
                 method: 'POST',
@@ -102,7 +97,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(created.status, 201, JSON.stringify(created.body));
             const id = created.body.data.id;
-            assert.equal(objectBytes(id), 0);
+            assert.equal(await objectBytes(base, id, owner), 0);
 
             const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
             const pngHash = sha(png);
@@ -113,7 +108,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(notWebp.status, 400, JSON.stringify(notWebp.body));
             assert.equal(notWebp.body.error.code, 'validation');
-            assert.equal(objectBytes(id), 0);
+            assert.equal(await objectBytes(base, id, owner), 0);
 
             const webp = tinyWebp(1);
             const hash = sha(webp);
@@ -124,7 +119,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(wrong.status, 400, JSON.stringify(wrong.body));
             assert.equal(wrong.body.error.code, 'validation');
-            assert.equal(objectBytes(id), 0);
+            assert.equal(await objectBytes(base, id, owner), 0);
 
             const foreign = await jsonFetch(`${base}/api/universes/${id}/objects/${hash}`, {
                 method: 'PUT',
@@ -133,7 +128,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(foreign.status, 403);
             assert.equal(foreign.body.error.code, 'forbidden');
-            assert.equal(objectBytes(id), 0);
+            assert.equal(await objectBytes(base, id, owner), 0);
 
             const uploaded = await jsonFetch(`${base}/api/universes/${id}/objects/${hash}`, {
                 method: 'PUT',
@@ -143,7 +138,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
             assert.equal(uploaded.body.data.hash, hash);
             assert.equal(uploaded.body.data.bytes, webp.length);
-            assert.equal(objectBytes(id), webp.length);
+            assert.equal(await objectBytes(base, id, owner), webp.length);
 
             const repeated = await jsonFetch(`${base}/api/universes/${id}/objects/${hash}`, {
                 method: 'PUT',
@@ -152,7 +147,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(repeated.status, 200, JSON.stringify(repeated.body));
             assert.equal(repeated.body.data.hash, hash);
-            assert.equal(objectBytes(id), webp.length);
+            assert.equal(await objectBytes(base, id, owner), webp.length);
 
             const stolenGet = await fetch(`${base}/api/universes/${id}/objects/${hash}`, { headers: { cookie: other } });
             assert.equal(stolenGet.status, 404);
@@ -163,7 +158,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(stolenPut.status, 404);
             assert.equal(stolenPut.body.error.code, 'not_found');
-            assert.equal(objectBytes(id), webp.length);
+            assert.equal(await objectBytes(base, id, owner), webp.length);
 
             const streamed = await fetch(`${base}/api/universes/${id}/objects/${hash}`, { headers });
             assert.equal(streamed.status, 200);
@@ -183,14 +178,14 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             assert.equal(over.status, 400, JSON.stringify(over.body));
             assert.equal(over.body.error.code, 'too_large');
-            assert.equal(objectBytes(id), QUOTA - second.length + 1);
+            assert.equal(await objectBytes(base, id, owner), QUOTA - second.length + 1);
             const stillThere = await jsonFetch(`${base}/api/universes/${id}/objects/${hash}`, {
                 method: 'PUT',
                 headers,
                 body: webp,
             });
             assert.equal(stillThere.status, 200, JSON.stringify(stillThere.body));
-            assert.equal(objectBytes(id), QUOTA - second.length + 1);
+            assert.equal(await objectBytes(base, id, owner), QUOTA - second.length + 1);
         });
     });
 }

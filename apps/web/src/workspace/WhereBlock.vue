@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
           <button type="button" class="ui-btn where-again" @click="startPick">Pick another</button>
         </p>
         <template v-else>
-          <p class="where-hint" role="status">Click a system on the map, or search for it.</p>
+          <p class="where-hint" role="status">Select a system on the map, or search for it.</p>
           <div class="where-acts">
             <button v-if="current" type="button" class="ui-btn where-current" @click="useCurrent">
               <Icon name="location-dot" :size="13" />Use {{ current.name || current.hex }} {{ current.hex }}

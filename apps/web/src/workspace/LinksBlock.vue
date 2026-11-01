@@ -266,8 +266,14 @@ watch(() => props.id, () => {
 <style>
 .lnk-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+/* On a phone the head's button drops under the label when the two do not fit, and stays at the right (DF28). */
+.lnk-head > .ui-btn {
+  margin-left: auto;
 }
 
 .lnk-head .ui-frame-label {

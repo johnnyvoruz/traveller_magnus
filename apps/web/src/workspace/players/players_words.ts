@@ -29,11 +29,11 @@ export function usesWords(uses: number): string {
 
 /**
  * The link as the Players section shows it: what the invite write answers, or what the read brings
- * back after a reload (DU33), which has no uses count.
+ * back after a reload (DU33) with its uses count (DU33b); a read without the count shows the date alone.
  */
 export type InviteShown = { url: string; expiresAt: string; uses?: number };
 
-/** The line under the link: when it stops working, and how often it has been used (left out when the read does not say). */
+/** The line under the link: when it stops working, and how often it has been used (left out when the body does not say). */
 export function inviteLine(invite: { expiresAt: string; uses?: number }): string {
     const date = realDate(invite.expiresAt);
     const until = date ? 'Works until ' + date : 'Works for 30 days';

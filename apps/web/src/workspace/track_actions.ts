@@ -45,7 +45,7 @@ export function dockShipAt(recordId: string, anchor: CampaignAnchor, days: numbe
     const legs = record && !record.deleted ? trackOf(record) : null;
     if (!record || !legs) return false;
     if (!anchor) {
-        showToast(record.name + ' has a track, so it cannot be nowhere. Pick a place, or remove its legs on the ship’s page.');
+        showToast(record.name + ' has a track, so it cannot be nowhere. Select a place, or remove its legs on the ship’s page.');
         return false;
     }
     const refusal = moveRefusal(record.name, legs, days);

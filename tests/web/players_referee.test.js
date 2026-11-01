@@ -16,7 +16,9 @@ test('the words: a real date, uses, the link line, a member line by status', () 
     assert.equal(realDate('not a date'), '');
     assert.deepEqual([0, 1, 4].map(usesWords), ['Not used yet', 'Used once', 'Used 4 times']);
     assert.equal(inviteLine({ expiresAt: '2026-11-16T00:00:00.000Z', uses: 2 }), 'Works until November 16, 2026 · Used 2 times');
-    // DU33: the link read back after a reload carries no uses count, so the line stops at the date.
+    // DU33b: the read carries the count (B's BU35), so the line after a reload says it as a link just made does.
+    assert.equal(inviteLine({ expiresAt: '2026-11-16T00:00:00.000Z', uses: 0 }), 'Works until November 16, 2026 · Not used yet');
+    // A body without the count: the line stops at the date, no guess.
     assert.equal(inviteLine({ expiresAt: '2026-11-16T00:00:00.000Z' }), 'Works until November 16, 2026');
     assert.equal(inviteLine({ expiresAt: 'nonsense' }), 'Works for 30 days');
     const base = { userId: 'u1', handle: 'mara', personId: null, joined: '2026-10-17T10:00:00.000Z', status: 'active', archivedAt: null, archivedBy: null };
@@ -71,12 +73,15 @@ describe('the board renders', { concurrency: 1 }, () => {
         return (await renderToString(createSSRApp(view, props))).replace(/<!--[\s\S]*?-->/g, '');
     }
 
-    test('DU33: a link read back after a reload shows as one just made, without the uses words', async () => {
-        const html = await render({ invite: { url: 'https://traveller.voyage/join/kept', expiresAt: '2026-11-16T00:00:00.000Z' }, list: { playing: [], archived: [] } });
+    test('DU33, DU33b: a link read back after a reload shows as one just made, with its uses', async () => {
+        const html = await render({ invite: { url: 'https://traveller.voyage/join/kept', expiresAt: '2026-11-16T00:00:00.000Z', uses: 0 }, list: { playing: [], archived: [] } });
         assert.match(html, /value="https:\/\/traveller\.voyage\/join\/kept" data-players-url/);
         assert.match(html, /data-players-revoke[^>]*>Revoke/);
-        assert.match(html, /Works until November 16, 2026\. Anyone with the link can join as a player\./);
-        assert.doesNotMatch(html, /Not used yet|Used /);
+        assert.match(html, /Works until November 16, 2026 · Not used yet\. Anyone with the link can join as a player\./);
+        const used = await render({ invite: { url: 'https://traveller.voyage/join/kept', expiresAt: '2026-11-16T00:00:00.000Z', uses: 2 }, list: { playing: [], archived: [] } });
+        assert.match(used, /Works until November 16, 2026 · Used 2 times\./);
+        const bare = await render({ invite: { url: 'https://traveller.voyage/join/kept', expiresAt: '2026-11-16T00:00:00.000Z' }, list: { playing: [], archived: [] } });
+        assert.match(bare, /Works until November 16, 2026\. Anyone with the link can join as a player\./, 'a read without the count stops at the date');
         const section = fs.readFileSync(path.join(webRoot, 'src/workspace/players/PlayersSection.vue'), 'utf8');
         assert.match(section, /async function loadInvite\(\): Promise<void> \{\s+const id = campaign\.universeId;\s+if \(!id\) return;\s+const found = await readInvite\(\);\s+if \(!found \|\| id !== campaign\.universeId \|\| invite\.value\) return;\s+invite\.value = found;\s+noteSeen\(\);/, 'read once; a link made meanwhile wins');
         assert.match(section, /onMounted\(\(\) => \{\s+void loadList\(\);\s+void loadInvite\(\);\s+\}\);/);

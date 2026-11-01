@@ -37,19 +37,23 @@ function sqlFile(persistTo, sql) {
     }
 }
 
-function userCookie(userId, email, persistTo) {
+function signIns(persistTo, prefix, people) {
     const now = Date.now();
     const expires = now + 30 * 24 * 60 * 60 * 1000;
-    const token = randomBytes(32).toString('hex');
-    const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
-    sqlFile(persistTo, `
+    const cookies = [];
+    const rows = people.map(([userId, email]) => {
+        const token = randomBytes(32).toString('hex');
+        const sessionId = `${userId}-${randomBytes(8).toString('hex')}`;
+        const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
+        cookies.push(`__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`);
+        return `
 INSERT INTO user (id, name, email, email_verified, created_at, updated_at, role, banned)
 VALUES ('${userId}', '${userId}', '${email}', 1, ${now}, ${now}, 'user', 0);
 INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
-VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');
-`);
-    const signature = createHmac('sha256', authSecret()).update(token).digest('base64');
-    return `__Secure-better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
+VALUES ('${sessionId}', ${expires}, '${token}', ${now}, ${now}, '${userId}');`;
+    }).join('\n');
+    sqlFile(persistTo, `${prefix}\n${rows}`);
+    return cookies;
 }
 
 function sleep(ms) {
@@ -121,12 +125,13 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
             const stamp = randomBytes(3).toString('hex');
             const version = `ps${stamp}`;
-            sqlFile(persistTo, `
+            const [owner, reader] = signIns(persistTo, `
 INSERT INTO truth_versions (version, engine_version, state, started_at, released_at, sectors_total, sectors_done)
 VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
-`);
-            const owner = userCookie(`psa${stamp}`, `psa${stamp}@localhost`, persistTo);
-            const reader = userCookie(`psb${stamp}`, `psb${stamp}@localhost`, persistTo);
+`, [
+                [`psa${stamp}`, `psa${stamp}@localhost`],
+                [`psb${stamp}`, `psb${stamp}@localhost`],
+            ]);
             child = startDev({ port, persistTo, inspectorPort: 19866 });
             await up(base);
             const headers = { 'content-type': 'application/json', cookie: owner, origin: base };
@@ -221,15 +226,16 @@ VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
         let child;
         try {
             runWrangler(['d1', 'migrations', 'apply', 'voyage', '--local', '--persist-to', persistTo]);
-            sqlFile(persistTo, 'DROP TABLE public_ships;');
             const stamp = randomBytes(3).toString('hex');
             const version = `po${stamp}`;
-            sqlFile(persistTo, `
+            const [owner, reader] = signIns(persistTo, `
+DROP TABLE public_ships;
 INSERT INTO truth_versions (version, engine_version, state, started_at, released_at, sectors_total, sectors_done)
 VALUES ('${version}', '1.2.0', 'released', '${STAMP}', '${STAMP}', 0, 0);
-`);
-            const owner = userCookie(`poc${stamp}`, `poc${stamp}@localhost`, persistTo);
-            const reader = userCookie(`pod${stamp}`, `pod${stamp}@localhost`, persistTo);
+`, [
+                [`poc${stamp}`, `poc${stamp}@localhost`],
+                [`pod${stamp}`, `pod${stamp}@localhost`],
+            ]);
             child = startDev({ port, persistTo, inspectorPort: 19867 });
             await up(base);
             const headers = { 'content-type': 'application/json', cookie: owner, origin: base };

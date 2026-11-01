@@ -3,6 +3,7 @@
  * A tag in the source stays text. A link is an http or https address, or it stays text.
  * A mention token stays one chip, including inside bold, italic, a link label, or a list item.
  */
+import { refereeFenceLine } from '@voyage/shared';
 import { mentionAt } from './body.ts';
 
 export type RichNode =
@@ -137,10 +138,10 @@ function parseLines(lines: string[], nameOf: NameOf, fences: boolean): RichNode[
     const nodes: RichNode[] = [];
     let i = 0;
     while (i < lines.length) {
-        if (fences && lines[i].trim() === ':::referee') {
+        if (fences && refereeFenceLine(lines[i]) === 'open') {
             let close = -1;
             for (let j = i + 1; j < lines.length; j++) {
-                if (lines[j].trim() === ':::') {
+                if (refereeFenceLine(lines[j]) === 'close') {
                     close = j;
                     break;
                 }

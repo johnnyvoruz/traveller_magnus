@@ -393,7 +393,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <p v-if="trouble" class="cps-trouble" role="alert">{{ trouble }}</p>
-          <p v-if="ready && !campaigns.length" class="cps-none">No campaigns yet. A campaign holds your records, the party and the journal.</p>
+          <p v-if="ready && !campaigns.length" class="cps-none">No campaigns yet. A campaign holds your records, the party, and the journal.</p>
           <ul class="cps-list">
             <li v-for="item in campaigns" :key="item.id">
               <article class="cps-card ui-frame" :class="{ 'is-open': item.id === campaign.universeId }" :aria-labelledby="'cps-h-' + item.id" :data-campaign="item.id">

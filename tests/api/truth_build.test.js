@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
@@ -31,6 +31,18 @@ if (OWN_STATE) {
 const { adminCookie, removeTree, runWrangler } = await import('./session.js');
 const { stateRoot, withDevServer, wranglerBin } = await import('./server.js');
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** One wrangler process for several statements. A separate process per statement was most of this file's wait. */
+function d1(sql) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'voyage-truth-sql-'));
+    const file = path.join(dir, 'batch.sql');
+    writeFileSync(file, sql.endsWith(';') ? sql : `${sql};`);
+    try {
+        runWrangler(['d1', 'execute', 'voyage', '--local', '--file', file]);
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
 
 /** Stops the suite's own dev server (server.js's pid file for its port) and deletes its state. */
 function dropOwnState() {
@@ -819,9 +831,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/Fixture.tsv', '--file', tsv, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/Fixture.xml', '--file', xml, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vtest/sectors.json', '--file', catalogue, '--local']);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vtest'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vtest'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vtest'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vtest';\nDELETE FROM truth_build_sectors WHERE version = 'vtest';\nDELETE FROM truth_versions WHERE version = 'vtest'");
             const cookie = adminCookie();
             const posted = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
@@ -847,7 +857,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(build));
                 if (build.data.sectorsDone === 1) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(build.data.sectorsDone, 1, JSON.stringify(build));
             const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
@@ -910,7 +920,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const again = retriedBuild.data.sectors.find((item) => item.slug === 'Fixture');
                 if (again && again.state === 'failed') throw new Error(JSON.stringify(retriedBuild));
                 if (retriedBuild.data.sectorsDone === 1 && again && again.state === 'done') break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(retriedBuild.data.sectorsDone, 1, JSON.stringify(retriedBuild));
             const afterRetry = jsonFrom(runWrangler([
@@ -1032,9 +1042,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/Fixture.tsv', '--file', tsv, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/Fixture.xml', '--file', xml, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vderived/sectors.json', '--file', catalogue, '--local']);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vderived'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vderived'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vderived'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vderived';\nDELETE FROM truth_build_sectors WHERE version = 'vderived';\nDELETE FROM truth_versions WHERE version = 'vderived'");
             const objectsBefore = objectKeys();
             const derivedPosted = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
@@ -1061,7 +1069,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = derivedBuild.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(derivedBuild));
                 if (derivedBuild.data.sectorsDone === 1) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(derivedBuild.data.sectorsDone, 1, JSON.stringify(derivedBuild));
             for (const sector of derivedBuild.data.sectors) assert.equal(sector.state, 'done', JSON.stringify(sector));
@@ -1098,7 +1106,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = derivedAgain.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(derivedAgain));
                 if (derivedAgain.data.sectorsDone === 1 && sector && sector.state === 'done' && logged.length > derivedLogsBefore) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(derivedAgain.data.sectorsDone, 1, JSON.stringify(derivedAgain));
             const retryLogs = traceMessages('truth-derive').slice(derivedLogsBefore);
@@ -1139,9 +1147,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 }),
             });
             assert.equal(transformMismatch.status, 409, JSON.stringify(await transformMismatch.json()));
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vreconcile'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vreconcile'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vreconcile'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vreconcile';\nDELETE FROM truth_build_sectors WHERE version = 'vreconcile';\nDELETE FROM truth_versions WHERE version = 'vreconcile'");
             const reconcilePosted = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
@@ -1167,7 +1173,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = reconcileBuild.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(reconcileBuild));
                 if (reconcileBuild.data.sectorsDone === 1) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(reconcileBuild.data.sectorsDone, 1, JSON.stringify(reconcileBuild));
             assert.equal(reconcileBuild.data.state, 'building');
@@ -1265,7 +1271,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = reconcileAgain.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(reconcileAgain));
                 if (reconcileAgain.data.sectorsDone === 1 && sector && sector.state === 'done' && logged.length > reconcileLogsBefore) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(reconcileAgain.data.state, 'building');
             const reconcileIndexAgain = path.join(dir, 'reconcile-index-again.json');
@@ -1297,9 +1303,8 @@ if (process.env.RUN_API_TESTS !== '1') {
             });
             const releasedRemoveBody = await releasedRemove.json();
             assert.equal(releasedRemove.status, 409, JSON.stringify(releasedRemoveBody));
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vwithdrawn'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                "INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vwithdrawn', '1.0.0', 'M1105', 's', '{}', '[]', 'withdrawn', '2020-01-01T00:00:00.000Z', NULL, NULL, NULL, 0, 0, '[]')"]);
+            d1(`DELETE FROM truth_versions WHERE version = 'vwithdrawn';
+INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vwithdrawn', '1.0.0', 'M1105', 's', '{}', '[]', 'withdrawn', '2020-01-01T00:00:00.000Z', NULL, NULL, NULL, 0, 0, '[]')`);
             const withdrawnRemove = await fetch(`${base}/api/admin/truth/builds/vwithdrawn/remove`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
@@ -1348,9 +1353,7 @@ if (process.env.RUN_API_TESTS !== '1') {
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vwide/Wide.tsv', '--file', wideTsvFile, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vwide/Wide.xml', '--file', wideXmlFile, '--local']);
             runWrangler(['r2', 'object', 'put', 'voyage-private/inputs/vwide/sectors.json', '--file', wideCatalogueFile, '--local']);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vwide'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vwide'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vwide';\nDELETE FROM truth_build_sectors WHERE version = 'vwide';\nDELETE FROM truth_versions WHERE version = 'vwide'");
             const widePosted = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
@@ -1381,7 +1384,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                     throw new Error(JSON.stringify(err));
                 }
                 if (wideBuild.data.sectorsDone === 1) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(wideBuild.data.sectorsDone, 1, JSON.stringify(wideBuild));
             assert.equal(wideBuild.data.sectorsFailed, 0);
@@ -1439,14 +1442,11 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(unreleased.status, 409, JSON.stringify(unreleasedBody));
             const staleAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
             const freshAt = new Date().toISOString();
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh', 'Queued')"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Stale', 'building', 0, 0, 0, NULL, NULL, '${staleAt}')`]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Fresh', 'building', 0, 0, 0, NULL, NULL, '${freshAt}')`]);
             const queuedAt = '2020-01-01T00:00:00.000Z';
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Queued', 'queued', 0, 0, 0, NULL, NULL, '${queuedAt}')`]);
+            d1(`DELETE FROM truth_build_sectors WHERE version = 'vwide' AND sector_slug IN ('Stale', 'Fresh', 'Queued');
+INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Stale', 'building', 0, 0, 0, NULL, NULL, '${staleAt}');
+INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Fresh', 'building', 0, 0, 0, NULL, NULL, '${freshAt}');
+INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at) VALUES ('vwide', 'Queued', 'queued', 0, 0, 0, NULL, NULL, '${queuedAt}')`);
             const stalled = await fetch(`${base}/api/admin/truth/builds/vwide/retry`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', cookie },
@@ -1477,14 +1477,10 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(releasedOnly.status, 200, JSON.stringify(releasedOnlyBody));
             assert.ok(releasedOnlyBody.data.items.some((item) => item.version === 'vtest' && item.name === 'Regina'));
             assert.equal(releasedOnlyBody.data.items.some((item) => item.version === 'vwide'), false);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vrank'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vrank'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                "INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vrank', '1.0.0', 'M1105', 'rank', '{}', '[]', 'released', '2026-10-03T00:00:00.000Z', '2026-10-03T00:00:00.000Z', NULL, NULL, 1, 1, '[]')"]);
-            for (const [hex, name] of [['1910', 'Regina'], ['1911', 'Regis'], ['1912', 'Reginante'], ['1913', 'New Regina']]) {
-                runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                    `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('vrank', 'Rank', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`]);
-            }
+            d1(`DELETE FROM truth_systems WHERE version = 'vrank';
+DELETE FROM truth_versions WHERE version = 'vrank';
+INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('vrank', '1.0.0', 'M1105', 'rank', '{}', '[]', 'released', '2026-10-03T00:00:00.000Z', '2026-10-03T00:00:00.000Z', NULL, NULL, 1, 1, '[]');
+${[['1910', 'Regina'], ['1911', 'Regis'], ['1912', 'Reginante'], ['1913', 'New Regina']].map(([hex, name]) => `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('vrank', 'Rank', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`).join(';\n')}`);
             const rankedExact = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('regina')}&version=vrank`);
             const rankedExactBody = await rankedExact.json();
             assert.equal(rankedExact.status, 200, JSON.stringify(rankedExactBody));
@@ -1505,9 +1501,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 runWrangler(['r2', 'object', 'put', `voyage-private/inputs/vfeed/${slug}.tsv`, '--file', tsv, '--local']);
                 runWrangler(['r2', 'object', 'put', `voyage-private/inputs/vfeed/${slug}.xml`, '--file', xml, '--local']);
             }
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vfeed'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vfeed'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vfeed'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vfeed';\nDELETE FROM truth_build_sectors WHERE version = 'vfeed';\nDELETE FROM truth_versions WHERE version = 'vfeed'");
             // One sector per request (the cap, 1.1.12): "all" over the 14-sector catalogue is refused and creates nothing.
             const feedAll = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
@@ -1567,9 +1561,7 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('a derive with no inputs of its own uses the source inputs', { timeout: 180000 }, async () => {
         const dir = mkdtempSync(path.join(tmpdir(), 'voyage-derive-'));
         await withDevServer(async (base) => {
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_systems WHERE version = 'vnoinputs'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_build_sectors WHERE version = 'vnoinputs'"]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', "DELETE FROM truth_versions WHERE version = 'vnoinputs'"]);
+            d1("DELETE FROM truth_systems WHERE version = 'vnoinputs';\nDELETE FROM truth_build_sectors WHERE version = 'vnoinputs';\nDELETE FROM truth_versions WHERE version = 'vnoinputs'");
             const cookie = adminCookie();
             const posted = await fetch(`${base}/api/admin/truth/build`, {
                 method: 'POST',
@@ -1596,7 +1588,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                 const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
                 if (sector && sector.state === 'failed') throw new Error(JSON.stringify(build));
                 if (build.data.sectorsDone === 1) break;
-                await sleep(1000);
+                await sleep(200);
             }
             assert.equal(build.data.sectorsDone, 1, JSON.stringify(build));
             const sourceFile = path.join(dir, 'source-index.json');
@@ -1620,13 +1612,13 @@ if (process.env.RUN_API_TESTS !== '1') {
     test('a derive of a derived version releases with the source catalogue', { timeout: 180000 }, async () => {
         const dir = mkdtempSync(path.join(tmpdir(), 'voyage-chain-'));
         const versions = ['vchain1', 'vchain2'];
-        function clearVersion(version) {
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_systems WHERE version = '${version}'`]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_build_sectors WHERE version = '${version}'`]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_versions WHERE version = '${version}'`]);
+        function clearVersions() {
+            d1(versions.map((version) => `DELETE FROM truth_systems WHERE version = '${version}';
+DELETE FROM truth_build_sectors WHERE version = '${version}';
+DELETE FROM truth_versions WHERE version = '${version}'`).join(';\n'));
         }
         await withDevServer(async (base) => {
-            for (const version of versions) clearVersion(version);
+            clearVersions();
             try {
                 const cookie = adminCookie();
                 const shared = {
@@ -1654,7 +1646,7 @@ if (process.env.RUN_API_TESTS !== '1') {
                         const sector = build.data.sectors.find((item) => item.slug === 'Fixture');
                         if (sector && sector.state === 'failed') throw new Error(JSON.stringify(build));
                         if (build.data.sectorsDone === 1) break;
-                        await sleep(1000);
+                        await sleep(200);
                     }
                     assert.equal(build.data.sectorsDone, 1, JSON.stringify(build));
                 }
@@ -1688,42 +1680,41 @@ if (process.env.RUN_API_TESTS !== '1') {
                     assert.equal(listed.y, item.y);
                 }
             } finally {
-                for (const version of versions) clearVersion(version);
+                clearVersions();
             }
         });
     });
 
     test('search uses the newest released version and the canonical layer', { timeout: 120000 }, async () => {
-        function clearVersion(version) {
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_systems WHERE version = '${version}'`]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_build_sectors WHERE version = '${version}'`]);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command', `DELETE FROM truth_versions WHERE version = '${version}'`]);
+        function versionSql(version, releasedAt) {
+            return `INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('${version}', '1.0.0', 'M1105', 'search', '{}', '[]', 'released', '${releasedAt}', '${releasedAt}', NULL, NULL, 1, 1, '[]')`;
         }
-        function insertVersion(version, releasedAt) {
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_versions (version, engine_version, milieu, seed, settings, sectors, state, started_at, released_at, notes, manifest_hash, sectors_total, sectors_done, sectors_failed) VALUES ('${version}', '1.0.0', 'M1105', 'search', '{}', '[]', 'released', '${releasedAt}', '${releasedAt}', NULL, NULL, 1, 1, '[]')`]);
+        function systemSql(version, slug, hex, name) {
+            return `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('${version}', '${slug}', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`;
         }
-        function insertSystem(version, slug, hex, name) {
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_systems (version, sector_slug, hex, name, uwp, allegiance, zone, tree_hash, partial) VALUES ('${version}', '${slug}', '${hex}', '${name}', 'A788899-C', NULL, NULL, NULL, NULL)`]);
-        }
-        function insertSector(version, slug, canonical) {
+        function sectorSql(version, slug, canonical) {
             const value = canonical === null ? 'NULL' : String(canonical);
-            runWrangler(['d1', 'execute', 'voyage', '--local', '--command',
-                `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at, canonical) VALUES ('${version}', '${slug}', 'done', 1, 1, 0, NULL, NULL, '2020-01-01T00:00:00.000Z', ${value})`]);
+            return `INSERT INTO truth_build_sectors (version, sector_slug, state, systems, built, partial, index_hash, error, updated_at, canonical) VALUES ('${version}', '${slug}', 'done', 1, 1, 0, NULL, NULL, '2020-01-01T00:00:00.000Z', ${value})`;
+        }
+        const versions = ['voldsearch', 'vnewsearch', 'vlayer', 'vnullsearch'];
+        function clearVersions() {
+            d1(versions.map((version) => `DELETE FROM truth_systems WHERE version = '${version}';
+DELETE FROM truth_build_sectors WHERE version = '${version}';
+DELETE FROM truth_versions WHERE version = '${version}'`).join(';\n'));
         }
         await withDevServer(async (base) => {
-            const versions = ['voldsearch', 'vnewsearch', 'vlayer', 'vnullsearch'];
-            for (const version of versions) clearVersion(version);
+            clearVersions();
             try {
-            insertVersion('voldsearch', '2020-01-01T00:00:00.000Z');
-            insertSystem('voldsearch', 'Old', '1910', 'Sharedhaven');
-            insertSystem('voldsearch', 'Old', '1911', 'Oldhaven');
-            insertSector('voldsearch', 'Old', 1);
-            insertVersion('vnewsearch', '2099-01-01T00:00:00.000Z');
-            insertSystem('vnewsearch', 'New', '1910', 'Sharedhaven');
-            insertSystem('vnewsearch', 'New', '1911', 'Newhaven');
-            insertSector('vnewsearch', 'New', 1);
+            d1([
+                versionSql('voldsearch', '2020-01-01T00:00:00.000Z'),
+                systemSql('voldsearch', 'Old', '1910', 'Sharedhaven'),
+                systemSql('voldsearch', 'Old', '1911', 'Oldhaven'),
+                sectorSql('voldsearch', 'Old', 1),
+                versionSql('vnewsearch', '2099-01-01T00:00:00.000Z'),
+                systemSql('vnewsearch', 'New', '1910', 'Sharedhaven'),
+                systemSql('vnewsearch', 'New', '1911', 'Newhaven'),
+                sectorSql('vnewsearch', 'New', 1),
+            ].join(';\n'));
             const shared = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Sharedhaven')}`);
             const sharedBody = await shared.json();
             assert.equal(shared.status, 200, JSON.stringify(sharedBody));
@@ -1739,11 +1730,13 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(namedBody.data.items.length, 1);
             assert.equal(namedBody.data.items[0].version, 'voldsearch');
 
-            insertVersion('vlayer', '2021-01-01T00:00:00.000Z');
-            insertSector('vlayer', 'Canon', 1);
-            insertSector('vlayer', 'Alt', 0);
-            insertSystem('vlayer', 'Canon', '1910', 'Layermark');
-            insertSystem('vlayer', 'Alt', '1911', 'Layermark');
+            d1([
+                versionSql('vlayer', '2021-01-01T00:00:00.000Z'),
+                sectorSql('vlayer', 'Canon', 1),
+                sectorSql('vlayer', 'Alt', 0),
+                systemSql('vlayer', 'Canon', '1910', 'Layermark'),
+                systemSql('vlayer', 'Alt', '1911', 'Layermark'),
+            ].join(';\n'));
             const canonical = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Layermark')}&version=vlayer&layer=canonical`);
             const canonicalBody = await canonical.json();
             assert.equal(canonical.status, 200, JSON.stringify(canonicalBody));
@@ -1757,16 +1750,18 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(defaultLayer.status, 200, JSON.stringify(defaultBody));
             assert.deepEqual(defaultBody.data.items.map((item) => item.sectorSlug), ['Canon']);
 
-            insertVersion('vnullsearch', '2022-01-01T00:00:00.000Z');
-            insertSector('vnullsearch', 'Blank', null);
-            insertSystem('vnullsearch', 'Blank', '1910', 'Nullhaven');
+            d1([
+                versionSql('vnullsearch', '2022-01-01T00:00:00.000Z'),
+                sectorSql('vnullsearch', 'Blank', null),
+                systemSql('vnullsearch', 'Blank', '1910', 'Nullhaven'),
+            ].join(';\n'));
             const legacy = await fetch(`${base}/api/truth/search?q=${encodeURIComponent('Nullhaven')}&version=vnullsearch&layer=canonical`);
             const legacyBody = await legacy.json();
             assert.equal(legacy.status, 200, JSON.stringify(legacyBody));
             assert.equal(legacyBody.data.items.length, 1);
             assert.equal(legacyBody.data.items[0].sectorSlug, 'Blank');
             } finally {
-                for (const version of versions) clearVersion(version);
+                clearVersions();
             }
         });
     });

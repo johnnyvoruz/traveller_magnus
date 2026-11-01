@@ -114,6 +114,23 @@ function wantWtn(rows: readonly MarketRow[], trees: Readonly<Record<string, stri
 }
 
 /**
+ * The chart's index row for one hex (DT6: the ship's world and a destination as the traffic rolls read
+ * them), from the indexes the markets list reads; the sector's index is asked for when it is not in yet.
+ * Null until it is, or when the hex has no row. Reactive as `marketsAround` is: a computed that calls it
+ * runs again as indexes arrive. `startMarkets` must have run for the version.
+ */
+export function entryAt(hexKey: string): SectorHex | null {
+    void marketsChart.arrivals;
+    const place = parseHexKey(hexKey);
+    const { version } = marketsChart;
+    if (!place || !version) return null;
+    const index = client().index(version, place.slug);
+    if (!index) { client().want(version, [place.slug]); return null; }
+    const row = index.hexes[place.hex];
+    return row ?? null;
+}
+
+/**
  * The worlds within `range` of `hexKey`, nearest first, and whether some sector is still on its way.
  * Reactive: call it in a computed. It asks for what is missing.
  */

@@ -191,7 +191,7 @@ watch(graph, () => {
       </button>
       <p v-if="!graph.nodes.length" class="web-empty">
         <template v-if="choices.kinds.length">Nothing is linked among the types and links shown. Turn one back on above.</template>
-        <template v-else>No links yet. Link two records on a record's page, under Links, and they appear here.</template>
+        <template v-else>No links yet. Link two records on a record's page, under Connections, and they appear here.</template>
       </p>
     </div>
     <p class="web-bar" role="status">
@@ -209,7 +209,7 @@ watch(graph, () => {
           <Icon name="location-crosshairs" :size="13" />{{ locating.recordId === pointedRecord.id ? 'Locating' : 'Locate' }}
         </button>
       </template>
-      <span v-else-if="graph.nodes.length" class="web-hint">Point at a record to see where it is. Click one to open it.</span>
+      <span v-else-if="graph.nodes.length" class="web-hint">Point at a record to see where it is. Select one to open it.</span>
     </p>
     </div>
   </section>

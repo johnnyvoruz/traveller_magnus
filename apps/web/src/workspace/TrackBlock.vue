@@ -16,6 +16,9 @@ import { registerCommand } from '../shell/registry.ts';
 import { liveById, parseHexKey, resolvePlace } from './places.ts';
 import { removeLastTrackLeg } from './track_actions.ts';
 import { TRACK_COMMANDS, shownRows, trackRows } from './track_rows.ts';
+import AdvanceClock from './AdvanceClock.vue';
+import { daysTo } from './advance_clock.ts';
+import { campaignDays } from './party_where.ts';
 
 const props = defineProps<{
     id: string;
@@ -38,6 +41,8 @@ const rows = computed(() => {
     return legs ? trackRows(legs, campaign.records) : [];
 });
 const shown = computed(() => shownRows(rows.value, all.value));
+/** The campaign date as the clock counts it; null without a clock. A leg that arrives after it offers Advance to the arrival (DU39). */
+const now = computed(() => (campaign.clock ? campaignDays(campaign.clock) : null));
 /** The vessel's system, where its course is plotted; null while it is nowhere. */
 const system = computed(() => {
     const place = record.value ? resolvePlace(props.id, liveById(campaign.records)) : null;
@@ -121,6 +126,7 @@ watch(() => props.id, () => { all.value = false; });
             <span class="trk-sr">Departs </span>{{ row.departs }}<span class="trk-arrow" aria-hidden="true">→</span><span class="trk-sr"> arrives </span>{{ row.arrives }}
           </span>
           <span v-if="row.note" class="trk-note">{{ row.note }}</span>
+          <AdvanceClock v-if="now !== null && row.arrivesDays > now" :days="daysTo(now, row.arrivesDays)" :label="'Days to the arrival of leg ' + row.n" class="trk-advance" />
         </li>
       </ol>
     </template>
@@ -267,6 +273,10 @@ watch(() => props.id, () => { all.value = false; });
 .trk-when {
   font: 400 12px/1.4 var(--font-code);
   font-variant-numeric: var(--tabular);
+}
+
+.trk-advance {
+  flex: 1 1 100%;
 }
 
 .trk-note {

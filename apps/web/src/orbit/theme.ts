@@ -334,6 +334,196 @@ export function printOrbitTheme(el: HTMLElement): OrbitTheme {
     };
 }
 
+/** A mark has to clear this on white (the same mark level the contrast check uses). */
+const MARK_ON_PAPER = 3;
+
+type Rgba = { r: number; g: number; b: number; a: number };
+
+function parseColour(colour: string): Rgba | null {
+    const text = colour.trim();
+    const hex = /^#([0-9a-f]{3,8})$/i.exec(text);
+    if (hex) {
+        let digits = hex[1];
+        if (digits.length === 3 || digits.length === 4) digits = digits.split('').map((part) => part + part).join('');
+        if (digits.length !== 6 && digits.length !== 8) return null;
+        const value = Number.parseInt(digits.slice(0, 6), 16);
+        const alpha = digits.length === 8 ? Number.parseInt(digits.slice(6, 8), 16) / 255 : 1;
+        return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255, a: alpha };
+    }
+    const rgb = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)$/i.exec(text);
+    if (!rgb) return null;
+    const raw = rgb[4] === undefined ? 1 : Number(rgb[4]);
+    return { r: Number(rgb[1]), g: Number(rgb[2]), b: Number(rgb[3]), a: raw > 1 ? raw / 255 : raw };
+}
+
+function channel(value: number): number {
+    const s = value / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+function luminance(colour: Rgba): number {
+    return 0.2126 * channel(colour.r) + 0.7152 * channel(colour.g) + 0.0722 * channel(colour.b);
+}
+
+function overPaper(fg: Rgba, bg: Rgba): Rgba {
+    const a = fg.a + bg.a * (1 - fg.a);
+    if (a <= 0) return { r: bg.r, g: bg.g, b: bg.b, a: 1 };
+    const mix = (front: number, back: number): number => (front * fg.a + back * bg.a * (1 - fg.a)) / a;
+    return { r: mix(fg.r, bg.r), g: mix(fg.g, bg.g), b: mix(fg.b, bg.b), a: 1 };
+}
+
+/** Contrast of a colour laid on the paper, after its alpha. */
+export function contrastOnPaper(colour: string, paper: string): number {
+    const fg = parseColour(colour);
+    const bg = parseColour(paper);
+    if (!fg || !bg) return 1;
+    const flat = overPaper(fg, { ...bg, a: 1 });
+    const lighter = Math.max(luminance(flat), luminance(bg));
+    const darker = Math.min(luminance(flat), luminance(bg));
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+function formatColour(colour: Rgba): string {
+    const r = Math.round(colour.r);
+    const g = Math.round(colour.g);
+    const b = Math.round(colour.b);
+    if (colour.a >= 0.999) return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+    return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + Number(colour.a.toFixed(3)) + ')';
+}
+
+/**
+ * Darken a screen ink until it can be read on the paper at the mark level. A wash that is
+ * still too faint when black has its alpha raised, only as far as that level needs.
+ * A colour that already clears is returned unchanged.
+ */
+export function darkenOnPaper(colour: string, paper: string): string {
+    const fg = parseColour(colour);
+    const bg = parseColour(paper);
+    if (!fg || !bg || fg.a <= 0) return colour;
+    if (contrastOnPaper(colour, paper) >= MARK_ON_PAPER) return colour;
+    const scaled = (k: number, alpha: number): Rgba => ({ r: fg.r * k, g: fg.g * k, b: fg.b * k, a: alpha });
+    const passes = (ink: Rgba): boolean => contrastOnPaper(formatColour(ink), paper) >= MARK_ON_PAPER;
+    let alpha = fg.a;
+    if (!passes(scaled(0, alpha))) {
+        let low = alpha;
+        let high = 1;
+        for (let i = 0; i < 12; i += 1) {
+            const mid = (low + high) / 2;
+            if (passes(scaled(0, mid))) high = mid;
+            else low = mid;
+        }
+        alpha = high;
+    }
+    let low = 0;
+    let high = 1;
+    let kept = 0;
+    for (let i = 0; i < 14; i += 1) {
+        const mid = (low + high) / 2;
+        if (passes(scaled(mid, alpha))) {
+            kept = mid;
+            low = mid;
+        } else high = mid;
+    }
+    return formatColour(scaled(kept, alpha));
+}
+
+function paperStar(star: StarPaint, name: string, ink: (colour: string, label: string) => string): StarPaint {
+    return {
+        solid: ink(star.solid, name),
+        glow: ink(star.glow, name + ' glow'),
+        clear: star.clear,
+        rim: ink(star.rim, name + ' rim'),
+    };
+}
+
+function paperStops(colours: readonly string[], name: string, ink: (colour: string, label: string) => string): [string, string, string] {
+    return [
+        ink(colours[0], name),
+        ink(colours[1], name + ' mid'),
+        ink(colours[2], name + ' edge'),
+    ];
+}
+
+/**
+ * The full-colour system map saved for printing (CP8). The space, the star field and the
+ * nebulae become the paper. Words use the print text. A screen ink that cannot be read on
+ * white at the mark level is darkened. The discs and the orbits otherwise keep their colours.
+ * `darkened` names each ink that changed.
+ */
+export function screenOnPaper(theme: OrbitTheme, el: HTMLElement): { theme: OrbitTheme; darkened: readonly string[] } {
+    const style = getComputedStyle(el);
+    const token = (name: string): string => style.getPropertyValue(name).trim();
+    const paper = token('--print-paper');
+    const darkened: string[] = [];
+    const ink = (colour: string, name: string): string => {
+        const next = darkenOnPaper(colour, paper);
+        if (next !== colour) darkened.push(name);
+        return next;
+    };
+    const blank: [string, string] = [withAlpha(paper, 0), withAlpha(paper, 0)];
+    const stars: Record<string, StarPaint> = {};
+    for (const key of Object.keys(theme.stars)) stars[key] = paperStar(theme.stars[key], 'star ' + key, ink);
+    const nebulae: [string, string][][] = theme.nebulae.map(() => [blank, blank, blank]);
+    return {
+        theme: {
+            ...theme,
+            space: paper,
+            spaceClear: withAlpha(paper, 0),
+            starCore: ink(theme.starCore, 'star core'),
+            stars,
+            starUnknown: paperStar(theme.starUnknown, 'star', ink),
+            field: theme.field.map(() => paper),
+            nebulae,
+            hzEdge: ink(theme.hzEdge, 'habitable zone'),
+            hzMid: ink(theme.hzMid, 'habitable zone band'),
+            hzLine: ink(theme.hzLine, 'habitable zone line'),
+            jump: ink(theme.jump, 'jump circle'),
+            pathBase: ink(theme.pathBase, 'orbit line'),
+            hzPanel: ink(theme.hzPanel, 'habitable panel'),
+            rock: ink(theme.rock, 'belt rock'),
+            scanWedge: [ink(theme.scanWedge[0], 'scan'), ink(theme.scanWedge[1], 'scan edge')],
+            tones: {
+                gasLarge: ink(theme.tones.gasLarge, 'large gas giant'),
+                gasMedium: ink(theme.tones.gasMedium, 'medium gas giant'),
+                gasSmall: ink(theme.tones.gasSmall, 'small gas giant'),
+                belt: ink(theme.tones.belt, 'belt'),
+                world: ink(theme.tones.world, 'world'),
+            },
+            moon: ink(theme.moon, 'moon'),
+            ring: ink(theme.ring, 'ring'),
+            beltBand: ink(theme.beltBand, 'belt band'),
+            night: ink(theme.night, 'night half'),
+            shadow: [ink(theme.shadow[0], 'shadow'), ink(theme.shadow[1], 'shadow mid'), ink(theme.shadow[2], 'shadow edge')],
+            mainworld: ink(theme.mainworld, 'mainworld'),
+            text: token('--print-orbit-text'),
+            textMuted: token('--print-orbit-text-muted'),
+            lock: ink(theme.lock, 'selection'),
+            lockGlow: [ink(theme.lockGlow[0], 'selection glow'), ink(theme.lockGlow[1], 'selection glow edge')],
+            signal: ink(theme.signal, 'signal'),
+            attention: ink(theme.attention, 'attention'),
+            tag: ink(theme.tag, 'tag'),
+            port: {
+                major: {
+                    washLit: paperStops(theme.port.major.washLit, 'port', ink),
+                    washDark: paperStops(theme.port.major.washDark, 'port shade', ink),
+                    hub: paperStops(theme.port.major.hub, 'port hub', ink),
+                },
+                minor: {
+                    washLit: paperStops(theme.port.minor.washLit, 'minor port', ink),
+                    washDark: paperStops(theme.port.minor.washDark, 'minor port shade', ink),
+                    hub: paperStops(theme.port.minor.hub, 'minor port hub', ink),
+                },
+            },
+            portStarboard: paperStops(theme.portStarboard, 'starboard', ink),
+            portPort: paperStops(theme.portPort, 'port lamp', ink),
+            portStrobe: paperStops(theme.portStrobe, 'strobe', ink),
+            portShade: ink(theme.portShade, 'port shade'),
+            portPath: ink(theme.portPath, 'port path'),
+        },
+        darkened,
+    };
+}
+
 /** The camera moves: a hop is --t-slow, a flight is --t-long (tokens.css names both for the camera); a layout change is --t-lineup. */
 export function readOrbitMotion(el: HTMLElement): OrbitMotion {
     const style = getComputedStyle(el);

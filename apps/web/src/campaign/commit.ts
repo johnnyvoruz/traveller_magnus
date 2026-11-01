@@ -25,7 +25,10 @@ export const pending = ref(false);
 
 /** The example campaign is open. It has no universe, so a write is not queued and not sent. */
 export const exampleRead = { on: false };
+/** `offline` when the connection failed, or the server's sentence when a refusal carried one. */
 export const lastError = ref('');
+/** The status of a refusal that carried a sentence. Null for offline and for a clean save. */
+export const lastStatus = ref<number | null>(null);
 
 const FLUSH_MS = 800;
 const RETRY_CAP_MS = 30_000;
@@ -202,6 +205,22 @@ export function commit(changes: CampaignChanges): void {
     scheduleFlush();
 }
 
+/** A refusal that named its reason. A body with no sentence stays a connection failure. */
+async function refusalOf(res: Response): Promise<{ status: number; sentence: string } | null> {
+    let body: unknown;
+    try {
+        body = await res.json();
+    } catch {
+        return null;
+    }
+    if (!body || typeof body !== 'object') return null;
+    const error = (body as { error?: { message?: unknown } }).error;
+    if (!error || typeof error.message !== 'string') return null;
+    const sentence = error.message.trim();
+    if (!sentence) return null;
+    return { status: res.status, sentence };
+}
+
 export async function flushCampaign(): Promise<void> {
     if (sending) return;
     if (cancelTimer) {
@@ -214,6 +233,7 @@ export async function flushCampaign(): Promise<void> {
     }
     if (!campaign.universeId) {
         lastError.value = 'offline';
+        lastStatus.value = null;
         return;
     }
     const records = [...queuedRecords.values()];
@@ -235,7 +255,14 @@ export async function flushCampaign(): Promise<void> {
             headers: JOURNAL_PUBLIC_HEADERS,
             body: JSON.stringify(bodyOf(records, links, journal, settings, clock)),
         });
-        if (!res.ok) throw new Error('offline');
+        if (!res.ok) {
+            const refusal = await refusalOf(res);
+            if (!refusal) throw new Error('offline');
+            restoreAll(records, links, journal, settings, clock);
+            lastError.value = refusal.sentence;
+            lastStatus.value = refusal.status;
+            scheduleRetry();
+        } else {
         const result = parseRead((await shared).CampaignChangesResult, (await res.json()).data);
         const handled = new Set<string>();
         let settingsHandled = false;
@@ -270,10 +297,13 @@ export async function flushCampaign(): Promise<void> {
         restoreUnhandled(records, links, journal, settings, clock, handled, settingsHandled, clockHandled);
         attempt = 0;
         lastError.value = '';
+        lastStatus.value = null;
         reindex();
+        }
     } catch {
         restoreAll(records, links, journal, settings, clock);
         lastError.value = 'offline';
+        lastStatus.value = null;
         scheduleRetry();
     } finally {
         sending = false;
@@ -353,6 +383,7 @@ export function resetCampaign(): void {
     attempt = 0;
     pending.value = false;
     lastError.value = '';
+    lastStatus.value = null;
     clearToasts();
     resetCampaignState();
 }

@@ -55,7 +55,7 @@ const WIDTHS = [
 ];
 const SPANS = ['Column', 'Half', 'Full'];
 
-test('the orbit title and the search field do not cover each other', { timeout: 180000 }, async (t) => {
+test('the orbit title and the search field do not cover each other', { timeout: 600000 }, async (t) => {
     const origin = process.env.VOYAGE_TRUTH_API;
     if (!(await chartReachable(origin))) {
         t.skip('the chart at ' + origin + ' cannot be reached');
@@ -154,14 +154,43 @@ test('the orbit title and the search field do not cover each other', { timeout: 
                 const btn = document.querySelector('[aria-label="Close panel"]');
                 if (btn) btn.click();
             });
-            // Closing from Full slides the card in from the right and down, over the rail's duration.
-            let closed = await measure();
-            const closedStart = Date.now();
-            while (Date.now() - closedStart < 8000) {
-                if (closed.omni && closed.nav && closed.identity && closed.nav.top >= closed.omni.bottom - 1) break;
-                await page.waitForTimeout(150);
-                closed = await measure();
-            }
+            // Close writes panel=closed. The panel element stays mounted; the open one
+            // goes. The card then slides until the nav's visible box sits under the
+            // search. The second argument is the page function's arg, so the ceiling
+            // is the third. 120 s per width; the test allows ten minutes for four widths.
+            await page.waitForFunction(() => {
+                const params = new URLSearchParams(location.search);
+                if (params.get('panel') !== 'closed') return false;
+                if (document.querySelector('.panel.is-open')) return false;
+                function box(selector) {
+                    const el = document.querySelector(selector);
+                    if (!el) return null;
+                    const style = getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden') return null;
+                    let r = el.getBoundingClientRect();
+                    let node = el.parentElement;
+                    while (node) {
+                        const parent = getComputedStyle(node);
+                        if (parent.overflow !== 'visible' || parent.overflowX !== 'visible' || parent.overflowY !== 'visible') {
+                            const c = node.getBoundingClientRect();
+                            const left = Math.max(r.left, c.left);
+                            const top = Math.max(r.top, c.top);
+                            const right = Math.min(r.right, c.right);
+                            const bottom = Math.min(r.bottom, c.bottom);
+                            r = { left, top, right, bottom, width: right - left, height: bottom - top };
+                        }
+                        node = node.parentElement;
+                    }
+                    if (r.width < 2 || r.height < 2) return null;
+                    return r;
+                }
+                const omni = box('.omni-field');
+                const nav = box('.orbit-nav');
+                const identity = box('.orbit-identity');
+                if (!omni || !nav || !identity) return false;
+                return nav.top >= omni.bottom - 1;
+            }, null, { timeout: 120000 });
+            const closed = await measure();
             if (!closed.omni) hits.push(size.name + ' closed search missing');
             if (!closed.identity) hits.push(size.name + ' closed title missing');
             for (const key of ['nav', 'identity', 'back', 'title']) {

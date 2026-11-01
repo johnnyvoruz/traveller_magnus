@@ -150,6 +150,8 @@ describe('the Cargo and Ledger sections render', { concurrency: 1 }, () => {
         // DF12b: it posts the upkeep, the same five boxes and figure as Upkeep.
         assert.match(html, /<h4 class="vt-part-head">This month&#39;s upkeep<\/h4>/);
         assert.match(html, /data-post-month>Post this month&#39;s upkeep: −Cr14,500, dated 014-1105<\/button>/);
+        // DU43: nothing on the ledger yet.
+        assert.match(html, /<p class="vt-fine" data-month-last>Not posted yet\.<\/p>/);
         const none = await render(vessel({ id: 'cr_66666666-6666-4666-8666-666666666666' }));
         assert.match(none, /Write the ship&#39;s recurring costs on the ship sheet \(Mortgage Cost, Maintenance Cost, Life Support Cost, Salary Cost, Running Cost\) to post its upkeep each month\./);
     });

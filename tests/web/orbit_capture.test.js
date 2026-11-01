@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { paperPixels, PRINT_DPR } from '../../apps/web/src/capture/paper.ts';
 import { fitCamera, startCamera, viewOf } from '../../apps/web/src/orbit/camera.ts';
 import { CAPTURE_FOOT, captureSize, fittedCamera, fittedOrientation, framedCamera } from '../../apps/web/src/orbit/capture.ts';
+import { contrastOnPaper, darkenOnPaper } from '../../apps/web/src/orbit/theme.ts';
 import { sceneBounds, planSystem } from '../../apps/web/src/orbit/layout.ts';
 import { DEFAULT_LAYERS } from '../../apps/web/src/orbit/picture.ts';
 import { HEX_KEY, testSystem } from './orbit_fixture.js';
@@ -82,10 +83,26 @@ test('the capture draws one frame on its own canvas, with flat discs, and does n
     assert.match(view, /label: 'What\\'s on screen'/);
     assert.match(view, /label: 'The whole system'/);
     assert.match(view, /choice\.look === 'screen' \? readOrbitTheme\(el\) : printOrbitTheme\(el\)/);
+    assert.match(view, /screenOnPaper\(read, el\)\.theme/);
     assert.match(view, /showToast\(TOO_LARGE\)/);
     const theme = read('orbit/theme.ts');
     assert.match(theme, /export function printOrbitTheme\(el: HTMLElement\): OrbitTheme/);
     assert.match(theme, /space: paper/);
+    assert.match(theme, /export function screenOnPaper\(theme: OrbitTheme, el: HTMLElement\)/);
+    assert.match(theme, /field: theme\.field\.map\(\(\) => paper\)/);
     assert.match(theme, /tLock: 0/);
     assert.doesNotMatch(theme, /#[0-9a-fA-F]{3,8}\b/);
+});
+
+test('a screen ink that fails the mark level on white is darkened, and one that passes is kept', () => {
+    const paper = '#ffffff';
+    const light = ['#ffffff', '#78baff', '#66fcf1', '#e4e8ea', '#c8a97a', '#fff4ea', 'rgba(88, 214, 120, 0.16)'];
+    for (const colour of light) {
+        const next = darkenOnPaper(colour, paper);
+        assert.ok(contrastOnPaper(next, paper) >= 3, colour + ' -> ' + next);
+        assert.notEqual(next, colour);
+    }
+    assert.equal(darkenOnPaper('#16181c', paper), '#16181c');
+    assert.equal(darkenOnPaper('#6a7070', paper), '#6a7070');
+    assert.equal(darkenOnPaper('rgba(0, 0, 0, 0)', paper), 'rgba(0, 0, 0, 0)');
 });
