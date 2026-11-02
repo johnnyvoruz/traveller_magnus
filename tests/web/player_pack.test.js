@@ -200,7 +200,7 @@ test('the file contains no referee-only marker', () => {
     assert.equal(file.html.includes('Bare_Sector/0101'), true);
     assert.equal(file.html.includes('ZREF_STALE_LABEL'), false);
     assert.equal(file.html.includes(play.person.sheet.line), true);
-    assert.equal(file.html.includes(play.vessel.sheet.line), false);
+    assert.equal(file.html.includes(play.vessel.sheet.line), true);
     assert.equal(file.html.includes(play.person.images[0].caption), false);
     assert.equal(file.html.includes(play.person.provenance.universeId), false);
     assert.equal(file.html.includes('Member of'), true);

@@ -105,7 +105,7 @@ const WIDTHS = [
     { name: '390', width: 390, height: 844, closePanel: false },
 ];
 
-test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 180000 }, async (t) => {
+test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 600000 }, async (t) => {
     const origin = process.env.VOYAGE_TRUTH_API;
     if (!(await chartReachable(origin))) {
         t.skip('the chart at ' + origin + ' cannot be reached');
@@ -247,21 +247,55 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
             if (size.name === '1600') {
                 const before = await page.evaluate(() => {
                     const el = document.querySelector('.orbit-comms');
+                    const root = document.documentElement;
+                    root.dataset.commsDuring = '';
+                    root.dataset.commsEnded = '';
+                    const sample = (node) => {
+                        if (!(node instanceof Element) || !node.isConnected || !node.classList.contains('is-hidden')) return;
+                        if (root.dataset.commsDuring) return;
+                        const b = node.getBoundingClientRect();
+                        root.dataset.commsDuring = b.width + 'x' + b.height;
+                    };
+                    if (el instanceof Element) {
+                        el.addEventListener('transitionend', (event) => {
+                            if (event.target === el && event.propertyName === 'opacity') sample(el);
+                        });
+                        if (el.parentElement) {
+                            const obs = new MutationObserver((records) => {
+                                for (const record of records) {
+                                    if (record.type === 'attributes') sample(record.target);
+                                    if (record.type === 'childList') {
+                                        for (const node of record.removedNodes) {
+                                            if (node instanceof Element && node.classList.contains('orbit-comms')) root.dataset.commsEnded = '1';
+                                        }
+                                    }
+                                }
+                            });
+                            obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+                            obs.observe(el.parentElement, { childList: true });
+                        }
+                    }
+                    const tick = () => {
+                        const node = document.querySelector('.orbit-comms');
+                        if (!node) {
+                            root.dataset.commsEnded = '1';
+                            return;
+                        }
+                        sample(node);
+                        setTimeout(tick, 16);
+                    };
+                    setTimeout(tick, 16);
                     const b = el.getBoundingClientRect();
                     return b.width + 'x' + b.height;
                 });
                 await page.click('[data-command="system-comms"]');
-                await page.waitForFunction(() => {
-                    const el = document.querySelector('.orbit-comms');
-                    return !!el && Number(getComputedStyle(el).opacity) < 1;
-                }, { timeout: 1000 });
-                const during = await page.evaluate(() => {
-                    const el = document.querySelector('.orbit-comms');
-                    const b = el.getBoundingClientRect();
-                    return b.width + 'x' + b.height;
-                });
-                if (during !== before) hits.push('1600 fade moved ' + before + ' to ' + during);
-                await page.waitForSelector('.orbit-comms', { state: 'detached', timeout: 2000 });
+                // The second argument is the page function's arg. The ceiling is the
+                // third: the fade's own end, on a slow machine, not a one-second glance
+                // that the suite can miss once the receiver has already left.
+                await page.waitForFunction(() => document.documentElement.dataset.commsEnded === '1', null, { timeout: 120000 });
+                const during = await page.evaluate(() => document.documentElement.dataset.commsDuring || '');
+                if (!during) hits.push('1600 fade had no settled box');
+                else if (during !== before) hits.push('1600 fade moved ' + before + ' to ' + during);
             }
             await page.close();
         }

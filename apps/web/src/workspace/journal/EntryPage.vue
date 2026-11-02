@@ -8,6 +8,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_ENTRY_KINDS, CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignEntry, type CampaignEntryKind } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../../campaign/commit.ts';
+import { notSavedWords, saveFailedWords } from '../../campaign/save_words.ts';
 import { campaign } from '../../campaign/store.ts';
 import { deleteEntry, nextSessionNumber, saveEntry } from '../../campaign/journal.ts';
 import Icon from '../../design/Icon.vue';
@@ -281,7 +282,7 @@ watch(() => props.id, greet, { immediate: true });
   <p v-if="!entry" class="jn-missing">This entry is not in the journal.</p>
   <article v-else ref="rootEl" class="rec jn-entry" :data-beside="beside ? 'yes' : 'no'" :data-save="saveState" @keydown="onKey">
     <div v-if="saveState === 'failed' && lastError" class="camp-strip is-error" role="alert">
-      <span>That change was not saved. Your text is still here.</span>
+      <span data-save-failed>{{ saveFailedWords(lastError) }}</span>
       <button type="button" class="ui-btn" @click="flushCampaign()">Try again</button>
     </div>
 
@@ -311,7 +312,7 @@ watch(() => props.id, greet, { immediate: true });
         </div>
         <p v-if="changedHere || saveState !== 'saved'" class="rec-save" :class="'is-' + saveState" role="status">
           <template v-if="saveState === 'saving'">{{ saveWords }}</template>
-          <template v-else-if="saveState === 'failed'">Not saved</template>
+          <template v-else-if="saveState === 'failed'">{{ notSavedWords(lastError) }}</template>
           <template v-else><Icon name="check" :size="12" />Saved</template>
         </p>
       </header>

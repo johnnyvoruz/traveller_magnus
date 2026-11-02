@@ -79,6 +79,15 @@ describe('rendered', { concurrency: 1 }, () => {
             'Characters',
             'The journal',
             'The timeline',
+            'Build',
+            'The orbit view',
+            'The system page',
+            'The party',
+            'Account',
+            'The Marketplace',
+            'What&#39;s new',
+            'View as players',
+            'The map',
         ]) {
             assert.match(html, new RegExp(heading));
         }
@@ -126,6 +135,24 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /New session/);
         assert.match(html, /<h3>The timeline<\/h3>/);
         assert.match(html, /Only this ship/);
+        assert.match(html, /<h3>Build<\/h3>/);
+        assert.match(html, /Design by hand…/);
+        assert.match(html, /<h3>The orbit view<\/h3>/);
+        assert.match(html, /Explore orbits/);
+        assert.match(html, /<h3>The system page<\/h3>/);
+        assert.match(html, /world profile/);
+        assert.match(html, /<h3>The party<\/h3>/);
+        assert.match(html, /Move the party/);
+        assert.match(html, /<h3>Account<\/h3>/);
+        assert.match(html, /I lost my passkey/);
+        assert.match(html, /<h3>The Marketplace<\/h3>/);
+        assert.match(html, /Search packages/);
+        assert.match(html, /<h3>What&#39;s new<\/h3>/);
+        assert.match(html, /The full list/);
+        assert.match(html, /<h3>View as players<\/h3>/);
+        assert.match(html, /Stop viewing as players/);
+        assert.match(html, /<h3>The map<\/h3>/);
+        assert.match(html, /How to use the map/);
         assert.equal(html.toLowerCase().includes('snapshot'), false);
         assert.match(html, /Lower DM and Raise DM/);
         assert.match(html, /Boon keeps the best two of three dice/);

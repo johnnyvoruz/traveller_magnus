@@ -16,10 +16,10 @@ const cases = JSON.parse(readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), 'fixtures/ai_snapshot/ai_paste_cases.json'),
     'utf8',
 ));
-const notJson = cases.find((item) => item.expect && item.expect.code === 'not_json');
+const ownCopy = cases.find((item) => item.name === "the campaign's own copy");
 
 test('twenty snapshots pasted back propose nothing', () => {
-    assert.ok(notJson, 'the paste cases name a block that is not JSON');
+    assert.ok(ownCopy, "the paste cases name the campaign's own copy");
     const built = buildCampaigns('aq4-round-2-snapshot', 20);
     assert.equal(built.length, 20);
     for (const [index, item] of built.entries()) {
@@ -35,9 +35,9 @@ test('twenty snapshots pasted back propose nothing', () => {
         assert.equal(found.json.includes('[ ... ]'), true);
         const pasted = pastedBatch(text);
         assert.equal(pasted.ok, false, `campaign ${index}`);
-        assert.equal(pasted.code, notJson.expect.code, `campaign ${index}`);
-        assert.deepEqual(pasted.problems, notJson.expect.problems, `campaign ${index}`);
-        assert.deepEqual(pasted.sentences, notJson.expect.sentences, `campaign ${index}`);
+        assert.equal(pasted.code, ownCopy.expect.code, `campaign ${index}`);
+        assert.deepEqual(pasted.problems, ownCopy.expect.problems, `campaign ${index}`);
+        assert.deepEqual(pasted.sentences, ownCopy.expect.sentences, `campaign ${index}`);
         assert.equal(pasted.batch, undefined, `campaign ${index}`);
     }
 });

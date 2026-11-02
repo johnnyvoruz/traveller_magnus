@@ -17,6 +17,23 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.6',
+        date: '2026-11-01',
+        title: 'Set up the ship',
+        story: [
+            'A ship\'s page opens on a Set up card with the boxes the trade screens read, and your first campaign asks its name.',
+            'Every page carries security headers, and a note made of brackets cannot stall the journal.',
+        ],
+        items: [
+            'Security: every page and answer now carries headers that stop a browser guessing a file\'s type, limit what address other sites see and keep the app out of other sites\' frames. A journal note made only of brackets no longer stalls the browser that opens it.',
+            'Set up the ship: a card at the top of a ship\'s page holds the eleven sheet boxes the trade screens read, from Jump Drive Output to Running Cost, each with a line saying what reads it. When every box has a number the card folds to one line with Edit.',
+            'Name your campaign: the first step on Start here, with the box prefilled. The Party tab says when a campaign is still called My map, with Rename beside it.',
+            'A refused save says why: "Not saved: Too many requests." on the record, the journal entry and the Party tab, with your text kept and the retry as before.',
+            'Help covers every screen: nine new sections, from Build and the orbit view to the Marketplace, What\'s new and View as players.',
+            'Smaller: the Player Pack prints a character\'s or ship\'s sheet as lines, not code; pasting the campaign\'s own copy back into Proposals says so instead of blaming your AI.',
+        ],
+    },
+    {
         version: '1.3.5',
         date: '2026-10-31',
         title: 'Passengers, freight and mail',

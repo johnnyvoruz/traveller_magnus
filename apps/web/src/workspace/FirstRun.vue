@@ -9,6 +9,8 @@ import Icon from '../design/Icon.vue';
 import { commands } from '../shell/registry.ts';
 import { frame, onFrame } from '../shell/frame.ts';
 import { dateIsSet, firstRunCard, firstRunCurrent, vesselHasPlace, worldIsOpen } from './first_run.ts';
+import { isDefaultName, openCampaignName } from './campaign_name.ts';
+import CampaignName from './CampaignName.vue';
 
 defineProps<{
     /** Changes cannot be made just now (offline). */
@@ -34,6 +36,8 @@ const card = computed(() => firstRunCard({
     dateSet: dateIsSet(campaign.clock),
 }));
 const current = computed(() => firstRunCurrent(card.value));
+/** The campaign has a name of its own (DU44): not the store's "My map". */
+const named = computed(() => !isDefaultName(openCampaignName(campaign.universes, campaign.universeId)));
 
 function locate(): void {
     const command = commands().find((item) => item.id === 'locate-system');
@@ -56,6 +60,11 @@ onBeforeUnmount(() => {
     <p class="ui-kicker is-signal">Start here</p>
     <h2>Set up this campaign</h2>
     <ol class="ui-steps">
+      <li class="ui-step" :class="{ 'is-lit': named }" data-first-run-name>
+        <p>Name your campaign</p>
+        <CampaignName :read-only="readOnly" label="Campaign name" />
+        <span v-if="named" class="first-run-done">Done</span>
+      </li>
       <li class="ui-step" :class="{ 'is-lit': card.world }" :aria-current="current === 1 ? 'step' : undefined">
         <p>Find your ship's world</p>
         <button

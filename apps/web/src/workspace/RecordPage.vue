@@ -9,6 +9,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord, type CampaignRecordType } from '@voyage/shared';
 import { flushCampaign, lastError, pending } from '../campaign/commit.ts';
+import { notSavedWords, saveFailedWords } from '../campaign/save_words.ts';
 import { campaign } from '../campaign/store.ts';
 import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
@@ -29,6 +30,7 @@ import { publishThisRecord } from './market/command.ts';
 import { canPublishRecords } from './market/record_publish.ts';
 import PrintButton from './PrintButton.vue';
 import RecordWhen from './RecordWhen.vue';
+import ShipSetup from './ShipSetup.vue';
 import SpreadNews from './SpreadNews.vue';
 import { RECORD_TYPES, addTag, cleanDetails, cleanName, cleanSummary } from './records.ts';
 import type { BodyPart } from './journal/body.ts';
@@ -247,7 +249,7 @@ watch(() => props.id, () => {
 <template>
   <article v-if="record" class="rec" :data-save="saveState">
     <div v-if="saveState === 'failed' && lastError" class="camp-strip is-error" role="alert">
-      <span>That change was not saved. Your text is still here.</span>
+      <span data-save-failed>{{ saveFailedWords(lastError) }}</span>
       <button type="button" class="ui-btn" @click="flushCampaign()">Try again</button>
     </div>
 
@@ -273,7 +275,7 @@ watch(() => props.id, () => {
       </div>
       <p class="rec-save" :class="'is-' + saveState" role="status">
         <template v-if="saveState === 'saving'">{{ saveWords }}</template>
-        <template v-else-if="saveState === 'failed'">Not saved</template>
+        <template v-else-if="saveState === 'failed'">{{ notSavedWords(lastError) }}</template>
         <template v-else><Icon name="check" :size="12" />Saved</template>
       </p>
     </header>
@@ -373,6 +375,8 @@ watch(() => props.id, () => {
     <RecordMentions :id="id" />
 
     <RecordTimeline :id="id" />
+
+    <ShipSetup v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 
     <TrackBlock v-if="record.type === 'vessel'" :id="id" :read-only="readOnly" />
 

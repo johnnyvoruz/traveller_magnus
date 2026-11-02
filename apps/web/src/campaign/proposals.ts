@@ -31,6 +31,8 @@ import { campaign, transport } from './store.ts';
 
 const NO_BLOCK = 'No proposals found. Your AI\'s reply should end with one ```json block holding the batch.';
 const NOT_JSON = 'The ```json block is not valid JSON. Ask your AI to give the whole block again.';
+const OWN_COPY = 'This is the campaign\'s own copy for your AI. Paste your AI\'s reply instead.';
+const SNAPSHOT_HEADING = /^# .+?: the campaign for your AI agent$/;
 const BATCH_COUNT = 'A batch holds at most 200 proposals.';
 const BATCH_BYTES = 'A batch is at most 256 KB.';
 const MAX_SENTENCES = 20;
@@ -113,8 +115,15 @@ export function problemSentence(problem: PasteProblem): string {
     return `${who}: ${plainReason(problem)}.`;
 }
 
+/** The Copy for your AI file starts with `# <name>: the campaign for your AI agent`. */
+function isOwnCopy(text: string): boolean {
+    const line = text.replace(/\r\n?/g, '\n').split('\n').find((row) => row.trim() !== '');
+    return !!line && SNAPSHOT_HEADING.test(line.trim());
+}
+
 /** Finds the batch in a pasted reply and checks it. Does not send it. */
 export function pastedBatch(text: string): PastedBatch {
+    if (isOwnCopy(text)) return { ok: false, code: 'invalid', problems: [], sentences: [OWN_COPY] };
     const found = findBlock(text);
     if (!found) return { ok: false, code: 'no_block', problems: [], sentences: [NO_BLOCK] };
     let value: unknown;

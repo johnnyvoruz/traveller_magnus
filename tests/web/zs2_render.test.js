@@ -181,11 +181,13 @@ test('ZS2 FINDING: a fence with a zero-width or bidi character on its line still
     }
 });
 
-test('ZS2 SECURITY: a line of brackets does not stall the journal', { todo: 'open finding S4' }, () => {
+test('ZS2 SECURITY: a line of brackets does not stall the journal', () => {
+    const text = '['.repeat(100_000);
     const started = performance.now();
-    parseRich('['.repeat(3000));
+    const html = richHtml(parseRich(text));
     const spent = performance.now() - started;
-    assert.equal(spent < 500, true, `${Math.round(spent)} ms for 3,000 characters; a body may hold 100,000`);
+    assert.equal(html, text);
+    assert.equal(spent < 1000, true, `${Math.round(spent)} ms for 100,000 characters`);
 });
 
 test('ZS2: stars and long plain text stay quick at the size of a body', () => {

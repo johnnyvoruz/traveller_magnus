@@ -6,7 +6,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { newRecord } from '../../apps/web/src/workspace/records.ts';
 import { systemAnchor } from '../../apps/web/src/workspace/places.ts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { dateIsSet, firstRunCard, firstRunCurrent, vesselHasPlace, worldIsOpen } from '../../apps/web/src/workspace/first_run.ts';
+import { DEFAULT_CAMPAIGN_NAME, isDefaultName, nameToSave, openCampaignName, stillCalledWords } from '../../apps/web/src/workspace/campaign_name.ts';
+
+const src = (file) => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../apps/web/src', file), 'utf8');
 
 const STAMP = '2026-10-17T12:00:00.000Z';
 const REGINA = 'Spinward_Marches/1910';
@@ -60,4 +66,36 @@ test('the card shows for none and for one condition, and hides when the ship and
     assert.equal(bothClosed.show, false);
     assert.equal(dateIsSet(null), false);
     assert.equal(dateIsSet({ days: 1, rev: 0 }), true);
+});
+
+test('the first campaign asks its name (DU44): the store\'s "My map" is the default, a typed name saves cleaned, blank or unchanged saves nothing', () => {
+    assert.equal(DEFAULT_CAMPAIGN_NAME, 'My map');
+    assert.match(src('campaign/store.ts'), /postCampaign\('My map'\)/, 'the store still makes the first campaign under that name');
+    assert.equal(isDefaultName('My map'), true);
+    assert.equal(isDefaultName('  My  map '), true);
+    assert.equal(isDefaultName('Kestrel Run'), false);
+    assert.equal(isDefaultName(''), false);
+    const universes = [{ id: 'uni-1', name: 'My map' }, { id: 'uni-2', name: 'Kestrel Run' }];
+    assert.equal(openCampaignName(universes, 'uni-2'), 'Kestrel Run');
+    assert.equal(openCampaignName(universes, 'uni-9'), '');
+    assert.equal(openCampaignName(universes, null), '');
+    assert.equal(nameToSave('  Kestrel   Run ', 'My map'), 'Kestrel Run');
+    assert.equal(nameToSave('', 'My map'), null);
+    assert.equal(nameToSave('   ', 'My map'), null);
+    assert.equal(nameToSave('My map', 'My map'), null);
+    assert.equal(nameToSave(' My  map ', 'My map'), null, 'the same name after cleaning');
+    assert.equal(stillCalledWords('My map'), 'Your campaign is still called My map.');
+});
+
+test('the name box sits first on Start here and beside the invite link while the name is "My map" (DU44 pins)', () => {
+    const first = src('workspace/FirstRun.vue');
+    assert.match(first, /<ol class="ui-steps">\s+<li class="ui-step" :class="\{ 'is-lit': named \}" data-first-run-name>\s+<p>Name your campaign<\/p>\s+<CampaignName :read-only="readOnly" label="Campaign name" \/>/, 'the first step');
+    assert.match(first, /const named = computed\(\(\) => !isDefaultName\(openCampaignName\(campaign\.universes, campaign\.universeId\)\)\);/);
+    const box = src('workspace/CampaignName.vue');
+    assert.match(box, /data-campaign-name\s+@keydown\.enter\.prevent="save"\s+@keydown\.esc="reset"\s+@keydown\.stop\s+@blur="save"/, 'saved on Enter or on leaving the box');
+    assert.match(box, /await renameCampaign\(id, name\);/, 'the Campaigns panel\'s own rename; no new store call');
+    assert.match(box, /showToast\('The campaign could not be renamed\. Try again\.'\)/);
+    const board = src('workspace/players/PlayersBoard.vue');
+    assert.match(board, /<template v-if="campaignName && isDefaultName\(campaignName\)">\s+<p v-if="!renaming" class="players-fine players-named" data-players-still-named>\s+\{\{ stillCalledWords\(campaignName\) \}\}\s+<button type="button" class="ui-btn" :disabled="readOnly" data-players-rename @click="renaming = true">Rename<\/button>\s+<\/p>\s+<CampaignName v-else :read-only="readOnly" label="Campaign name" @saved="renaming = false" \/>/, 'the invite box');
+    assert.match(src('workspace/players/PlayersSection.vue'), /:campaign-name="campaignName"/);
 });

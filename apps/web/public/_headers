@@ -1,7 +1,18 @@
+# Security headers on every static file. The same policy is report-only in
+# apps/api/src/security_headers.ts, and the Worker stamps it on its own responses.
+# Google Fonts are the sheet pages. The policy is not enforced.
+# One rule: a header named twice is joined with a comma.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://cdn.traveller.voyage; connect-src 'self' https://cdn.traveller.voyage wss:; font-src 'self' https://fonts.gstatic.com; worker-src 'self' blob:; frame-ancestors 'none'; report-uri /api/csp-report
+
 # Cache headers for the static files Cloudflare serves from apps/web/dist.
 # Cloudflare Workers Static Assets reads this file (wrangler.toml [assets]) and applies it to
 # static responses only. The Worker's own /api and /mcp responses set their own headers.
-# Files with no rule keep the default (public, max-age=0, must-revalidate, with an ETag):
+# The security rule above does not set a cache lifetime. These keep the default
+# (public, max-age=0, must-revalidate, with an ETag):
 # /, /index.html, /sw.js, /shell_cache.js, /manifest.webmanifest, /favicon.*, /robots.txt,
 # /sitemap.xml and /og.png. A deploy reaches the page through those.
 

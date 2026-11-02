@@ -54,7 +54,11 @@ function httpHref(raw: string): string | null {
     return url.href;
 }
 
-function readLink(text: string, start: number, end: number, nameOf: NameOf): { node: RichNode; next: number } | null {
+/**
+ * A link starting at `start`, or where to resume. A `[` that fails shares its first
+ * `]` with every `[` before that `]`, so the scan does not start over at the next character.
+ */
+function readLink(text: string, start: number, end: number, nameOf: NameOf): { node: RichNode | null; next: number } {
     let j = start + 1;
     while (j < end) {
         const mention = mentionAt(text, j, nameOf);
@@ -62,17 +66,22 @@ function readLink(text: string, start: number, end: number, nameOf: NameOf): { n
             j = mention.end;
             continue;
         }
-        if (text[j] === '\n' || text[j] === '\r') return null;
+        if (text[j] === '\n' || text[j] === '\r') return { node: null, next: j };
         if (text[j] === ']') break;
         j += 1;
     }
-    if (j >= end || text[j] !== ']' || text[j + 1] !== '(') return null;
+    if (j >= end || text[j] !== ']') return { node: null, next: j };
+    if (text[j + 1] !== '(') return { node: null, next: j + 1 };
     const urlStart = j + 2;
     let urlEnd = urlStart;
-    while (urlEnd < end && text[urlEnd] !== ')') urlEnd += 1;
-    if (urlEnd >= end) return null;
+    let inner = -1;
+    while (urlEnd < end && text[urlEnd] !== ')') {
+        if (inner < 0 && text[urlEnd] === '[') inner = urlEnd;
+        urlEnd += 1;
+    }
+    if (urlEnd >= end) return { node: null, next: inner < 0 ? urlEnd : inner };
     const href = httpHref(text.slice(urlStart, urlEnd));
-    if (!href) return null;
+    if (!href) return { node: null, next: inner < 0 ? urlEnd + 1 : inner };
     return {
         node: { kind: 'link', href, children: parseRange(text, start + 1, j, nameOf) },
         next: urlEnd + 1,
@@ -113,13 +122,13 @@ function parseRange(text: string, start: number, end: number, nameOf: NameOf): R
         }
         if (text[i] === '[' && text[i - 1] !== '!') {
             const link = readLink(text, i, end, nameOf);
-            if (link) {
+            if (link.node) {
                 nodes.push(link.node);
                 i = link.next;
                 continue;
             }
-            pushText(nodes, '[');
-            i += 1;
+            pushText(nodes, text.slice(i, link.next));
+            i = link.next;
             continue;
         }
         let next = i + 1;

@@ -10,6 +10,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { CAMPAIGN_LIMITS, type CampaignAnchor, type CampaignRecord } from '@voyage/shared';
 import { lastError, pending } from '../campaign/commit.ts';
+import { notSavedWords } from '../campaign/save_words.ts';
 import { campaign } from '../campaign/store.ts';
 import { trackOf } from '../campaign/track.ts';
 import Icon from '../design/Icon.vue';
@@ -287,7 +288,7 @@ watch(() => campaign.universeId, () => { choosing.value = ''; });
         />
         <p class="rec-save party-save" :class="'is-' + saveState" role="status">
           <template v-if="saveState === 'saving'">Saving…</template>
-          <template v-else-if="saveState === 'failed'">Not saved</template>
+          <template v-else-if="saveState === 'failed'">{{ notSavedWords(lastError) }}</template>
           <template v-else><Icon name="check" :size="12" />Saved</template>
         </p>
       </header>

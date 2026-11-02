@@ -6,12 +6,17 @@
  */
 import type { PlayerList } from '@voyage/shared';
 import Icon from '../../design/Icon.vue';
+import { ref } from 'vue';
 import { inviteLine, isFull, memberLine, PLAYERS_FULL, type InviteShown, type MemberRow } from './players_words.ts';
+import { isDefaultName, stillCalledWords } from '../campaign_name.ts';
+import CampaignName from '../CampaignName.vue';
 
 const props = defineProps<{
     readOnly: boolean;
     invite: InviteShown | null;
     inviteBusy: boolean;
+    /** The campaign's name: while it is still "My map", the box offers to rename it (DU44). Absent, nothing is said. */
+    campaignName?: string;
     list: PlayerList | null;
     listState: 'loading' | 'ready' | 'failed';
     listWords: string;
@@ -32,6 +37,8 @@ const emit = defineEmits<{
     person: [member: MemberRow, personId: string | null];
 }>();
 
+/** Rename pressed: the name box in place of the line (DU44). */
+const renaming = ref(false);
 const personName = (id: string | null): string => (id ? props.people.find((item) => item.id === id)?.name ?? '' : '');
 </script>
 
@@ -42,6 +49,13 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
     </div>
 
     <div class="players-invite" data-players-invite>
+      <template v-if="campaignName && isDefaultName(campaignName)">
+        <p v-if="!renaming" class="players-fine players-named" data-players-still-named>
+          {{ stillCalledWords(campaignName) }}
+          <button type="button" class="ui-btn" :disabled="readOnly" data-players-rename @click="renaming = true">Rename</button>
+        </p>
+        <CampaignName v-else :read-only="readOnly" label="Campaign name" @saved="renaming = false" />
+      </template>
       <template v-if="invite">
         <label class="players-link">
           <span class="rec-sr">Invite link</span>
@@ -115,6 +129,13 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
 
 .players-invite > .ui-btn {
   justify-self: start;
+}
+
+.players-named {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .players-link input {

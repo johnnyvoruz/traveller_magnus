@@ -17,10 +17,13 @@ import { showToast } from '../../shell/toast.ts';
 import { archiveMember, bringBack, failWords, setMemberPerson } from './referee_calls.ts';
 import PlayersBoard from './PlayersBoard.vue';
 import { partyPeople, type InviteShown, type MemberRow } from './players_words.ts';
+import { openCampaignName } from '../campaign_name.ts';
 
 const props = defineProps<{ readOnly: boolean }>();
 
 const invite = ref<InviteShown | null>(null);
+/** The campaign's name, for the box's "still called My map" line (DU44). */
+const campaignName = computed(() => openCampaignName(campaign.universes, campaign.universeId));
 const inviteBusy = ref(false);
 const list = ref<PlayerList | null>(null);
 /** The list's state: loading, ready, or a sentence to show in its place. */
@@ -164,6 +167,7 @@ watch(() => campaign.universeId, () => {
     :read-only="readOnly"
     :invite="invite"
     :invite-busy="inviteBusy"
+    :campaign-name="campaignName"
     :list="list"
     :list-state="listState"
     :list-words="listWords"

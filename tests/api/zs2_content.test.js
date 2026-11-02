@@ -336,15 +336,45 @@ VALUES ('z2-invite', '${A}', NULL, '${sha(live)}', 'player', '2036-01-01T00:00:0
                 assert.equal(missing.text.includes('<script'), false);
             });
 
-            await t.test('round 5 FINDING: the app page and the API send the security headers', { todo: 'open finding F4' }, async () => {
+            await t.test('round 5 FINDING: the app page and the API send the security headers', async () => {
                 for (const url of [`${base}/`, `${base}/api/health`, `${base}/ship/${marks.markup}`]) {
                     const res = await jsonFetch(url, { headers: HTML });
                     assert.equal(res.headers.get('x-content-type-options'), 'nosniff', url);
-                    assert.match(res.headers.get('referrer-policy') ?? '', /strict-origin|no-referrer/, url);
+                    assert.equal(res.headers.get('referrer-policy'), 'strict-origin-when-cross-origin', url);
+                    assert.equal(res.headers.get('x-frame-options'), 'DENY', url);
                 }
                 const page = await jsonFetch(`${base}/`, { headers: HTML });
-                assert.equal(Boolean(page.headers.get('x-frame-options')) || /frame-ancestors/.test(page.headers.get('content-security-policy') ?? ''), true);
-                assert.match(page.headers.get('content-security-policy') ?? '', /default-src|script-src/);
+                const policy = page.headers.get('content-security-policy-report-only') ?? '';
+                assert.match(policy, /script-src/);
+                assert.match(policy, /frame-ancestors 'none'/);
+                assert.equal(page.headers.get('content-security-policy'), null);
+            });
+
+            await t.test('round 5: the character room socket still opens', async () => {
+                const { WebSocket } = await import('undici');
+                const made = await jsonFetch(`${base}/api/characters`, {
+                    method: 'POST',
+                    headers: json(c['z2-o']),
+                    body: JSON.stringify({ name: 'Voss' }),
+                });
+                assert.equal(made.status, 201, made.text.slice(0, 300));
+                const id = made.body.data.character.id;
+                const ws = new WebSocket(`${base.replace('http', 'ws')}/api/characters/${id}/live`, { headers: { cookie: c['z2-o'] } });
+                try {
+                    await new Promise((resolve, reject) => {
+                        const timer = setTimeout(() => reject(new Error('socket failed')), 5000);
+                        ws.addEventListener('open', () => {
+                            clearTimeout(timer);
+                            resolve(undefined);
+                        });
+                        ws.addEventListener('error', () => {
+                            clearTimeout(timer);
+                            reject(new Error('socket failed'));
+                        });
+                    });
+                } finally {
+                    ws.close();
+                }
             });
 
             await t.test('round 1: a member can store a body of brackets, so the parser finding is reachable by a player', async () => {

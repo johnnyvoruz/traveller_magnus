@@ -90,6 +90,42 @@ import { PUBLIC_GAMES_LABEL } from './public_games.ts';
         <h3>The timeline</h3>
         <p>Open Campaign, then Timeline. It lists dated journal entries, dated records, a ship's legs, and where the party is, by year and day. Today is the campaign date. Select a row to open it. Choose All types, or one record type. Select Only this ship to keep the party's ship. With no campaign date, select Set the campaign date. With nothing dated yet, select Open the Journal.</p>
       </li>
+      <li class="ui-step">
+        <h3>Build</h3>
+        <p>With Build on, select a hex and select Generate a system. The preview is a draft. Select Keep to put it on your map, Roll again for another, or Discard to drop it. Select Design by hand… to place the bodies yourself. Select Add star, then Add world, Add gas giant, Add belt, or Add moon. Select Pick orbit to place the selected body. Select Keep to store that draft. A system marked Chart is the chart's. One marked Yours is one you kept. Select Edit this system to change a charted system. When you keep those changes, it becomes yours, and the chart stays as it was. Select Restore to the chart to put the chart's system back. Open the command palette and select New sector to add a sector. The book says what a generated world means.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The orbit view</h3>
+        <p>On a system, select Explore orbits. You can also double-click the system on the map. Select Time, View, or Layers. Time moves the picture: Back 1 week, Advance 1 week, and Set as campaign date. View chooses Orbits, Row, or Column, and Fit shows the whole system. Layers shows or hides Paths, Moons, Habitable, Jump limit, Day / night, Scan, and Mainworld. Select a ship to open the navigation console. Choose a destination, or select Clear the destination. Select Release the ship and leave plotting to close it. System Comms is its own section. The book says how travel works.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The system page</h3>
+        <p>Open Search and choose a world, or select System on the rail. The page shows the surface map, the world profile, and the lists of worlds and moons. Select a world or a moon to read it. Select Explore orbits for the orbit view. News is its own section. The book says what the profile means.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The party</h3>
+        <p>Open Campaign, then Party. Select Choose the ship, and Add people. Where are we shows the place. Select Move the party to change it. Where the ship is, the party is. Under Ships, select Add a ship. The first ship is the lead. Select Make lead to change it. Under The party, select Add someone. Choose Aboard, or No ship. Where is everyone lists each person and ship. Select Locate to show one on the map. The invite is in Invite your players.</p>
+      </li>
+      <li class="ui-step">
+        <h3>Account</h3>
+        <p>Open the account menu at the foot of the rail and select Account and sign-in. Select Create an account and choose a username. Select Sign in to use a passkey you already have. Select I lost my passkey, then enter your username and one recovery code. On the account page, select Add a passkey, Rename, or Remove under Passkeys. Recovery codes shows how many are left. Select Make new codes to replace them. Each code works once, and the page shows the new set only then. Save them before you leave.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The Marketplace</h3>
+        <p>Select Marketplace on the rail. Search packages looks through titles, descriptions, and tags. Select Search. The store can show New in the store or Most imported, and Browse by kind. Select Filters to choose Kind, Contents, Edition, Tags, Updated, or Publisher. Select Clear all to remove them. Sort by Recently updated, Most imported, or Title. Select a package to open it. The page shows What's inside, and it can show a Gallery, About, and Versions. Select My packages for yours. Publishing is in Publish records and Publish part of your map. The link is in Share a package. Import is its own section.</p>
+      </li>
+      <li class="ui-step">
+        <h3>What's new</h3>
+        <p>Open the account menu at the foot of the rail and select What's new. Each release has two lines. Select The full list for the rest. Select a release's title to open that version, and All versions to return. A version with no entry says that this version is not in What's new.</p>
+      </li>
+      <li class="ui-step">
+        <h3>View as players</h3>
+        <p>Open Campaign. Select View as players. You see the campaign as your players see it, and you can't change anything while you look. The bar says You're seeing what players see. Select Stop viewing as players to come back.</p>
+      </li>
+      <li class="ui-step">
+        <h3>The map</h3>
+        <p>On the map, select How to use the map. The card covers moving, zooming, and opening a system, including with Build on. It opens once by itself, then stays closed until you select it again. Search is in Start here.</p>
+      </li>
     </ol>
   </div>
 </template>

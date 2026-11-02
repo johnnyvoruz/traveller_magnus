@@ -150,5 +150,17 @@
         "A batch is at most 256 KB."
       ]
     }
+  },
+  {
+    "name": "the campaign's own copy",
+    "text": "\n# The Efate Run: the campaign for your AI agent\n\n## 4. The shape of a proposal\n\n```json\n{ \"format\": \"voyage-proposals\", proposals: [ }\n```\n",
+    "expect": {
+      "ok": false,
+      "code": "invalid",
+      "problems": [],
+      "sentences": [
+        "This is the campaign's own copy for your AI. Paste your AI's reply instead."
+      ]
+    }
   }
 ]

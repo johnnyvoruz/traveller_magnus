@@ -10,6 +10,8 @@ export type BodyPart =
     | { kind: 'hex'; hexKey: string; label: string };
 
 const TOKEN = /\[\[(cr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|hex:[^/\]|]+\/\d{4})(?:\|([^\]]*))?\]\]/gi;
+/** Match only at `lastIndex`. A forward search here made a line of `[` scan the rest of the text at every character. */
+const TOKEN_AT = new RegExp(TOKEN.source, 'iy');
 
 function chipLabel(target: string, written: string | undefined, nameOf: (target: string) => string | null): string {
     const named = nameOf(target);
@@ -33,9 +35,9 @@ export function mentionAt(
     index: number,
     nameOf: (target: string) => string | null,
 ): { part: Exclude<BodyPart, { kind: 'text' }>; end: number } | null {
-    TOKEN.lastIndex = index;
-    const match = TOKEN.exec(text);
-    if (!match || match.index !== index) return null;
+    TOKEN_AT.lastIndex = index;
+    const match = TOKEN_AT.exec(text);
+    if (!match) return null;
     const target = match[1] ?? '';
     const label = chipLabel(target, match[2], nameOf);
     const end = index + match[0].length;

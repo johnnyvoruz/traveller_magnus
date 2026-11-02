@@ -13,6 +13,12 @@ const APP = readFileSync(new URL('../../apps/web/src/version.ts', import.meta.ur
     .match(/export const APP_VERSION = '([^']+)'/)[1];
 const MARK = 'Players can join your campaign with an invite link';
 const CACHE = { 'cache-control': 'public, max-age=31536000, immutable' };
+const SECURITY = {
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'x-frame-options': 'DENY',
+    'content-security-policy-report-only': "default-src 'self'; script-src 'self'; frame-ancestors 'none'",
+};
 
 function bodyFor(version) {
     return 'var p=[{version:`' + version + '`,story:[`' + MARK + '`]}];';
@@ -22,7 +28,8 @@ function start(mode) {
     const server = http.createServer((req, res) => {
         const path = new URL(req.url, 'http://127.0.0.1').pathname;
         const send = (status, body, headers = {}) => {
-            res.writeHead(status, { 'content-type': 'application/json', ...headers });
+            const security = mode === 'headers' ? {} : SECURITY;
+            res.writeHead(status, { 'content-type': 'application/json', ...security, ...headers });
             res.end(body);
         };
         if (path === '/') return send(mode === 'home' ? 500 : 200, '<script src="/assets/index-GOOD.js"></script>'
@@ -88,6 +95,7 @@ test('a good origin passes every check', async () => {
         const result = await runScript(origin);
         assert.equal(result.code, 0, result.out);
         assert.match(result.out, /ok home 200 index-GOOD\.js/);
+        assert.match(result.out, /ok headers nosniff strict-origin-when-cross-origin DENY report-only/);
         assert.match(result.out, /ok versions 200 released v10/);
         assert.match(result.out, /ok overview 200/);
         assert.match(result.out, /ok sector-index 200/);
@@ -105,6 +113,7 @@ test('a good origin passes every check', async () => {
 
 const misses = [
     ['home', /miss home 500/],
+    ['headers', /miss headers missing on \//],
     ['two-index', /miss home 200 2 index scripts/],
     ['versions', /miss versions 500/],
     ['versions-empty', /miss versions 200 no released version/],

@@ -29,6 +29,7 @@ import { publishConsumer } from './jobs/publish_queue';
 import { truthBuildConsumer } from './jobs/truth_build';
 import { fail, ok } from './http';
 import { previewDocument } from './preview_document';
+import { cspReport, securityHeaders } from './security_headers';
 export { UniverseDO } from './universe/UniverseDO';
 export { CharacterRoom } from './character/CharacterRoom';
 
@@ -41,6 +42,7 @@ function passkeySurface(path: string): boolean {
 
 const app = new Hono<AppEnv>();
 app.use('*', requestContext);
+app.use('*', securityHeaders);
 app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     const ready = await detectPasskeyColumns(c.env.DB);
     if (!ready && passkeySurface(c.req.path)) {
@@ -50,6 +52,7 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     return linkRefusal(response);
 });
 app.route('/api', health);
+app.post('/api/csp-report', cspReport);
 app.get('/api/me', me);
 app.get('/api/providers', (c) => ok(c, {
     twitter: Boolean(c.env.TWITTER_CLIENT_ID && c.env.TWITTER_CLIENT_SECRET),

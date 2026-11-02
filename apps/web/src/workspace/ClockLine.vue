@@ -7,6 +7,7 @@
  */
 import { computed, nextTick, ref } from 'vue';
 import { lastError, pending } from '../campaign/commit.ts';
+import { saveFailedWords } from '../campaign/save_words.ts';
 import { campaign, setCampaignDate } from '../campaign/store.ts';
 import Icon from '../design/Icon.vue';
 import { DEFAULT_START, totalDays } from '../orbit/clock.ts';
@@ -99,7 +100,7 @@ defineExpose({ edit });
         <template v-if="said"><b>{{ said.date }}</b><span>{{ said.weekday }}</span></template>
         <template v-else><span class="clock-none">No campaign date yet</span><span v-if="!readOnly">Set it</span></template>
       </button>
-      <span v-if="saveState !== 'saved'" class="clock-save" :class="'is-' + saveState" role="status">{{ saveState === 'saving' ? 'Saving…' : 'Not saved' }}</span>
+      <span v-if="saveState !== 'saved'" class="clock-save" :class="'is-' + saveState" role="status" :title="saveState === 'failed' ? saveFailedWords(lastError) : undefined">{{ saveState === 'saving' ? 'Saving…' : 'Not saved' }}</span>
     </template>
   </div>
 </template>

@@ -15,10 +15,15 @@ import {
     type CampaignSettings,
 } from '@voyage/shared';
 import { totalDays } from '../orbit/clock.ts';
+import { CHARACTER_RULES, CHARACTER_SCHEMA } from '../workspace/character_sheet.ts';
 import { kindWord, whenText } from '../workspace/journal/list.ts';
 import { typeInfo } from '../workspace/records.ts';
+import { SHEET_RULES as SHIP_RULES } from '../workspace/ship_sheet.ts';
 import { stardate } from '../workspace/stardate.ts';
 import { redactText } from './text.ts';
+
+/** The schema `ship_sheet.ts` writes. A vessel's boxes follow that file. */
+const SHIP_SCHEMA = 'mgt2e_ship_sheet@1';
 
 export type PackInput = {
     name: string;
@@ -159,37 +164,82 @@ function placeOf(
 }
 
 /**
- * A status read as one line. The naval or scout mark stays off the line.
- * The players projection drops that key on the object; the pack has no object, so the key is deleted before the line is read.
+ * The player's record page shows For players and the place. The pack already prints both.
+ * A vessel's track, hold, fares and costs stay off until question 129, and so does the
+ * naval or scout mark (AF2). Nothing of the status is left to read, so the Status heading goes.
  */
-function statusText(
-    status: CampaignRecord['status'],
+function statusText(): null {
+    return null;
+}
+
+const SHEET_SKIP = new Set(['schema', 'fields', 'characterId', 'homeworld']);
+
+function sheetFieldNames(record: CampaignRecord, sheet: unknown): readonly string[] {
+    const schema = sheet && typeof sheet === 'object' && !Array.isArray(sheet)
+        ? (sheet as { schema?: unknown }).schema
+        : undefined;
+    const ship = schema === SHIP_SCHEMA || (schema !== CHARACTER_SCHEMA && record.type === 'vessel');
+    const fields = ship ? SHIP_RULES.fields : CHARACTER_RULES.fields;
+    return fields.map((field) => field.name);
+}
+
+/** Strings and ticks a sheet holds. Companion record ids stay beside the name and are not a box. */
+function sheetValues(sheet: object): Record<string, string | boolean> {
+    const held = sheet as Record<string, unknown>;
+    const nested = held.fields;
+    const source = nested && typeof nested === 'object' && !Array.isArray(nested)
+        ? nested as Record<string, unknown>
+        : held;
+    const out: Record<string, string | boolean> = {};
+    const take = (from: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(from)) {
+            if (SHEET_SKIP.has(key) || key.endsWith(' record') || Object.hasOwn(out, key)) continue;
+            if (typeof value === 'string' || typeof value === 'boolean') out[key] = value;
+        }
+    };
+    take(source);
+    if (source !== held) take(held);
+    return out;
+}
+
+function sheetLine(
+    label: string,
+    value: string | boolean,
     records: Readonly<Record<string, CampaignRecord>>,
     counts: PackCounts,
 ): string | null {
-    if (!status) return null;
-    const copy = { ...status };
-    delete copy.fuelMark;
-    let raw = '';
-    try {
-        raw = JSON.stringify(copy);
-    } catch {
-        return null;
-    }
-    if (!raw || raw === '{}') return null;
-    return redactText(raw, records, counts);
+    if (value === false) return null;
+    const raw = value === true ? 'yes' : value;
+    if (raw.trim() === '') return null;
+    const shown = redactText(raw, records, counts).trim();
+    const name = redactText(label, records, counts).trim();
+    if (!shown || !name) return null;
+    return name + ': ' + shown;
 }
 
+/** A person's or a ship's sheet as "Label: value" lines, in the sheet file's order. An empty box is left out. */
 function sheetText(record: CampaignRecord, records: Readonly<Record<string, CampaignRecord>>, counts: PackCounts): string | null {
-    if (record.type !== 'person' || record.sheet == null) return null;
-    let raw = '';
-    try {
-        raw = typeof record.sheet === 'string' ? record.sheet : JSON.stringify(record.sheet);
-    } catch {
-        return null;
+    if ((record.type !== 'person' && record.type !== 'vessel') || record.sheet == null) return null;
+    if (typeof record.sheet === 'string') {
+        const text = redactText(record.sheet, records, counts).trim();
+        return text || null;
     }
-    if (!raw) return null;
-    return redactText(raw, records, counts);
+    if (typeof record.sheet !== 'object' || Array.isArray(record.sheet)) return null;
+    const values = sheetValues(record.sheet);
+    const used = new Set<string>();
+    const lines: string[] = [];
+    for (const name of sheetFieldNames(record, record.sheet)) {
+        if (!Object.hasOwn(values, name)) continue;
+        used.add(name);
+        const line = sheetLine(name, values[name], records, counts);
+        if (line) lines.push(line);
+    }
+    for (const [name, value] of Object.entries(values)) {
+        if (used.has(name)) continue;
+        const line = sheetLine(name, value, records, counts);
+        if (line) lines.push(line);
+    }
+    return lines.length ? lines.join('\n') : null;
 }
 
 function entryTitle(entry: CampaignEntry, body: string): string {
@@ -255,7 +305,7 @@ export function planPack(input: PackInput): PackPlan {
             place: placeOf(record.anchor, input.records, counts),
             playerNotes: notes,
             sheet: sheetText(record, input.records, counts),
-            status: statusText(record.status, input.records, counts),
+            status: statusText(),
         });
     }
     records.sort((a, b) => a.typeName.localeCompare(b.typeName) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));

@@ -91,6 +91,13 @@ export async function smoke(origin, opts = {}) {
     say(home.status === 200 && hashes.length === 1, 'home', home.status === 200
         ? (hashes.length === 1 ? '200 index-' + hashes[0] + '.js' : '200 ' + hashes.length + ' index scripts')
         : String(home.status));
+    const policy = home.headers.get('content-security-policy-report-only') ?? '';
+    const headersOk = home.headers.get('x-content-type-options') === 'nosniff'
+        && home.headers.get('referrer-policy') === 'strict-origin-when-cross-origin'
+        && (home.headers.get('x-frame-options') ?? '').toLowerCase() === 'deny'
+        && /script-src/.test(policy)
+        && /frame-ancestors 'none'/.test(policy);
+    say(headersOk, 'headers', headersOk ? 'nosniff strict-origin-when-cross-origin DENY report-only' : 'missing on /');
     const indexPath = hashes.length === 1 ? '/assets/index-' + hashes[0] + '.js' : '';
 
     const versions = await hit(site + '/api/truth/versions');
