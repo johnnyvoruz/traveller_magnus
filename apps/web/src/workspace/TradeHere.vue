@@ -602,6 +602,31 @@ function gainWords(lot: CargoLot, received: number): string {
   font-variant-numeric: var(--tabular);
 }
 
+/* A phone: the kind row wraps instead of clipping, and every control reaches 44 px. */
+@media (max-width: 599px) {
+  .th-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .th-kind {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .th-box {
+    min-height: 44px;
+  }
+
+  .th-log {
+    box-sizing: border-box;
+    min-height: 44px;
+  }
+}
+
 .th-acts {
   display: flex;
   flex: 1 1 100%;

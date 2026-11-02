@@ -3,8 +3,10 @@
  * A record as a player reads it (players_build_plan.md P6): read-only, with "For players" as its body,
  * then what else the projection carries (findings F13: from P6 on, every string the projection holds
  * is on a player's screen, so the referee can check it with View as players). Where it is, with
- * Locate; its tags; its connections, each opening that record. No sheet: a sheet opens only through
- * the character's own access. Nothing here can be changed.
+ * Locate; its tags; its connections, each opening that record. A character's sheet opens only through
+ * the character's own access. The party's ship (DP2, Johnny's yes to 129) carries its Cargo, Passengers,
+ * Fuel and Ledger under the place, and its ship sheet at the end, read-only, from the projection as it
+ * arrives. Nothing here can be changed.
  */
 import { computed, ref } from 'vue';
 import { campaign } from '../../campaign/store.ts';
@@ -15,6 +17,9 @@ import { resolveAnchor } from '../party.ts';
 import { placeNow } from '../place_now.ts';
 import RecordAvatar from '../RecordAvatar.vue';
 import { typeInfo } from '../records.ts';
+import { isPartyShip } from './player_ship.ts';
+import PlayerShip from './PlayerShip.vue';
+import PlayerShipSheet from './PlayerShipSheet.vue';
 
 const props = defineProps<{ id: string; beside: boolean }>();
 const emit = defineEmits<{ back: []; open: [id: string]; map: [] }>();
@@ -23,6 +28,8 @@ const record = computed(() => {
     const row = campaign.records[props.id];
     return row && !row.deleted ? row : null;
 });
+/** A players vessel that is one of the party's ships: its sections and sheet show. Any other vessel reads as before. */
+const partyShip = computed(() => isPartyShip(record.value, campaign.settings ? campaign.settings.party : null));
 const place = computed(() => (record.value ? resolveAnchor(record.value.anchor, campaign.records) : null));
 const connections = computed(() => (record.value ? connectionsOf(record.value.id, campaign.records, campaign.links) : []));
 const locateBtn = ref<HTMLElement | null>(null);
@@ -72,6 +79,8 @@ function locate(): void {
       </p>
     </section>
 
+    <PlayerShip v-if="partyShip" :id="record.id" @open="emit('open', $event)" />
+
     <section v-if="record.summary.trim()" class="prec-part" aria-labelledby="prec-summary">
       <h3 id="prec-summary" class="ui-heading ui-kicker">Summary</h3>
       <p class="prec-text">{{ record.summary }}</p>
@@ -99,6 +108,8 @@ function locate(): void {
         </li>
       </ul>
     </section>
+
+    <PlayerShipSheet v-if="partyShip" :id="record.id" @open="emit('open', $event)" />
   </article>
   <div v-else class="prec-gone">
     <p>This record is not here.</p>

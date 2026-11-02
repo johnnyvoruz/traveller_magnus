@@ -177,7 +177,12 @@ onMounted(() => {
 @media (max-width: 639px), (pointer: coarse) {
   .save-img .ui-btn,
   .save-img .ui-seg button {
+    box-sizing: border-box;
     min-height: 44px;
+  }
+
+  .save-img .ui-seg button {
+    min-width: 44px;
   }
 
   .save-img-opt {

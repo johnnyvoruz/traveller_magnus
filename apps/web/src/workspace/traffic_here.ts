@@ -200,7 +200,8 @@ export function deliveredLine(lot: Pick<CargoLot, 'label' | 'tons' | 'payCr' | '
     const paid = late ? Math.round((pay * (100 - late.percent)) / 100) : pay;
     const place = at || lot.destination;
     const where = place ? ' at ' + place : '';
-    const lateWords = late ? '; late, 1D+4 x 10% (1D: ' + late.dice.join(', ') + ') = ' + late.percent + '% off' : '';
+    // The line says which was chosen (DU48): on time, or late with the roll.
+    const lateWords = late ? '; late, 1D+4 x 10% (1D: ' + late.dice.join(', ') + ') = ' + late.percent + '% off' : '; on time';
     return { when, amount: paid, memo: 'Delivered ' + (lot.label || 'a lot') + ' (' + tonsWords(lot.tons) + ')' + where + lateWords, kind: 'income' };
 }
 

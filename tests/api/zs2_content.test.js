@@ -11,6 +11,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { applyTags } from '../../apps/api/src/preview_tags.ts';
+import { cspReportLines } from '../../apps/api/src/security_headers.ts';
+import { MUTATION_BUDGET } from '../../apps/api/src/universe/budget.ts';
 import { removeTree, runWrangler } from './session.js';
 import { startDev, stopDev, wranglerBin } from './server.js';
 
@@ -348,6 +350,58 @@ VALUES ('z2-invite', '${A}', NULL, '${sha(live)}', 'player', '2036-01-01T00:00:0
                 assert.match(policy, /script-src/);
                 assert.match(policy, /frame-ancestors 'none'/);
                 assert.equal(page.headers.get('content-security-policy'), null);
+            });
+
+            await t.test('round 5: the CSP report route keeps a short report and refuses the rest', async () => {
+                const secret = 'csp-secret-do-not-log';
+                const legacy = JSON.stringify({
+                    'csp-report': {
+                        'document-uri': `https://traveller.voyage/map?token=${secret}`,
+                        'violated-directive': 'script-src',
+                        'effective-directive': 'script-src',
+                        'blocked-uri': `https://evil.example/a.js?token=${secret}`,
+                        'source-file': secret,
+                    },
+                });
+                const lines = cspReportLines(legacy);
+                assert.equal(lines.length, 1);
+                assert.equal(lines[0].includes(secret), false);
+                assert.equal(JSON.parse(lines[0]).directive, 'script-src');
+                assert.equal(JSON.parse(lines[0]).blocked, 'evil.example');
+                assert.equal(JSON.parse(lines[0]).body, undefined);
+                const reports = cspReportLines(JSON.stringify([
+                    { type: 'csp-violation', body: { effectiveDirective: 'img-src', blockedURL: `https://cdn.example/x.png?q=${secret}`, documentURL: `https://traveller.voyage/?${secret}` } },
+                    { type: 'csp-violation', body: { effectiveDirective: 'script-src', blockedURL: `data:text/plain,${secret}` } },
+                    { type: 'csp-violation', body: { effectiveDirective: 'script-src', blockedURL: 'inline' } },
+                ]));
+                assert.equal(reports.length, 3);
+                assert.equal(reports.join('\n').includes(secret), false);
+                assert.equal(JSON.parse(reports[0]).blocked, 'cdn.example');
+                assert.equal(JSON.parse(reports[1]).blocked, 'data');
+                assert.equal(JSON.parse(reports[2]).blocked, 'inline');
+                assert.equal(cspReportLines('not json').length, 0);
+
+                const post = (type, body) => jsonFetch(`${base}/api/csp-report`, { method: 'POST', headers: { 'content-type': type }, body });
+                const refused = await post('text/plain', legacy);
+                assert.equal(refused.status, 415);
+                assert.equal(refused.body.error.message, 'That request could not be read. Try again.');
+                const fat = await post('application/csp-report', 'x'.repeat(8193));
+                assert.equal(fat.status, 413);
+                assert.equal(fat.body.error.message, 'That report is larger than 8 KB.');
+                const edge = await post('application/csp-report', 'x'.repeat(8192));
+                assert.equal(edge.status, 204);
+                const typed = await post('application/csp-report; charset=utf-8', legacy);
+                assert.equal(typed.status, 204);
+                const listed = await post('application/reports+json', JSON.stringify([{ type: 'csp-violation', body: { effectiveDirective: 'img-src', blockedURL: 'inline' } }]));
+                assert.equal(listed.status, 204);
+                for (let sent = 3; sent < MUTATION_BUDGET; sent++) {
+                    const res = await post('application/csp-report', legacy);
+                    assert.equal(res.status, 204, String(sent));
+                }
+                const limited = await post('application/csp-report', legacy);
+                assert.equal(limited.status, 429);
+                assert.equal(limited.body.error.message, 'Too many requests.');
+                assert.equal(limited.headers.get('retry-after'), '60');
             });
 
             await t.test('round 5: the character room socket still opens', async () => {

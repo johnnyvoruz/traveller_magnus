@@ -189,7 +189,8 @@ describe('the Cargo and Ledger sections render', { concurrency: 1 }, () => {
         assert.match(soon, /<b>Cr500 every 1 day<\/b>/);
         const none = await render(vessel({ id: 'cr_99999999-9999-4999-8999-999999999999' }));
         assert.match(none, /No owners yet\. Add who holds the ship&#39;s shares: a person, an organization, or the party\./);
-        assert.match(none, /No payment set\./);
+        assert.match(none, /Set the mortgage here and the upkeep leaves it out\. Say what the ship pays, how often, and when it is next due\./, 'DU47');
+        assert.match(soon, /data-payment-mortgage>This is the ship&#39;s mortgage\. The month&#39;s upkeep leaves it out\.<\/p>/, 'DU47');
         assert.match(none, /data-set-payment>[\s\S]*?Set a payment<\/button>/);
         assert.match(none, /To compare the fuel aboard with that capacity, write Fuel Capacity on the ship sheet\./);
     });

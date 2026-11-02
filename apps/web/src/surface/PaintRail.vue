@@ -213,9 +213,19 @@ function cssOf(rgb: RGB): string {
   }
 }
 
-@media (pointer: coarse) {
-  .paint-swatch {
+/* Touch, and a phone: the swatches and the rail's buttons were 28 px in a fine-pointer shot. */
+@media (pointer: coarse), (max-width: 599px) {
+  .paint-swatch,
+  .paint-rail .ui-btn {
+    box-sizing: border-box;
     min-height: 44px;
+  }
+}
+
+@media (max-width: 599px) {
+  .paint-name {
+    overflow: visible;
+    white-space: normal;
   }
 }
 </style>

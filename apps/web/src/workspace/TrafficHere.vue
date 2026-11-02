@@ -23,6 +23,7 @@ import { cryptoFace } from '../dice/roll.ts';
 import { JUMP_FIELD, jumpNumberOf, jumpParsecs } from '../map/jump_ring.ts';
 import { truthAt } from './build/acts.ts';
 import { buildStore } from './build/seam.ts';
+import { setTradeTarget } from './jump_from_here.ts';
 import { entryAt, marketsAround, startMarkets } from './markets_near.ts';
 import { resolveAnchor } from './party.ts';
 import { campaignDays, vesselWhere } from './party_where.ts';
@@ -94,6 +95,8 @@ const worlds = computed(() => {
 
 const dest = ref('');
 const destRow = computed(() => worlds.value.rows.find((row) => row.hexKey === dest.value) ?? null);
+/** The destination chosen here is the Track block's "Jump to" (DT7), for this vessel, while it is chosen. */
+watch(destRow, (row) => setTradeTarget(props.id, row ? { hexKey: row.hexKey, name: row.name || row.hexKey, parsecs: row.parsecs } : null), { immediate: true });
 /** The destination as the traffic rolls read it: Build's row there, else the chart's index entry. */
 const destWorld = computed(() => {
     const row = destRow.value;

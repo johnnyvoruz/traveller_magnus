@@ -48,7 +48,8 @@ import Icon from '../design/Icon.vue';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import { fieldsOf } from './sheet_fields.ts';
 import { anchorName } from './track_rows.ts';
-import { dayOf, dayWords, fuelMarkOf, ledgerOf, manifestOf, signedAmount, statusWithTrade, writeTrade, type Day } from './vessel_trade.ts';
+import { PAYMENT_IS_MORTGAGE, SET_MORTGAGE_HERE, leftOutWords, monthWithPayment } from './upkeep_payment.ts';
+import { dayOf, dayWords, fuelMarkOf, ledgerOf, lotMeta, manifestOf, signedAmount, statusWithTrade, writeTrade, type Day } from './vessel_trade.ts';
 
 const props = defineProps<{
     id: string;
@@ -136,23 +137,24 @@ function dropLot(index: number): void {
 
 /** The cargo row whose Deliver form is open. */
 const delivering = ref<number | null>(null);
-const deliver = reactive({ late: false });
+/** Delivered on time, or late (DU48, Johnny's 130: a choice, no due day): on time is chosen first each time the form opens. */
+const deliver = reactive({ choice: 'ontime' as 'ontime' | 'late' });
 const deliverError = ref('');
 
 function openDeliver(i: number): void {
     delivering.value = i;
-    deliver.late = false;
+    deliver.choice = 'ontime';
     deliverError.value = '';
 }
 
-/** Deliver: the pay on the ledger as income (less the file's late cut when ticked, rolled now), the lot out of the hold, one commit. */
+/** Deliver: the pay on the ledger as income (less the file's late cut when Delivered late is chosen, rolled now), the lot out of the hold, one commit. */
 function deliverNow(): void {
     const now = record.value;
     const i = delivering.value;
     const item = i === null ? null : cargo.value[i];
     if (!now || i === null || !item || !isFreight(item) || props.readOnly) return;
-    const late = deliver.late ? lateReduction(cryptoFace) : null;
-    if (deliver.late && !late) { deliverError.value = 'The trade tables have no late-delivery cut.'; return; }
+    const late = deliver.choice === 'late' ? lateReduction(cryptoFace) : null;
+    if (deliver.choice === 'late' && !late) { deliverError.value = 'The trade tables have no late-delivery cut.'; return; }
     const line = deliveredLine(item, today.value, late, world.value ? world.value.name : undefined);
     writeTrade(now, { status: statusWithTrade(now, { cargo: removeCargo(cargo.value, i), ledger: postLedger(ledger.value, line) }) });
     delivering.value = null;
@@ -293,7 +295,11 @@ function setMark(event: Event): void {
 }
 
 /** What Post this month would post: one recurring line per cost box with a number, dated today. */
-const month = computed(() => (record.value ? monthlyLines(fieldsOf(record.value.sheet), today.value) : []));
+/** The month's lines as the sheet gives them; with a Payment set, Mortgage Cost is the Payment's and is left out, said in its place (DU47). */
+const monthAll = computed(() => (record.value ? monthlyLines(fieldsOf(record.value.sheet), today.value) : []));
+const monthCut = computed(() => monthWithPayment(monthAll.value, payment.value !== null));
+const month = computed(() => monthCut.value.lines);
+const mortgageLeftOut = computed(() => monthCut.value.leftOut);
 const monthTotal = computed(() => ledgerBalance(month.value));
 const monthSaid = ref('');
 /** When the upkeep was last posted, from the Ledger's recurring cost lines (DU43); no month length is assumed. */
@@ -604,17 +610,15 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       <ol v-if="cargo.length" class="vt-rows">
         <li v-for="(item, i) in cargo" :key="i" class="vt-row">
           <span class="vt-main"><b>{{ item.label || 'Unnamed lot' }}</b> <span class="vt-num">{{ tons(item.tons) }}</span></span>
-          <span class="vt-meta">
-            <template v-if="item.value != null">{{ credits(item.value) }}</template>
-            <template v-if="item.origin"> · from {{ item.origin }}</template>
-            <template v-if="item.destination"> · to {{ item.destination }}</template>
-            <template v-if="item.note"> · {{ item.note }}</template>
-          </span>
+          <span v-if="lotMeta(item)" class="vt-meta" data-lot-meta>{{ lotMeta(item) }}</span>
           <button v-if="isFreight(item) && delivering !== i && !underway" type="button" class="ui-btn" :disabled="readOnly" data-deliver @click="openDeliver(i)">Deliver</button>
           <span v-else-if="isFreight(item) && underway" class="vt-fine" data-deliver-wait>Deliver when the ship arrives.</span>
           <button type="button" class="ui-btn vt-drop" :disabled="readOnly" :aria-label="'Remove ' + (item.label || 'this lot')" title="Remove this lot" @click="dropLot(i)"><Icon name="xmark" :size="11" /></button>
           <form v-if="delivering === i" class="vt-form is-inline vt-deliver" data-deliver-form @submit.prevent="deliverNow">
-            <label class="vt-check"><input v-model="deliver.late" type="checkbox" data-deliver-late /> Delivered late: the file's cut, 1D+4 x 10%, comes off the pay (rolled on post)</label>
+            <div class="vt-choice" role="radiogroup" aria-label="Delivered on time or late" data-deliver-choice>
+              <label class="vt-check"><input v-model="deliver.choice" type="radio" name="deliver-choice" value="ontime" data-deliver-ontime /> Delivered on time</label>
+              <label class="vt-check"><input v-model="deliver.choice" type="radio" name="deliver-choice" value="late" data-deliver-late /> Delivered late: the file's cut, 1D+4 × 10%, comes off the pay (rolled on post)</label>
+            </div>
             <p class="vt-fine" data-deliver-words>Posts {{ credits(item.payCr ?? 0) }} to the ledger as income, dated {{ dayWords(today) }}; the lot leaves the hold.</p>
             <p v-if="deliverError" class="vt-err" role="alert">{{ deliverError }}</p>
             <div class="vt-acts">
@@ -776,12 +780,14 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         <template v-if="payment && !payOpen">
           <p class="vt-at"><b>{{ credits(payment.amountCr) }} every {{ plural(payment.everyDays, 'day') }}</b><template v-if="payment.payee"> to {{ payment.payee }}</template></p>
           <p class="vt-due" :class="{ 'is-late': due && due.state !== 'due' }" role="status">{{ dueWords }} · <span class="ui-date">{{ dayWords(payment.nextDueDay) }}</span></p>
+          <p class="vt-fine" data-payment-mortgage>{{ PAYMENT_IS_MORTGAGE }}</p>
           <div class="vt-acts">
             <button type="button" class="ui-btn is-primary" data-pay-now :disabled="readOnly" @click="payToday">Pay now: {{ credits(-payment.amountCr) }}</button>
           </div>
         </template>
-        <p v-else-if="!payOpen" class="vt-none">No payment set. Set what the ship pays, how often, and when it is next due.</p>
+        <p v-else-if="!payOpen" class="vt-none" data-payment-none>{{ SET_MORTGAGE_HERE }} Say what the ship pays, how often, and when it is next due.</p>
         <form v-if="payOpen" class="vt-form is-inline" data-payment-form @submit.prevent="savePay">
+          <p class="vt-fine" data-payment-mortgage>{{ PAYMENT_IS_MORTGAGE }}</p>
           <label class="vt-fld"><span>Amount (Cr)</span><input v-model="pay.amount" class="vt-box vt-num" inputmode="decimal" required /></label>
           <label class="vt-fld"><span>Every (days)</span><input v-model="pay.every" class="vt-box vt-num" inputmode="numeric" required /></label>
           <label class="vt-fld"><span>Next due, day</span><input v-model="pay.day" class="vt-box vt-num" inputmode="numeric" required data-pay-day @input="payDayTyped = true" /></label>
@@ -857,16 +863,19 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
       </div>
       <div class="vt-part" data-month>
         <h4 class="vt-part-head">This month's upkeep</h4>
-        <template v-if="month.length">
+        <template v-if="month.length || mortgageLeftOut">
           <p class="vt-fine" data-month-last>{{ monthLast }}</p>
           <ul class="vt-rows">
+            <li v-if="mortgageLeftOut" class="vt-row is-line" data-month-left-out>
+              <span class="vt-main vt-fine">{{ leftOutWords(mortgageLeftOut) }}</span>
+            </li>
             <li v-for="item in month" :key="item.memo" class="vt-row is-line">
               <span class="vt-main">{{ item.memo }}</span>
               <span class="vt-num vt-amount is-minus">{{ credits(item.amount) }}</span>
             </li>
           </ul>
           <div class="vt-acts">
-            <button type="button" class="ui-btn is-primary" data-post-month :disabled="readOnly" @click="postMonth">Post this month's upkeep: {{ credits(monthTotal) }}, dated {{ dayWords(today) }}</button>
+            <button type="button" class="ui-btn is-primary" data-post-month :disabled="readOnly || !month.length" @click="postMonth">Post this month's upkeep: {{ credits(monthTotal) }}, dated {{ dayWords(today) }}</button>
           </div>
         </template>
         <p v-else class="vt-none">Write the ship's recurring costs on the ship sheet ({{ MONTHLY_COST_FIELDS.join(', ') }}) to post its upkeep each month.</p>
@@ -1056,6 +1065,14 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
   align-items: center;
   gap: 8px;
   color: var(--text-1);
+}
+
+/* Delivered on time or late (DU48): two radio choices, one under the other. */
+.vt-choice {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .vt-fine {
@@ -1276,6 +1293,13 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
 
   .vt-drop {
     min-width: 44px;
+  }
+
+  .vt-link {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 44px;
   }
 }
 </style>

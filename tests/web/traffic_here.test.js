@@ -156,13 +156,13 @@ test('freight (DT6b): a rolled lot as cargo with the pay on delivery from the fa
 test('Deliver posts the pay as income, less the file\'s late cut when the referee says it was late', () => {
     const when = { year: 1105, day: 14 };
     const lot = { label: 'Freight, Major lot', tons: 40, payCr: 40000, destination: 'Ruie' };
-    assert.deepEqual(deliveredLine(lot, when, null), { when, amount: 40000, memo: 'Delivered Freight, Major lot (40 t) at Ruie', kind: 'income' });
+    assert.deepEqual(deliveredLine(lot, when, null), { when, amount: 40000, memo: 'Delivered Freight, Major lot (40 t) at Ruie; on time', kind: 'income' });
     const half = lateReduction(faces(1));
     assert.equal(half.percent, 50);
     assert.deepEqual(deliveredLine(lot, when, half), { when, amount: 20000, memo: 'Delivered Freight, Major lot (40 t) at Ruie; late, 1D+4 x 10% (1D: 1) = 50% off', kind: 'income' });
     const all = lateReduction(faces(6));
     assert.equal(deliveredLine(lot, when, all).amount, 0, 'a 100% cut pays nothing');
-    assert.equal(deliveredLine({ label: '', tons: 5, payCr: 5000 }, when, null).memo, 'Delivered a lot (5 t)');
+    assert.equal(deliveredLine({ label: '', tons: 5, payCr: 5000 }, when, null).memo, 'Delivered a lot (5 t); on time');
     const screen = src('workspace/TrafficHere.vue');
     assert.match(screen, /freightTraffic\(\{ from, to, parsecs: row\.parsecs, effect, face: cryptoFace, set: ownSet\.value \}\)/, 'the freight roll: no steward row');
     assert.match(screen, /data-traffic-roll-freight @click="rollFreight">Roll for freight</);
@@ -172,7 +172,7 @@ test('Deliver posts the pay as income, less the file\'s late cut when the refere
     assert.match(vessel, /<button v-if="isFreight\(item\) && delivering !== i && !underway" type="button" class="ui-btn" :disabled="readOnly" data-deliver @click="openDeliver\(i\)">Deliver</, 'Deliver only when the ship is somewhere (DW3 round 5)');
     assert.match(vessel, /<span v-else-if="isFreight\(item\) && underway" class="vt-fine" data-deliver-wait>Deliver when the ship arrives\.</);
     assert.match(vessel, /deliveredLine\(item, today\.value, late, world\.value \? world\.value\.name : undefined\)/, 'the memo names the world the ship is at');
-    assert.match(vessel, /const late = deliver\.late \? lateReduction\(cryptoFace\) : null;/);
+    assert.match(vessel, /const late = deliver\.choice === 'late' \? lateReduction\(cryptoFace\) : null;/, 'the late choice (DU48) rolls the cut');
     assert.match(vessel, /writeTrade\(now, \{ status: statusWithTrade\(now, \{ cargo: removeCargo\(cargo\.value, i\), ledger: postLedger\(ledger\.value, line\) \}\) \}\);/, 'Deliver: the lot out, the line in, one commit');
 });
 
@@ -260,8 +260,8 @@ test('the taken passengers against the sheet\'s Staterooms and Low Berths (DT6d)
 test('arrival (DW3 round 5): Deliver names the world the ship is at; boarded passengers disembark, their fares staying on the Ledger', () => {
     const when = { year: 1105, day: 23 };
     const lot = { label: 'Freight, Minor lot', tons: 5, payCr: 5000, destination: 'Ruie' };
-    assert.equal(deliveredLine(lot, when, null, 'Jenghe').memo, 'Delivered Freight, Minor lot (5 t) at Jenghe', 'delivered where the ship is');
-    assert.equal(deliveredLine(lot, when, null).memo, 'Delivered Freight, Minor lot (5 t) at Ruie', 'no place given: the lot\'s destination');
+    assert.equal(deliveredLine(lot, when, null, 'Jenghe').memo, 'Delivered Freight, Minor lot (5 t) at Jenghe; on time', 'delivered where the ship is');
+    assert.equal(deliveredLine(lot, when, null).memo, 'Delivered Freight, Minor lot (5 t) at Ruie; on time', 'no place given: the lot\'s destination');
     const list = [{ label: '', class: 'High', fareCr: 9000 }, { label: 'Bek Tal', class: 'Middle' }, { label: '', class: 'Low', fareCr: 700 }, { personId: 'cr_00000000-0000-4000-8000-000000000001', label: '', class: 'High', fareCr: 9000 }];
     assert.deepEqual(disembarked(list), [{ label: 'Bek Tal', class: 'Middle' }], 'every boarded one leaves, a person-linked one too; the unboarded stays');
     assert.deepEqual(disembarked(list, 2), [list[0], list[1], list[3]], 'one by its place');
@@ -378,5 +378,5 @@ test('the upkeep says when it was last posted: the newest recurring cost line, i
     assert.equal(upkeepPostedWords(null, today), 'Not posted yet.');
     const vessel = src('workspace/VesselTrade.vue');
     assert.match(vessel, /const monthLast = computed\(\(\) => upkeepPostedWords\(lastUpkeep\(ledger\.value, MONTHLY_COST_FIELDS\), today\.value\)\);/);
-    assert.match(vessel, /<h4 class="vt-part-head">This month's upkeep<\/h4>\s+<template v-if="month\.length">\s+<p class="vt-fine" data-month-last>\{\{ monthLast \}\}<\/p>/, 'under the head, before the lines');
+    assert.match(vessel, /<h4 class="vt-part-head">This month's upkeep<\/h4>\s+<template v-if="month\.length \|\| mortgageLeftOut">\s+<p class="vt-fine" data-month-last>\{\{ monthLast \}\}<\/p>/, 'under the head, before the lines (the mortgage line left out by DU47 still shows the head)');
 });

@@ -15,8 +15,11 @@ The authoritative schema is `ProposalBatchSubmit` in `packages/shared` (draft in
 }
 ```
 
-- At most 200 proposals and 256 KB. Split larger batches; keep a link in the same batch as the
-  `ref`s it names.
+- At most 200 proposals and 256 KB. At least one proposal. Split a larger batch; keep a link in the
+  same batch as the `ref`s it names.
+- A 21st open batch, or 2,000 proposals already waiting, is refused with "Review or drop some
+  proposals first." Do not split the batch for that.
+- `source.kind` is `transcript`, `notes`, or `other`.
 - `source.label` is what the referee will see as the batch's name in Proposals. At most 120
   characters; keep it short.
 - Order matters: a link may name a `ref` only after the `record.create` that made it. A `ref` used
@@ -27,7 +30,7 @@ The authoritative schema is `ProposalBatchSubmit` in `packages/shared` (draft in
 
 Every proposal has `op`, `evidence` (1 to 3 of `{ "at": "01:12:40", "quote": "…≤300 chars…",
 "speaker": "REFEREE" }`), and may have `ref` (lowercase letters, digits, hyphens, at most 40,
-unique in the batch). `ref` is required on `record.create`.
+unique in the batch). `at` is at most 32 characters and `speaker` at most 40. `ref` is required on `record.create`.
 
 | op | fields | when |
 |---|---|---|
@@ -35,11 +38,11 @@ unique in the batch). `ref` is required on `record.create`.
 | `record.update` | `id`, `baseRev`, `set?: { name, kind, summary, details, tags, anchor, when }`, `append?: { details, tags }` | a fact about an existing record; prefer `append.details` so nothing the referee wrote is lost; at least one of `set` or `append` |
 | `link.create` | `link: { from, to, kind, role, notes?, since?, until? }`; `from` and `to` are `{ "id": "cr_…" }` or `{ "ref": "…" }` | a relationship; kinds: member, owns, crew, passenger, commands, ally, rival, enemy, contact, patron, client, target, involved |
 | `journal.create` | `entry: { kind, title, body, when, realDate, sequence, anchor }` | the session entry (kind `session`, with `sequence`); a handout or rumor the referee read aloud (kind `handout` or `rumor`, `sequence` null) |
-| `clock.set` | `days`, `baseRev` | the campaign date at the end of the session, as the table said it, in the campaign's own day count (read the clock first; add the days the table named) |
+| `clock.set` | `days`, `baseRev` | the campaign date at the end of the session, as the table said it, in the campaign's own day count. Read the clock first and use its rev. Do not add days the table did not sum. |
 | `track.append` | `id` (a vessel), `baseRev`, `leg: { from, to, departs, arrives, mode, note? }` | a movement the table narrated; `departs` and `arrives` are the campaign's day numbers as said; `mode` is docked, orbit, flight or jump |
-| `cargo.append` | `id`, `baseRev`, `lots: [{ label, tons, value?, origin?, destination?, note? }]` | cargo taken aboard, as said |
-| `passengers.append` | `id`, `baseRev`, `passengers: [{ label, class, note? }]` | passengers taken, as said |
-| `ledger.append` | `id`, `baseRev`, `lines: [{ when: { year, day }, amount, memo, kind }]` | money in or out of the ship's ledger, as said; `kind` is income, expense or recurring |
+| `cargo.append` | `id`, `baseRev`, `lots: [{ label, tons, value?, origin?, destination?, note? }]` | cargo taken aboard, as said; at most 16 lots |
+| `passengers.append` | `id`, `baseRev`, `passengers: [{ label, class, note? }]` | passengers taken, as said; at most 16 |
+| `ledger.append` | `id`, `baseRev`, `lines: [{ when: { year, day }, amount, memo, kind }]` | money in or out of the ship's ledger, as said; `kind` is income, expense or recurring; at most 32 lines |
 | `question` | `text` (≤ 1,000 characters) | a loose thread, a deferred rule question, anything you could not place |
 
 Anchors: `null`, `{ "kind": "system", "hexKey": "Spinward_Marches/1910", "locationLabel": "Startown" }`
@@ -65,4 +68,4 @@ All with `Authorization: Bearer $VOYAGE_TOKEN`, JSON bodies, answers in `{ ok, d
 | `submit_proposals` | `POST https://traveller.voyage/api/universes/<universeId>/campaign/proposals` with the batch |
 | `read_proposal_batch` | `GET https://traveller.voyage/api/universes/<universeId>/campaign/proposals/<batchId>` |
 
-Limits you will meet: 120 reads a minute, 10 submits a minute per token; `429` carries `retry-after`.
+Limits you will meet: 120 reads a minute, 10 submits a minute per token, and 10 submits a minute per campaign. The 11th submit answers `429` and carries `retry-after`. When agent access is paused, a token request answers `503` and the message "Agent access is paused." The paste door does not use a token, so it stays open.

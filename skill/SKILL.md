@@ -125,7 +125,7 @@ the stored `id` and the `rev` you read. No match becomes a `record.create` with 
 Follow `references/shape.md` exactly (`format: "voyage-proposals"`, `schemaVersion: 1`). Order:
 creates first, then links, then updates and appends, then the journal entry, then the clock, then
 questions. The journal entry is one `journal.create` of kind `session` with the next `sequence`, a
-title, and a body of 150 to 400 words in plain past tense that mentions existing records as
+title, and a body in plain past tense that mentions existing records as
 `[[cr_…|Name]]`. Give it `when` as the table's end date and `realDate` as the day the session was
 played, if known. Put every open thread in a `question`.
 
@@ -142,14 +142,17 @@ success it returns a `batch` with an `id` and a `reviewUrl`.
 - `409 idempotency_conflict`: you changed the batch after a submit; make a new key and resubmit.
 - `429`: wait the `retry-after` seconds and resubmit with the same key.
 - `400 validation`: read `details`, fix the named field, make a new key, resubmit.
-- `400 too_large`: split the batch in two, each with its own key; keep every `ref` a link uses in the
-  same batch as the link.
+- `400 too_large`: over 200 proposals or 256 KB, split the batch in two, each with its own key; keep
+  every `ref` a link uses in the same batch as the link. A 21st open batch, or 2,000 proposals already
+  waiting, answers `too_large` with "Review or drop some proposals first." Do not split for that; tell
+  the referee and stop.
 - `401`: the token is unknown, expired or revoked; tell the referee to make a new one under Agent
   access, and stop.
 - `403`: the token lacks the `proposals:write` scope; tell the referee, and stop.
 - `404`: the token is not bound to this campaign, or the campaign is gone; go back to step 4 of
   "Before you start".
-- `503 agents_paused`: agent access is switched off on the site; tell the referee and stop.
+- `503 agents_paused`: the site answers "Agent access is paused." Tell the referee and stop. Paste
+  your AI's reply still works.
 - `503 tokens_unavailable` or `503 proposals_unavailable`: the site is not ready for proposals yet;
   tell the referee and stop. Keep the batch file so it can be sent later under a new key.
 

@@ -522,11 +522,17 @@ watch(() => props.register.id, closeLine);
   }
 }
 
-/* On touch, every control of the register reaches 44 px. */
-@media (pointer: coarse) {
+/* On touch, and on a phone, every control of the register reaches 44 px. */
+@media (pointer: coarse), (max-width: 599px) {
   .creg .ui-btn,
-  .creg .ui-seg button {
+  .creg .ui-seg button,
+  .creg .creg-box {
+    box-sizing: border-box;
     min-height: 44px;
+  }
+
+  .creg .ui-seg button {
+    min-width: 44px;
   }
 }
 </style>

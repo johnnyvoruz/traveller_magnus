@@ -98,6 +98,11 @@ export function startMarkets(): Promise<void> {
     return starting;
 }
 
+/** One system's tree by its chart hash, through the same client (DT7: the Track block's plan of the picture). */
+export function treeOf(hash: string): ReturnType<TruthClient['tree']> {
+    return client().tree(hash);
+}
+
 const treesAsked = new Set<string>();
 
 /** Each listed world's tree, once, for its WTN. A tree that cannot be read leaves the WTN empty. */

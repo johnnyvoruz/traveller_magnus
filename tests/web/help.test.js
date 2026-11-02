@@ -124,6 +124,10 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /No AI runs here/);
         assert.match(html, /Paste your AI&#39;s reply/);
         assert.match(html, /A token reaches this one campaign only/);
+        assert.match(html, /When Agent access is paused/);
+        assert.match(html, /one json block holding the batch/);
+        assert.match(html, /A batch holds at most 200 proposals/);
+        assert.match(html, /A batch is at most 256 KB/);
         assert.match(html, /<h3>Relationships<\/h3>/);
         assert.match(html, /Select Org chart/);
         assert.match(html, /<h3>Session<\/h3>/);

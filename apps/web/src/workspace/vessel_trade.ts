@@ -9,6 +9,7 @@
 import type { CampaignRecord, CargoLot, EntryChange, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
 import { cargoFromSheet, MANIFEST_ROWS, passengersFromSheet, sheetFromCargo, sheetFromPassengers } from '../campaign/cargo.ts';
 import { commit } from '../campaign/commit.ts';
+import { formatCredits } from '../campaign/money.ts';
 import { splitDays } from '../orbit/clock.ts';
 import { recordKey } from './sheet_people.ts';
 import { fieldsOf, type SheetValues } from './sheet_fields.ts';
@@ -144,4 +145,17 @@ export function dayWords(when: Day): string {
 export function signedAmount(amount: number, kind: LedgerLine['kind']): number {
     const size = Math.abs(amount);
     return kind === 'income' ? size : -size;
+}
+
+/**
+ * A cargo row's second line (DF34): the parts a lot has, joined with " · ", none leading: "Cr2,400 · from Regina",
+ * "from Regina · to Jenghe · Cr20,000 on delivery". Empty when the lot says nothing beyond its label and tons.
+ */
+export function lotMeta(lot: Pick<CargoLot, 'value' | 'origin' | 'destination' | 'note'>): string {
+    const parts: string[] = [];
+    if (lot.value != null) parts.push(formatCredits(lot.value));
+    if (lot.origin) parts.push('from ' + lot.origin);
+    if (lot.destination) parts.push('to ' + lot.destination);
+    if (lot.note) parts.push(lot.note);
+    return parts.join(' · ');
 }
