@@ -26,6 +26,8 @@ const props = defineProps<{
     rowWords: { userId: string; text: string } | null;
     /** Who a player can be: the party's people as players see them. */
     people: { id: string; name: string }[];
+    /** A person's crew line ("Captain of Kestrel Dawn"), by person id (DS2). */
+    roles?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -86,6 +88,7 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
           <span class="players-who">
             <b>{{ member.handle }}</b>
             <small>{{ memberLine(member) }}</small>
+            <small v-if="member.personId && (roles ?? {})[member.personId]" class="players-role" :data-players-role="member.userId">{{ (roles ?? {})[member.personId] }}</small>
           </span>
           <label class="players-which">
             <span>Which one</span>
@@ -227,6 +230,14 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
   .players-which select {
     flex: 1 1 auto;
     max-width: none;
+    min-height: 44px;
+  }
+}
+
+/* The invite field is a tap target. On a phone it meets the same 44 px as the buttons beside it. */
+@media (max-width: 599px) {
+  .players-link input {
+    height: 44px;
     min-height: 44px;
   }
 }

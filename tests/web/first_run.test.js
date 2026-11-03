@@ -89,7 +89,7 @@ test('the first campaign asks its name (DU44): the store\'s "My map" is the defa
 
 test('the name box sits first on Start here and beside the invite link while the name is "My map" (DU44 pins)', () => {
     const first = src('workspace/FirstRun.vue');
-    assert.match(first, /<ol class="ui-steps">\s+<li class="ui-step" :class="\{ 'is-lit': named \}" data-first-run-name>\s+<p>Name your campaign<\/p>\s+<CampaignName :read-only="readOnly" label="Campaign name" \/>/, 'the first step');
+    assert.match(first, /<ol class="ui-steps">\s+<li class="ui-step" :class="\{ 'is-lit': named \}" data-first-run-name>\s+<p>Name your campaign<\/p>\s+<CampaignName :read-only="readOnly" label="Campaign name" \/>\s+<p class="first-run-solo">Playing solo\? Everything here is yours; invite players later or never\.<\/p>/, 'the first step');
     assert.match(first, /const named = computed\(\(\) => !isDefaultName\(openCampaignName\(campaign\.universes, campaign\.universeId\)\)\);/);
     const box = src('workspace/CampaignName.vue');
     assert.match(box, /data-campaign-name\s+@keydown\.enter\.prevent="save"\s+@keydown\.esc="reset"\s+@keydown\.stop\s+@blur="save"/, 'saved on Enter or on leaving the box');

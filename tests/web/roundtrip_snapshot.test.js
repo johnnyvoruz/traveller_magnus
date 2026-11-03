@@ -1,7 +1,8 @@
 /**
  * AQ4 round 2. The AI snapshot of a campaign, pasted back through pastedBatch.
  * The paste cases live in tests/web/fixtures/ai_snapshot/ai_paste_cases.json.
- * directives/contracts/ai_paste_cases.json is not in the tree.
+ * directives/contracts/ai_paste_cases.json is in the tree: the eight-case contract.
+ * This test pins the fixture, which has those eight and three more.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

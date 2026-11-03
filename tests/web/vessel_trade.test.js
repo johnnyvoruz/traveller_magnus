@@ -227,3 +227,11 @@ test('the record page shows the sections on a vessel, and the ship sheet edits t
     assert.match(ship, /const values = computed\(\(\) => \(record\.value \? sheetView\(record\.value\) : null\)\);/);
     assert.match(ship, /if \(isManifestField\(field\.name\) \|\| !moved\) \{\n\s*writeTrade\(now, editedSheet\(now, next\)\);/);
 });
+
+test('DF36: "No passengers." is drawn only when the list is empty, not under a short list', () => {
+    const vue = fs.readFileSync(path.join(webRoot, 'src', 'workspace/VesselTrade.vue'), 'utf8');
+    assert.match(vue, /<p v-if="!passengers\.length && !rolled" class="vt-none">No passengers\./);
+    assert.doesNotMatch(vue, /<p v-else-if="!rolled" class="vt-none">/, 'not the else of Show all');
+    const player = fs.readFileSync(path.join(webRoot, 'src', 'workspace/players/PlayerShip.vue'), 'utf8');
+    assert.match(player, /<ul v-if="passengers\.length"[\s\S]*?<\/ul>\s*<p v-else class="pship-none">No passengers\.<\/p>/, "the player's copy is the else of the list itself");
+});

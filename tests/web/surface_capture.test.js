@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { areaWords, paperPixels, PRINT_DPR } from '../../apps/web/src/capture/paper.ts';
 import { NET_HEIGHT, NET_WIDTH } from '../../apps/web/src/surface/hybrid/grid.ts';
 import { SURFACE_BAND, projectionAspect, projectionFrame } from '../../apps/web/src/surface/capture.ts';
+import { SHEET_LAYOUT } from '../../apps/web/src/surface/hybrid/field.ts';
+import { drawSymbols, symbolOf } from '../../apps/web/src/surface/hybrid/symbols.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (rel) => fs.readFileSync(path.join(root, 'apps/web/src', rel), 'utf8');
@@ -58,7 +60,7 @@ test('the capture draws at the paper pixels through the renderer size path and l
     assert.match(capture, /ink: ink\.text/);
     assert.match(capture, /outlineInk: ink\.grid/);
     assert.match(capture, /iconRadius: cell \* 0\.4/);
-    assert.match(capture, /hex\.terrain === 'OC'/);
+    assert.match(capture, /plain: false/);
     assert.match(capture, /ink\.wash/);
     assert.doesNotMatch(capture, /fillStyle = terrainInk/);
     assert.match(capture, /input\.ink\.grid, 1\.4/);
@@ -79,4 +81,49 @@ test('the capture draws at the paper pixels through the renderer size path and l
     assert.doesNotMatch(capture, /screenText/);
     assert.match(stage, /rememberedVersion\(\)/);
     assert.doesNotMatch(stage.slice(stage.indexOf('async function saveImage')), /canvas\.width|sheetEl\.value\.width/);
+});
+
+function cell(terrain, features = []) {
+    return { terrain, features, accents: [] };
+}
+
+test('on paper nothing is stroked in the coast ink and nothing is filled in a wash ink', () => {
+    const capture = read('surface/capture.ts');
+    const start = capture.indexOf('function drawPaperNet');
+    const end = capture.indexOf('function drawLegend');
+    const paper = capture.slice(start, end);
+    assert.ok(start > 0 && end > start);
+    assert.doesNotMatch(paper, /ink\.coast/);
+    assert.doesNotMatch(paper, /wash/);
+    assert.match(paper, /ink\.grid/);
+    assert.match(paper, /plain: false/);
+    assert.match(capture, /drawDiamondSeparators\(/);
+    assert.match(capture, /input\.ink\.coast, 1\.8/);
+});
+
+function glyphStrokes(terrain, plain) {
+    const hex = cell(terrain);
+    let strokes = 0;
+    const ctx = {
+        strokeStyle: '', fillStyle: '', lineWidth: 1, lineCap: '', lineJoin: '',
+        beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, clip() {},
+        save() {}, restore() {}, arc() {}, rect() {}, fill() {},
+        stroke() { strokes += 1; },
+    };
+    drawSymbols(ctx, {
+        grid: { n: 1, faces: [{ a: [0, 0], b: [1, 0], c: [0.5, 0.866] }], vid: [Int32Array.from([0, 1, 2])] },
+        hexes: [hex, hex, hex],
+    }, SHEET_LAYOUT, { set: null, outlines: false, icons: true, plain, ink: '#111' });
+    return strokes;
+}
+
+test('an ocean cell and a shallows cell each carry a glyph on paper, and stay plain on the screen', () => {
+    for (const terrain of ['OC', 'SH', 'GR', 'RK']) {
+        assert.equal(symbolOf(cell(terrain)), null);
+        assert.equal(symbolOf(cell(terrain), false), terrain);
+        assert.equal(glyphStrokes(terrain, true), 0);
+        assert.ok(glyphStrokes(terrain, false) > 0, terrain);
+    }
+    assert.equal(symbolOf(cell('OC', ['town']), false), 'town');
+    assert.equal(symbolOf(cell('FO')), 'FO');
 });

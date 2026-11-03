@@ -9,22 +9,16 @@ referee a number.
 
 ## Consent first
 
-Ask whether everyone agreed to be recorded. Where the referee or any player sits in one of these
-places, everyone's agreement is required by law, not just courtesy:
+This is not legal advice. Ask every player before you record. Ask everyone when the players are in
+different places. These places require everyone's agreement for a conversation: California, Delaware,
+Florida, Illinois, Maryland, Massachusetts, Montana, Nevada, New Hampshire, Pennsylvania, and
+Washington. Michigan is contested. Oregon and Missouri require everyone's agreement for an in-person
+conversation. Connecticut and Nevada require it for a call. Germany requires it, under section 201 of
+its criminal code. New South Wales requires it. Canada and United States federal law let one person
+in the conversation agree. In the United Kingdom and the European Union, a private recording can fall
+under the household exemption. Uploading that recording to a cloud service may not.
 
-- United States: California, Delaware, Florida, Illinois, Maryland, Massachusetts, Michigan (contested),
-  Montana, Nevada, New Hampshire, Pennsylvania, Washington for any conversation; Oregon and Missouri for
-  in-person conversations; Connecticut and Nevada for calls. Elsewhere in the US and under federal law
-  one participant's consent is enough.
-- Germany: recording another person's non-public speech without their authorisation is a criminal
-  offence (§ 201 StGB), and so is passing the recording on.
-- Australia: New South Wales needs every principal party's consent; Victoria lets a participant record
-  but publishing needs everyone's agreement; Queensland lets a participant record.
-- United Kingdom, European Union, Canada: a participant may record a private conversation for personal
-  use. Uploading it to a cloud service is a step further; say which service you will use.
-
-When in doubt, the table's agreement at the start of the recording ("we are recording tonight, is
-that fine with everyone?") is the right practice everywhere.
+If the answer is not yes, stop. Do not transcribe.
 
 ## The term list
 

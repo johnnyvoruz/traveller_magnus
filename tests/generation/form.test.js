@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { EditForm } from '@voyage/shared';
 import { stable } from '@voyage/shared';
@@ -202,6 +203,44 @@ test('a star type keeps the system name and the fields typed in the draft', () =
         const uwp = (typed.envelope.body.mgt2eData || {}).uwp || '';
         if (uwp.length >= 2) assert.equal(uwp[1], '4');
     }
+});
+
+test('an edited chart world keeps the typed digits on the row entry', () => {
+    const body = JSON.parse(readFileSync(new URL('../golden/fixtures/engine_1.2.0/mgt2e_flesh_from_tsv.json', import.meta.url), 'utf8'));
+    const envelope = {
+        kind: 'tree',
+        engineVersion: '1.2.0',
+        derivation: { edition: 'MgT2E', mode: 'flesh', seed: 's', settings: {}, inputs: null },
+        hexKey: 'Spinward_Marches/1910',
+        body,
+    };
+    const before = formOf(envelope);
+    const tradeBefore = before.sections.flatMap((section) => section.fields).find((item) => item.id === 'chart.trade');
+    assert.equal(tradeBefore.value, 'Ri Pa Ph An Cp (Amindii)2 Varg0 Asla0 Sa');
+    const applied = applyForm(envelope, [
+        { id: 'profile.p', value: 9 },
+        { id: 'chart.trade', value: 'Ag Hi' },
+        { id: 'chart.zone', value: 'Amber' },
+        { id: 'chart.base.naval', value: false },
+        { id: 'name', value: 'Regina Prime' },
+        { id: 'chart.pbg', value: '814' },
+    ], []);
+    const entry = chartEntry(applied.envelope.body, 'tree');
+    assert.equal(entry.name, 'Regina Prime');
+    assert.equal(entry.uwp, 'A788999-C');
+    assert.deepEqual(entry.tradeCodes, ['Ag', 'Hi']);
+    assert.equal(entry.zone, 'A');
+    assert.equal(entry.bases, 'S');
+    assert.equal(entry.pbg, '814');
+    const after = applied.answer.form;
+    const field = (id) => after.sections.flatMap((section) => section.fields).find((item) => item.id === id);
+    assert.equal(field('profile.p').value, 9);
+    assert.equal(field('chart.trade').value, 'Ag Hi');
+    assert.equal(field('chart.zone').value, 'Amber');
+    assert.equal(field('chart.base.naval').value, false);
+    assert.equal(field('chart.pbg').value, '814');
+    assert.equal(field('name').value, 'Regina Prime');
+    assert.equal(body.uwp, 'A788899-C');
 });
 
 test('rolling a body on Architect of Worlds does not run', () => {

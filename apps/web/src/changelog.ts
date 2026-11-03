@@ -17,6 +17,23 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.8',
+        date: '2026-11-02',
+        title: 'The crew',
+        story: [
+            'A ship has a crew: party characters with roles, Captain first, and switches per role for the Ledger, trade and the locker.',
+            'A jump offers its fuel from the sheet, the Player Pack prints the party ship, and the paper print is symbols only.',
+        ],
+        items: [
+            'The crew: under Passengers, add a party character and say what they do aboard, Captain preset for the first. A character crews one ship at a time. The Players list says who is Captain of which ship, and players see the crew on the ship\'s page.',
+            'Permissions: one row per role in use with three switches, the Ledger, trade and the locker, all on until you turn one off. The sheet, Set up the ship, the owners and the payment, Players, the course and the clock stay yours.',
+            'Jump fuel: under the latest jump leg, the tons the rules give for the ship\'s Size and a Take the fuel button. Nothing comes off the tanks without the press, and the orbit view\'s estimate reads Size too.',
+            'The Player Pack prints the party ship\'s Cargo, Passengers, Fuel, Ledger and sheet as lines. Playing solo is said on Start here and in Help.',
+            'Save image On paper draws a symbol in every cell, ocean and shallows included, with no coast line and no wash.',
+            'Smaller: a world edited from the chart keeps its edited digits on the map, the trade screens and a published package; a short passenger list no longer says No passengers; the Records chips, the Players section and the Party tab fit a phone.',
+        ],
+    },
+    {
         version: '1.3.7',
         date: '2026-11-02',
         title: 'Jump from the ship\'s page',

@@ -17,6 +17,7 @@ import { showToast } from '../../shell/toast.ts';
 import { archiveMember, bringBack, failWords, setMemberPerson } from './referee_calls.ts';
 import PlayersBoard from './PlayersBoard.vue';
 import { partyPeople, type InviteShown, type MemberRow } from './players_words.ts';
+import { crewLine, partyShips } from '../crew.ts';
 import { openCampaignName } from '../campaign_name.ts';
 
 const props = defineProps<{ readOnly: boolean }>();
@@ -40,6 +41,17 @@ const people = computed(() => partyPeople({
     settings: campaign.settings,
     clock: campaign.clock,
 }));
+
+/** Each party person's crew line across the party's ships (DS2), for the row under the handle. */
+const roles = computed((): Record<string, string> => {
+    const ships = partyShips(campaign.records, campaign.settings ? campaign.settings.party : null);
+    const out: Record<string, string> = {};
+    for (const person of people.value) {
+        const line = crewLine(ships, person.id);
+        if (line) out[person.id] = line;
+    }
+    return out;
+});
 
 /** The list, read again: after every change, so the groups say what the server holds. */
 async function loadList(): Promise<void> {
@@ -174,6 +186,7 @@ watch(() => campaign.universeId, () => {
     :busy-user="busyUser"
     :row-words="rowWords"
     :people="people"
+    :roles="roles"
     @link="getLink"
     @copy="copyLink"
     @revoke="revoke"

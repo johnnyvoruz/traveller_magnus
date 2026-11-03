@@ -358,6 +358,7 @@ test('an owner anchor to a hidden person is dropped', () => {
             ],
             fuelTons: 31,
             fuelMark: 'naval',
+            roles: [{ name: 'Captain', ledger: true, trade: true, locker: true }],
             payment: { amountCr: 4800, everyDays: 30, nextDueDay: { year: 1105, day: 40 } },
         },
     });
@@ -381,6 +382,7 @@ test('an owner anchor to a hidden person is dropped', () => {
     assert.equal(shown.status.fuelTons, 31);
     assert.equal(shown.status.payment.amountCr, 4800);
     assert.equal(Object.hasOwn(shown.status, 'fuelMark'), false);
+    assert.equal(Object.hasOwn(shown.status, 'roles'), false);
     assert.equal(JSON.stringify(shown.status).includes('naval'), false);
     assert.equal(JSON.stringify(shown.status).includes(hid), false);
 });

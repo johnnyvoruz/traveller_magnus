@@ -678,6 +678,16 @@ defineExpose({ focusSearch: () => { if (searchEl.value) searchEl.value.focus(); 
   mask-image: linear-gradient(to right, transparent, black 36px, black calc(100% - 36px), transparent);
 }
 
+/* A phone sheet is too narrow for one scrolling line: the chips wrap, and Order stays on the sheet. */
+@media (max-width: 599px) {
+  .camp[data-span="column"] .camp-types {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
 .camp-type {
   display: inline-flex;
   align-items: center;

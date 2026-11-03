@@ -319,8 +319,43 @@ function mainworld(body: Row, edition: 'MgT2E' | 'AoW'): Row {
     return found || body.mgt2eData || {};
 }
 
+/** Columns a fleshed chart tree keeps on the body, ahead of the engine's objects. */
+const CARRIED_ROW = ['uwp', 'tradeCodes', 'travelZone', 'bases', 'pbg', 'name', 'allegiance', 'notes'] as const;
+
+/**
+ * The chart row's own columns when the tree carries them, over the engine's copy.
+ * A generated system has none of these on the body, so its form is unchanged.
+ */
+function withCarriedRow(body: Row, source: Row): Row {
+    const next: Row = { ...source };
+    let uwpFromRow = false;
+    for (const key of CARRIED_ROW) {
+        if (!Object.hasOwn(body, key) || body[key] == null) continue;
+        next[key] = body[key];
+        if (key === 'uwp' && body[key] !== '') uwpFromRow = true;
+    }
+    if (uwpFromRow) {
+        delete next.starport;
+        delete next.size;
+        delete next.atm;
+        delete next.hydro;
+        delete next.pop;
+        delete next.gov;
+        delete next.law;
+        delete next.tl;
+    }
+    return next;
+}
+
 function profileSource(body: Row, edition: 'MgT2E' | 'AoW'): Row {
-    return body.mgt2eData || mainworld(body, edition) || {};
+    return withCarriedRow(body, body.mgt2eData || mainworld(body, edition) || {});
+}
+
+/** The index entry reads these on the body before the engine's objects. Stamp only a column the body already carries. */
+function stampCarried(body: Row, partial: Row): void {
+    for (const key of ['uwp', 'tradeCodes', 'travelZone', 'bases', 'pbg'] as const) {
+        if (Object.hasOwn(body, key) && Object.hasOwn(partial, key)) body[key] = partial[key];
+    }
 }
 
 function uwpCells(source: Row): Record<string, number | string> {
@@ -1102,6 +1137,7 @@ function writeDirect(body: Row, edition: 'MgT2E' | 'AoW', changes: FormChange[])
     let gasTouched = false;
     let profileTouched = false;
     let baseTouched = false;
+    const carried: Row = {};
     const socio: Row = {};
     let socioTouched = false;
     for (const change of changes) {
@@ -1141,6 +1177,7 @@ function writeDirect(body: Row, edition: 'MgT2E' | 'AoW', changes: FormChange[])
     if (propagate && oldName && oldName !== name) propagateName(body, oldName, name);
     if (profileTouched) {
         const uwp = `${chars.st}${chars.s}${chars.a}${chars.h}${chars.p}${chars.g}${chars.l}-${chars.tl}`;
+        carried.uwp = uwp;
         stamp(body, edition, {
             uwp,
             starport: chars.st,
@@ -1154,18 +1191,27 @@ function writeDirect(body: Row, edition: 'MgT2E' | 'AoW', changes: FormChange[])
         });
     }
     if (baseTouched) {
+        const bases = basesString(flags);
+        carried.bases = bases;
         stamp(body, edition, {
-            bases: basesString(flags),
+            bases,
             navalBase: !!flags.naval,
             scoutBase: !!flags.scout,
             militaryBase: !!flags.military,
             corsairBase: !!flags.corsair,
         });
     }
-    if (zoneTouched) stamp(body, edition, { travelZone: zone });
-    if (tradeTouched) stamp(body, edition, { tradeCodes: trade });
+    if (zoneTouched) {
+        carried.travelZone = zone;
+        stamp(body, edition, { travelZone: zone });
+    }
+    if (tradeTouched) {
+        carried.tradeCodes = trade;
+        stamp(body, edition, { tradeCodes: trade });
+    }
     if (gasTouched) stamp(body, edition, { gasGiant: gas });
     if (pbgTouched) {
+        carried.pbg = pbg;
         stamp(body, edition, {
             pbg,
             popDigit: fromEHex(pbg[0]),
@@ -1173,6 +1219,7 @@ function writeDirect(body: Row, edition: 'MgT2E' | 'AoW', changes: FormChange[])
             gasGiantsCount: fromEHex(pbg[2]),
         });
     }
+    stampCarried(body, carried);
     if (stellarTouched) stamp(body, edition, { homestar: stellar });
     if (allegianceTouched) {
         body.allegiance = allegiance;

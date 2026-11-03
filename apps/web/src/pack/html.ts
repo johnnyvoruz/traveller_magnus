@@ -33,7 +33,7 @@ function block(title: string, text: string | null): string {
     return '<h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>';
 }
 
-/** Details only. The text is already redacted. Summary, notes, the sheet, and status stay plain. */
+/** Details only. The text is already redacted. Summary, notes, the ship sections, the sheet, and status stay plain. */
 function richBlock(title: string, text: string | null): string {
     if (!text || !text.trim()) return '';
     return '<h3>' + escapeHtml(title) + '</h3><div class="rich">' + richHtml(parseRich(text)) + '</div>';
@@ -139,6 +139,10 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
         + (row.when ? '<p>In fiction: ' + escapeHtml(row.when) + '</p>' : '')
         + (row.place ? '<p>Place: ' + escapeHtml(row.place) + '</p>' : '')
         + block('For players', row.playerNotes)
+        + block('Cargo', row.cargo)
+        + block('Passengers', row.passengers)
+        + block('Fuel', row.fuel)
+        + block('Ledger', row.ledger)
         + block('Sheet', row.sheet)
         + block('Status', row.status)
         + '<h3>Connections</h3>'

@@ -62,6 +62,7 @@ describe('rendered', { concurrency: 1 }, () => {
         const html = await renderToString(createSSRApp(component));
         for (const heading of [
             'Start here',
+            'Playing solo',
             'Make records',
             'Publish records',
             'Publish part of your map',
@@ -97,6 +98,13 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, new RegExp(COURSE_LABEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
         assert.match(html, /id="help-h"/);
         assert.match(html, /href="\/welcome"/);
+        assert.match(html, /You can run the campaign on your own/);
+        assert.match(html, /name it under Name your campaign/);
+        assert.match(html, /Select Add your ship/);
+        assert.match(html, /Trade here, Find passengers and freight, and Markets nearby/);
+        assert.match(html, /Select Set the date for the clock/);
+        assert.match(html, /select New session or New note/);
+        assert.match(html, /Leave Get the invite link, Players, and View as players until you want them/);
         assert.match(html, /Get the invite link/);
         assert.match(html, /Select Copy, and send the address/);
         assert.match(html, /selects Join/);
@@ -119,6 +127,17 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /leaves System Comms as it is/);
         assert.match(html, /Bring in a session/);
         assert.match(html, /Ask every player before you record/);
+        assert.match(html, /Ask everyone when the players are in different places/);
+        assert.match(html, /California, Delaware, Florida, Illinois, Maryland, Massachusetts, Montana, Nevada, New Hampshire, Pennsylvania, and Washington/);
+        assert.match(html, /Michigan is contested/);
+        assert.match(html, /Oregon and Missouri require everyone&#39;s agreement for an in-person conversation/);
+        assert.match(html, /Connecticut and Nevada require it for a call/);
+        assert.match(html, /Germany requires it, under section 201 of its criminal code/);
+        assert.match(html, /New South Wales requires it/);
+        assert.match(html, /Canada and United States federal law let one person in the conversation agree/);
+        assert.match(html, /a private recording can fall under the household exemption/);
+        assert.match(html, /Uploading that recording to a cloud service may not/);
+        assert.match(html, /This is not legal advice/);
         assert.match(html, /Copy for your AI/);
         assert.match(html, /voyage-session-ingest skill from the skill folder/);
         assert.match(html, /No AI runs here/);

@@ -58,7 +58,7 @@ function stripValue(value: unknown, records: readonly CampaignRecord[], hiddenId
     if (value && typeof value === 'object') {
         const out: Record<string, unknown> = {};
         for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-            if (key === 'fuelMark') continue;
+            if (key === 'fuelMark' || key === 'roles') continue;
             out[key] = stripValue(item, records, hiddenIds);
         }
         return out;

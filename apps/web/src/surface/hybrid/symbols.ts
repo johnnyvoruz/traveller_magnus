@@ -42,14 +42,18 @@ export function groundOf(model: HybridModel, hex: HexRecord): readonly number[] 
     return terrainRgb(hex.terrain);
 }
 
-/** The symbol a hex shows: a settlement first, else an accent, else its terrain (open sea, grass and rock stay plain). */
-export function symbolOf(hex: HexRecord): SurfaceCode | null {
+/**
+ * The symbol a hex shows: a settlement first, else an accent, else its terrain.
+ * On the screen, open ocean, shallows, grass and bare rock stay plain. On paper
+ * (`plain` false) those four carry the same icon the legend draws.
+ */
+export function symbolOf(hex: HexRecord, plain = true): SurfaceCode | null {
     const main = hex.features.find((f) => f !== 'rural' && f !== 'farm' && f !== 'dome');
     if (main) return main;
     if (hex.accents.includes('VO')) return 'VO';
     if (hex.accents.includes('CR')) return 'CR';
     if (hex.accents.includes('MT')) return 'MT';
-    if (hex.terrain === 'OC' || hex.terrain === 'SH' || hex.terrain === 'GR' || hex.terrain === 'RK') return null;
+    if (plain && (hex.terrain === 'OC' || hex.terrain === 'SH' || hex.terrain === 'GR' || hex.terrain === 'RK')) return null;
     return hex.terrain;
 }
 
@@ -157,6 +161,11 @@ export type SymbolOptions = {
     readonly outlines?: boolean;
     /** Icons in the hexes. The grid can draw with this false. */
     readonly icons?: boolean;
+    /**
+     * When false, ocean, shallows, grass and bare rock draw their terrain icon.
+     * The screen leaves them plain. Paper sets this false.
+     */
+    readonly plain?: boolean;
     /** Grid stroke in sheet pixels. Quiet at the column width, still a line when the map is large. */
     readonly outlineWidth?: number;
     /** Symbol radius in sheet pixels. Omit it for the hex-sized default. */
@@ -223,7 +232,7 @@ export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout,
                 const ink = options.ink ?? inkOn(groundOf(model, hex));
                 if (hex.features.includes('farm')) drawCode(ctx, options.set, 'farm', x, y, r, ink, { tint: options.tint });
                 if (hex.features.includes('rural')) drawCode(ctx, options.set, 'rural', x, y, r, ink, { tint: options.tint });
-                const code = symbolOf(hex);
+                const code = symbolOf(hex, options.plain !== false);
                 if (code) drawCode(ctx, options.set, code, x, y, r, ink, { tint: options.tint, port: hex.port ?? undefined, domed: hex.domed });
             }
         }

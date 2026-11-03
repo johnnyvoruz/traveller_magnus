@@ -179,14 +179,52 @@ export const PassengerLot = z.object({
 }).strict();
 export type PassengerLot = z.infer<typeof PassengerLot>;
 
-/** One posted line (§5.3). `amount` is the credit change as stored. `when` is a campaign day. */
+/**
+ * One of the crew (DS2; Johnny 131, 134): a party character and what they do aboard, typed (the rules
+ * files hold no list of ship positions). A character crews one ship at a time; the web keeps that rule.
+ */
+export const CrewRow = z.object({
+    personId: z.string().regex(RECORD_ID),
+    role: z.string().max(80),
+}).strict();
+export type CrewRow = z.infer<typeof CrewRow>;
+
+/**
+ * A role's three switches (DS3; Johnny 131: "Default that every role can access everything"; 136): what a
+ * player in that role may do on the ship's page. A role with no row is all on; a row is made all on and
+ * flipped by the referee. Players never see this key (the projection drops it, as `fuelMark`).
+ */
+export const CrewRole = z.object({
+    name: z.string().max(80),
+    ledger: z.boolean(),
+    trade: z.boolean(),
+    locker: z.boolean(),
+}).strict();
+export type CrewRole = z.infer<typeof CrewRole>;
+
+/**
+ * One posted line (§5.3). `amount` is the credit change as stored. `when` is a campaign day.
+ * `by` is the person who posted it. A referee's line omits it. `linkId` pairs a transfer with
+ * the register line (80 characters, the register's own cap).
+ */
 export const LedgerLine = z.object({
     when: Day,
     amount: z.number().finite(),
     memo: z.string(),
     kind: z.enum(['income', 'expense', 'recurring']),
+    by: z.string().regex(RECORD_ID).optional(),
+    linkId: z.string().max(80).optional(),
 }).strict();
 export type LedgerLine = z.infer<typeof LedgerLine>;
+
+/** One row in the ship's locker. Separate from cargo. */
+export const LockerRow = z.object({
+    type: z.string().max(200),
+    tl: z.string().max(40),
+    kg: z.number().finite().nonnegative(),
+    notes: z.string().max(500),
+}).strict();
+export type LockerRow = z.infer<typeof LockerRow>;
 
 /**
  * One holder's shares (T1c). The holder is a person or organization record, or the party.
@@ -221,6 +259,8 @@ const RecordStatus = z.object({
     track: Track.optional(),
     cargo: z.array(CargoLot).optional(),
     passengers: z.array(PassengerLot).optional(),
+    crew: z.array(CrewRow).optional(),
+    roles: z.array(CrewRole).optional(),
     ledger: z.array(LedgerLine).optional(),
     owners: z.array(OwnerShare).optional(),
     payment: ShipPayment.optional(),
@@ -495,14 +535,59 @@ export const ClockChange = z.object({
 }).strict();
 export type ClockChange = z.infer<typeof ClockChange>;
 
+const AppendPiece = 32;
+
+const IndexList = z.array(z.number().int().nonnegative()).max(AppendPiece);
+
+/** A locker edit names the row by its place in the list the ship holds now. */
+const LockerChange = z.object({
+    index: z.number().int().nonnegative(),
+    row: LockerRow,
+}).strict();
+
+/**
+ * One piece a player adds to a ship. No `baseRev`: the object merges it into the
+ * record it holds. A referee's whole-record save is still `RecordChange`.
+ */
+export const StatusAppend = z.object({
+    id: z.string().regex(RECORD_ID),
+    append: z.object({
+        ledger: z.array(LedgerLine).min(1).max(AppendPiece).optional(),
+        cargo: z.object({
+            add: z.array(CargoLot).max(AppendPiece).optional(),
+            remove: IndexList.optional(),
+        }).strict().optional(),
+        passengers: z.object({
+            add: z.array(PassengerLot).max(AppendPiece).optional(),
+            remove: IndexList.optional(),
+        }).strict().optional(),
+        fuelTons: z.number().finite().nonnegative().optional(),
+        locker: z.object({
+            add: z.array(LockerRow).max(AppendPiece).optional(),
+            change: z.array(LockerChange).max(AppendPiece).optional(),
+            remove: IndexList.optional(),
+        }).strict().optional(),
+    }).strict().superRefine((append, ctx) => {
+        const cargo = (append.cargo?.add?.length ?? 0) > 0 || (append.cargo?.remove?.length ?? 0) > 0;
+        const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0;
+        const locker = (append.locker?.add?.length ?? 0) > 0 || (append.locker?.change?.length ?? 0) > 0 || (append.locker?.remove?.length ?? 0) > 0;
+        if (!append.ledger?.length && !cargo && !passengers && append.fuelTons === undefined && !locker) {
+            ctx.addIssue({ code: 'custom', message: 'empty', path: [] });
+        }
+    }),
+}).strict();
+export type StatusAppend = z.infer<typeof StatusAppend>;
+
 export const CampaignChanges = z.object({
     records: z.array(RecordChange).optional(),
     links: z.array(LinkChange).optional(),
     journal: z.array(EntryChange).optional(),
     settings: SettingsChange.optional(),
     clock: ClockChange.optional(),
+    /** A player's piece. The object merges each one. A referee does not send this. */
+    appends: z.array(StatusAppend).max(AppendPiece).optional(),
 }).strict().superRefine((value, ctx) => {
-    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.journal?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
+    const rows = (value.records?.length ?? 0) + (value.links?.length ?? 0) + (value.journal?.length ?? 0) + (value.appends?.length ?? 0) + (value.settings ? 1 : 0) + (value.clock ? 1 : 0);
     if (rows > CAMPAIGN_LIMITS.patchRows) {
         ctx.addIssue({ code: 'custom', message: 'too_large', path: ['records'] });
     }

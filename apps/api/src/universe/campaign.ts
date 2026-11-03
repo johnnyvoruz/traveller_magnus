@@ -21,6 +21,7 @@ import {
     type EntryChange,
     type LinkChange,
     type RecordChange,
+    type StatusAppend,
 } from '@voyage/shared';
 
 /**
@@ -857,7 +858,7 @@ const PLAYER_NOTES = 65_535;
 const PLAYER_NOTE_SENTENCE = 'You have 65,535 notes in this campaign, the most one player can keep.';
 const MEMBER_FORBIDDEN = 'You cannot change that.';
 
-export type MemberCaller = { userId: string };
+export type MemberCaller = { userId: string; personId?: string | null };
 
 function countPlayerNotes(sql: Sql, userId: string): number {
     const rows = sql.exec(`SELECT COUNT(*) AS n FROM campaign_journal WHERE deleted = 0 AND author_id = ?`, userId);
@@ -883,11 +884,124 @@ function assertMemberNote(change: EntryChange): void {
     if (Object.prototype.hasOwnProperty.call(change, 'images') && change.images != null) refuseMember();
 }
 
+type CrewSwitch = 'ledger' | 'trade' | 'locker';
+
+function statusObject(raw: unknown): Record<string, unknown> {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return { ...(raw as Record<string, unknown>) };
+}
+
+function rowList(value: unknown): unknown[] {
+    return Array.isArray(value) ? [...value] : [];
+}
+
 /**
- * A member writes their own players notes. The per-player live count is the guard.
- * Those notes are not refused by the universe journal cap.
+ * The crew row's role switch. Until the switches part stores a role row, a missing
+ * list or a missing row refuses. A row is open only when its switch is true.
  */
-function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: MemberCaller): CampaignWriteResult {
+function roleSwitch(status: Record<string, unknown>, personId: string | null, name: CrewSwitch): boolean {
+    if (!personId) return false;
+    const seat = rowList(status.crew).find((row) => {
+        if (!row || typeof row !== 'object') return false;
+        const item = row as { personId?: unknown; role?: unknown };
+        return item.personId === personId && typeof item.role === 'string';
+    }) as { role: string } | undefined;
+    if (!seat || !Array.isArray(status.roles)) return false;
+    const role = status.roles.find((row) => {
+        if (!row || typeof row !== 'object') return false;
+        return (row as { name?: unknown }).name === seat.role;
+    }) as Partial<Record<CrewSwitch, unknown>> | undefined;
+    return role?.[name] === true;
+}
+
+function appendSwitches(append: StatusAppend['append']): CrewSwitch[] {
+    const names: CrewSwitch[] = [];
+    if (append.ledger?.length) names.push('ledger');
+    const cargo = (append.cargo?.add?.length ?? 0) > 0 || (append.cargo?.remove?.length ?? 0) > 0;
+    const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0;
+    if (cargo || passengers || append.fuelTons !== undefined) names.push('trade');
+    const locker = append.locker;
+    if (locker && ((locker.add?.length ?? 0) > 0 || (locker.change?.length ?? 0) > 0 || (locker.remove?.length ?? 0) > 0)) names.push('locker');
+    return names;
+}
+
+function dropIndexes(rows: unknown[], indexes: readonly number[]): unknown[] {
+    const drop = new Set(indexes);
+    if (drop.size !== indexes.length || indexes.some((index) => index >= rows.length)) {
+        throw new CampaignRefusal('validation', 'That request could not be read. Try again.');
+    }
+    return rows.filter((_, index) => !drop.has(index));
+}
+
+function partyShip(sql: Sql, id: string): boolean {
+    return readSettings(sql).party.vesselIds.includes(id);
+}
+
+/**
+ * Merge one piece into the ship the object holds now. The record's other fields stay.
+ * `by` on a ledger line is this member's person.
+ */
+function mergeAppend(sql: Sql, change: StatusAppend, now: string, member: MemberCaller, applied: CampaignChangesResult['applied']): void {
+    const stored = loadRecord(sql, change.id);
+    if (!stored || bit(stored.deleted) || String(stored.type) !== 'vessel' || String(stored.visibility) !== 'players') refuseMember();
+    if (!partyShip(sql, change.id)) refuseMember();
+    const personId = member.personId ?? null;
+    const status = statusObject(parseJson(stored.status));
+    for (const name of appendSwitches(change.append)) {
+        if (!roleSwitch(status, personId, name)) refuseMember();
+    }
+    if (!personId) refuseMember();
+    const append = change.append;
+    if (append.ledger?.length) {
+        const ledger = rowList(status.ledger);
+        for (const line of append.ledger) {
+            if (line.by !== undefined && line.by !== personId) refuseMember();
+            ledger.push({ ...line, by: personId });
+        }
+        status.ledger = ledger;
+    }
+    if (append.cargo && ((append.cargo.add?.length ?? 0) > 0 || (append.cargo.remove?.length ?? 0) > 0)) {
+        let cargo = rowList(status.cargo);
+        if (append.cargo.remove?.length) cargo = dropIndexes(cargo, append.cargo.remove);
+        if (append.cargo.add?.length) cargo.push(...append.cargo.add);
+        status.cargo = cargo;
+    }
+    if (append.passengers && ((append.passengers.add?.length ?? 0) > 0 || (append.passengers.remove?.length ?? 0) > 0)) {
+        let passengers = rowList(status.passengers);
+        if (append.passengers.remove?.length) passengers = dropIndexes(passengers, append.passengers.remove);
+        if (append.passengers.add?.length) passengers.push(...append.passengers.add);
+        status.passengers = passengers;
+    }
+    if (append.fuelTons !== undefined) status.fuelTons = append.fuelTons;
+    if (append.locker && ((append.locker.add?.length ?? 0) > 0 || (append.locker.change?.length ?? 0) > 0 || (append.locker.remove?.length ?? 0) > 0)) {
+        let locker = rowList(status.locker);
+        if (append.locker.remove?.length) locker = dropIndexes(locker, append.locker.remove);
+        for (const edit of append.locker.change ?? []) {
+            if (edit.index >= locker.length) throw new CampaignRefusal('validation', 'That request could not be read. Try again.');
+            locker[edit.index] = edit.row;
+        }
+        if (append.locker.add?.length) locker.push(...append.locker.add);
+        status.locker = locker;
+    }
+    const rev = Number(stored.rev) + 1;
+    const seq = nextSeq(sql);
+    sql.exec(
+        `UPDATE campaign_records SET status = ?, rev = ?, seq = ?, updated_at = ? WHERE id = ?`,
+        JSON.stringify(status),
+        rev,
+        seq,
+        now,
+        change.id,
+    );
+    applied.push({ table: 'records', id: change.id, rev, seq });
+}
+
+/**
+ * A member writes their own players notes, or one piece on a party ship.
+ * The per-player live count is the guard for notes. Those notes are not refused
+ * by the universe journal cap. An append does not use `baseRev`.
+ */
+function applyMemberChanges(sql: Sql, changes: unknown, now: string, member: MemberCaller): CampaignWriteResult {
     const parsed = CampaignChanges.safeParse(changes);
     if (!parsed.success) {
         const tooLarge = parsed.error.issues.some((issue) => issue.message === 'too_large');
@@ -1030,6 +1144,7 @@ function applyMemberNotes(sql: Sql, changes: unknown, now: string, member: Membe
             applied.push({ table: 'journal', id: change.id, rev, seq });
             if (willDelete && !bit(stored.deleted)) tombstoneReplies(sql, change.id, now, applied);
         }
+        for (const change of input.appends ?? []) mergeAppend(sql, change, now, member, applied);
         return storedResult(sql, now, applied, conflicts);
     });
 }
@@ -1060,7 +1175,7 @@ export function applyCampaignChanges(
     ownerId?: string | null,
 ): CampaignWriteResult {
     const body = withoutAuthorName(changes);
-    if (member) return applyMemberNotes(sql, body, now, member);
+    if (member) return applyMemberChanges(sql, body, now, member);
     const refereeId = ownerId || null;
     const legacyParty = legacySettingsWrite(body);
     const parsed = CampaignChanges.safeParse(body);

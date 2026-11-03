@@ -15,11 +15,20 @@ import {
     type CampaignSettings,
 } from '@voyage/shared';
 import { totalDays } from '../orbit/clock.ts';
+import { capacityTons, tonsUsed } from '../campaign/cargo.ts';
+import { ledgerBalance, ledgerByPeriod } from '../campaign/ledger.ts';
+import { formatCredits } from '../campaign/money.ts';
+import { fuelCapacityTons, fuelTonsOf } from '../campaign/refuel.ts';
 import { CHARACTER_RULES, CHARACTER_SCHEMA } from '../workspace/character_sheet.ts';
 import { kindWord, whenText } from '../workspace/journal/list.ts';
+import { fareOfPassageField, isBoarded } from '../workspace/passenger_fare.ts';
+import { deckPlanOf, fuelWords, holdWords, isPartyShip, LEDGER_KIND_WORDS, tonsWords } from '../workspace/players/player_ship.ts';
 import { typeInfo } from '../workspace/records.ts';
-import { SHEET_RULES as SHIP_RULES } from '../workspace/ship_sheet.ts';
+import { fieldsOf } from '../workspace/sheet_fields.ts';
+import { peopleOfKind, personOf, SECTION_KIND } from '../workspace/sheet_people.ts';
+import { SHEET_RULES as SHIP_RULES, sheetSections, valueOf, type Section, type SheetField } from '../workspace/ship_sheet.ts';
 import { stardate } from '../workspace/stardate.ts';
+import { dayWords, isManifestField, ledgerOf, lotMeta, manifestOf, sheetView } from '../workspace/vessel_trade.ts';
 import { redactText } from './text.ts';
 
 /** The schema `ship_sheet.ts` writes. A vessel's boxes follow that file. */
@@ -59,9 +68,14 @@ export type PackRecord = {
     when: string | null;
     place: string | null;
     playerNotes: string | null;
-    /** A person's sheet, already turned into text. Other types carry none. */
+    /** A person's or a vessel's sheet as lines. A party ship follows the player's page. */
     sheet: string | null;
     status: string | null;
+    /** A party ship's sections, in the player's words. Null on every other record. */
+    cargo: string | null;
+    passengers: string | null;
+    fuel: string | null;
+    ledger: string | null;
 };
 
 export type PackEntry = {
@@ -164,9 +178,9 @@ function placeOf(
 }
 
 /**
- * The player's record page shows For players and the place. The pack already prints both.
- * A vessel's track, hold, fares and costs stay off until question 129, and so does the
- * naval or scout mark (AF2). Nothing of the status is left to read, so the Status heading goes.
+ * The status object is not a pack section. A party ship's cargo, passengers, fuel, ledger
+ * and sheet are their own lines. The track, the owners, the payment and the naval or scout
+ * mark (AF2) stay off the file, so the Status heading stays out.
  */
 function statusText(): null {
     return null;
@@ -242,6 +256,142 @@ function sheetText(record: CampaignRecord, records: Readonly<Record<string, Camp
     return lines.length ? lines.join('\n') : null;
 }
 
+function fieldsOfBlock(block: Section['blocks'][number]): SheetField[] {
+    if (block.kind === 'row') return block.cells.map((cell) => cell.field);
+    const fields: SheetField[] = [];
+    for (const row of block.cells) {
+        for (const field of row) if (field) fields.push(field);
+    }
+    return fields;
+}
+
+function keptPersonName(id: string | undefined, records: Readonly<Record<string, CampaignRecord>>): string | null {
+    if (!id) return null;
+    const found = records[id];
+    if (!found || found.deleted || found.type !== 'person') return null;
+    const name = found.name.trim();
+    return name || null;
+}
+
+/** One box on the player's sheet: the page's "Yes", a kept person's name, and a boarded fare on its Passage line. */
+function fieldLine(
+    field: SheetField,
+    values: ReturnType<typeof sheetView>,
+    passengers: ReturnType<typeof manifestOf>['passengers'],
+    viewRecords: Readonly<Record<string, CampaignRecord>>,
+): string | null {
+    if (field.type === 'checkbox') return valueOf(values, field) === true ? field.name + ': Yes' : null;
+    const person = personOf(values, field, viewRecords);
+    const held = valueOf(values, field);
+    const written = person ? person.name.trim() : (typeof held === 'string' ? held.trim() : '');
+    const fare = fareOfPassageField(passengers, field.name);
+    const fareText = fare === null ? '' : formatCredits(fare);
+    const shown = written && fareText ? written + ' · ' + fareText : (written || fareText);
+    if (!shown) return null;
+    return field.name + ': ' + shown;
+}
+
+function plainLine(name: string, value: string | true): string | null {
+    const raw = value === true ? 'Yes' : value.trim();
+    if (!raw || !name.trim()) return null;
+    return name + ': ' + raw;
+}
+
+/**
+ * The party ship's sheet as the player's page reads it: the PDF's sections in page order,
+ * empty sections left out, crew that the projection kept, and one "Deck plan" line when
+ * the sheet holds a plan. No coordinates and no JSON.
+ */
+function partySheetText(
+    record: CampaignRecord,
+    viewRecords: Readonly<Record<string, CampaignRecord>>,
+    viewLinks: Readonly<Record<string, CampaignLink>>,
+    records: Readonly<Record<string, CampaignRecord>>,
+    counts: PackCounts,
+): string | null {
+    if (typeof record.sheet === 'string') return sheetText(record, records, counts);
+    const values = sheetView(record);
+    const passengers = manifestOf(record).passengers;
+    const crew = peopleOfKind(viewLinks, viewRecords, record.id, SECTION_KIND.Crew);
+    const used = new Set<string>();
+    const lines: string[] = [];
+    for (const section of sheetSections()) {
+        const block: string[] = [];
+        if (section.name === 'Crew' && crew.length) {
+            block.push('People: ' + crew.map((item) => item.person.name).join(', '));
+        }
+        for (const piece of section.blocks) {
+            for (const field of fieldsOfBlock(piece)) {
+                used.add(field.name);
+                const line = fieldLine(field, values, passengers, viewRecords);
+                if (line) block.push(line);
+            }
+        }
+        if (block.length) {
+            lines.push(section.name);
+            for (const line of block) lines.push(line);
+        }
+    }
+    for (const [name, value] of Object.entries(values)) {
+        if (used.has(name) || isManifestField(name) || name.endsWith(' record')) continue;
+        if (value !== true && typeof value !== 'string') continue;
+        const line = plainLine(name, value);
+        if (line) lines.push(line);
+    }
+    if (deckPlanOf(record.sheet)) lines.push('Deck plan');
+    if (!lines.length) return null;
+    return redactText(lines.join('\n'), records, counts);
+}
+
+function cargoText(record: CampaignRecord): string {
+    const manifest = manifestOf(record);
+    const capacity = capacityTons(fieldsOf(record.sheet));
+    const used = tonsUsed(manifest.cargo);
+    const lines = [holdWords(used, capacity)];
+    if (capacity !== null && used > capacity) {
+        lines.push('The hold is over capacity by ' + tonsWords(used - capacity) + '.');
+    }
+    if (!manifest.cargo.length) {
+        lines.push('The hold is empty.');
+        return lines.join('\n');
+    }
+    for (const lot of manifest.cargo) {
+        const label = lot.label.trim() || 'Unnamed lot';
+        lines.push(label + ' ' + tonsWords(lot.tons));
+        const meta = lotMeta(lot);
+        if (meta) lines.push(meta);
+    }
+    return lines.join('\n');
+}
+
+function passengersText(record: CampaignRecord, viewRecords: Readonly<Record<string, CampaignRecord>>): string {
+    const lots = manifestOf(record).passengers;
+    if (!lots.length) return 'No passengers.';
+    return lots.map((lot) => {
+        const name = keptPersonName(lot.personId, viewRecords) ?? (lot.label.trim() || 'Unnamed passenger');
+        const parts = [name];
+        if (lot.class.trim()) parts.push(lot.class.trim());
+        if (isBoarded(lot)) parts.push('Boarded, ' + formatCredits(lot.fareCr ?? 0));
+        return parts.join(' · ');
+    }).join('\n');
+}
+
+function ledgerText(record: CampaignRecord): string {
+    const lines = ledgerOf(record);
+    const out = [formatCredits(ledgerBalance(lines))];
+    if (!lines.length) {
+        out.push('Nothing on the ledger yet.');
+        return out.join('\n');
+    }
+    for (const period of ledgerByPeriod(lines).reverse()) {
+        out.push(dayWords({ year: period.year, day: period.day }) + ' ' + formatCredits(period.balance));
+        for (const item of period.lines) {
+            out.push(item.memo + ' ' + LEDGER_KIND_WORDS[item.kind] + ' ' + formatCredits(item.amount));
+        }
+    }
+    return out.join('\n');
+}
+
 function entryTitle(entry: CampaignEntry, body: string): string {
     const title = entry.title.trim();
     if (title) return title;
@@ -282,6 +432,11 @@ export function planPack(input: PackInput): PackPlan {
     };
     const clock = clockDay(input.clockDays);
     const records: PackRecord[] = [];
+    const viewRecords: Record<string, CampaignRecord> = {};
+    for (const row of view.records) viewRecords[row.id] = row as CampaignRecord;
+    const viewLinks: Record<string, CampaignLink> = {};
+    for (const row of view.links) viewLinks[row.id] = row as CampaignLink;
+    const namedParty = input.settings ? input.settings.party : null;
 
     for (const record of Object.values(input.records)) {
         if (record.deleted) continue;
@@ -292,6 +447,7 @@ export function planPack(input: PackInput): PackPlan {
         const summary = redactText(record.summary, input.records, counts);
         const details = redactText(record.details, input.records, counts);
         const notes = record.playerNotes == null ? null : redactText(record.playerNotes, input.records, counts);
+        const ship = isPartyShip(record, namedParty) ? viewRecords[record.id] : undefined;
         records.push({
             id: record.id,
             type: record.type,
@@ -304,8 +460,12 @@ export function planPack(input: PackInput): PackPlan {
             when: record.when ? whenText(record.when.start) + (record.when.end ? ' to ' + whenText(record.when.end) : '') : null,
             place: placeOf(record.anchor, input.records, counts),
             playerNotes: notes,
-            sheet: sheetText(record, input.records, counts),
+            sheet: ship ? partySheetText(ship, viewRecords, viewLinks, input.records, counts) : sheetText(record, input.records, counts),
             status: statusText(),
+            cargo: ship ? redactText(cargoText(ship), input.records, counts) : null,
+            passengers: ship ? redactText(passengersText(ship, viewRecords), input.records, counts) : null,
+            fuel: ship ? redactText(fuelWords(fuelTonsOf(ship.status), fuelCapacityTons(fieldsOf(ship.sheet))), input.records, counts) : null,
+            ledger: ship ? redactText(ledgerText(ship), input.records, counts) : null,
         });
     }
     records.sort((a, b) => a.typeName.localeCompare(b.typeName) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));

@@ -142,7 +142,7 @@ export class UniverseDO extends DurableObject<Env> {
                     body,
                     new Date().toISOString(),
                     acknowledgePublic,
-                    memberId ? { userId: memberId } : null,
+                    memberId ? { userId: memberId, personId: request.headers.get('x-voyage-person') || null } : null,
                     memberId ? null : actorId,
                 );
                 return Response.json({ ok: true, data: result });

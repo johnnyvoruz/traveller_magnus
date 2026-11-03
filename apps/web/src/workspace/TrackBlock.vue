@@ -15,18 +15,24 @@ import { withQuery } from '../shell/pane.ts';
 import { registerCommand } from '../shell/registry.ts';
 import { liveById, parseHexKey, resolvePlace } from './places.ts';
 import { removeLastTrackLeg } from './track_actions.ts';
-import { TRACK_COMMANDS, shownRows, trackRows } from './track_rows.ts';
+import { TRACK_COMMANDS, anchorName, shownRows, trackRows } from './track_rows.ts';
 import AdvanceClock from './AdvanceClock.vue';
 import { daysTo } from './advance_clock.ts';
 import { campaignDays, vesselWhere } from './party_where.ts';
 import { appendLeg } from '../campaign/track.ts';
 import { rollJumpHours } from '../campaign/travel.ts';
-import type { JumpRoll } from '../orbit/estimates.ts';
+import { tonsWords, type JumpRoll } from '../orbit/estimates.ts';
 import type { Plan } from '../orbit/layout.ts';
 import { earliestDeparture, vesselPosition } from '../orbit/ship_list.ts';
 import { showToast } from '../shell/toast.ts';
 import { NO_PICTURE, NO_TARGET, NO_THRUST, NOT_DOCKED, READING, jumpFromHere, jumpWords, jumpedWords, limitFlight, thrustOf, tradeTargetOf } from './jump_from_here.ts';
 import { fieldsOf } from './sheet_fields.ts';
+import { parsecsBetween } from '../map/geometry.ts';
+import { postLedger } from '../campaign/ledger.ts';
+import { fuelTonsOf } from '../campaign/refuel.ts';
+import { marketsChart, sectorAtOf, startMarkets } from './markets_near.ts';
+import { dayOf, ledgerOf, statusWithTrade, writeTrade } from './vessel_trade.ts';
+import { NO_HULL, fuelTaken, fuelTakenLine, fuelTakenMemo, fuelTakenWords, hullTonsOf, jumpFuelOf, jumpFuelWords, latestJump } from './jump_fuel.ts';
 import { loadPlan, planAsk } from './system_plan.ts';
 
 const props = defineProps<{
@@ -136,6 +142,64 @@ const jumpSay = computed((): string => {
     return NO_PICTURE;
 });
 
+// ---- The jump's fuel (DT8; Johnny 127 and 143): offered on the latest jump leg, taken only on the press ----
+/** The hull from the sheet's Size box. */
+const hull = computed(() => (record.value ? hullTonsOf(fieldsOf(record.value.sheet)) : null));
+/** Fuel aboard (status.fuelTons): the gauge the Refuel section reads. Null until typed. */
+const aboard = computed(() => (record.value ? fuelTonsOf(record.value.status) : null));
+const lastJump = computed(() => {
+    const legs = record.value ? trackOf(record.value) : null;
+    return legs ? latestJump(legs) : null;
+});
+/** The jump's parsecs from the chart's grid; null until the grid is read, or when an end of the leg is not a system. */
+const jumpLegParsecs = computed((): number | null => {
+    const found = lastJump.value;
+    const sectors = marketsChart.sectors;
+    const from = found ? found.leg.from : null;
+    const to = found ? found.leg.to : null;
+    if (!sectors || !from || !to || from.kind !== 'system' || to.kind !== 'system') return null;
+    return parsecsBetween(from.hexKey, to.hexKey, sectorAtOf(sectors));
+});
+const legFuel = computed(() => jumpFuelOf(hull.value, jumpLegParsecs.value));
+const legDestination = computed(() => (lastJump.value ? anchorName(lastJump.value.leg.to, campaign.records) : ''));
+const legDay = computed(() => (lastJump.value ? dayOf(lastJump.value.leg.departs) : null));
+const legMemo = computed(() => (legFuel.value ? fuelTakenMemo(legDestination.value, legFuel.value) : ''));
+/** The line already posted for this jump: the press is offered once. */
+const taken = computed(() => (record.value && legDay.value && legMemo.value ? fuelTaken(ledgerOf(record.value), legDay.value, legMemo.value) : null));
+/** Under the latest jump leg: the fuel and the button, the taken line, or why there is no figure yet. */
+const jumpFuelRow = computed((): { n: number; words: string; can: boolean } | null => {
+    const found = lastJump.value;
+    if (!found) return null;
+    if (taken.value) return { n: found.n, words: fuelTakenWords(taken.value), can: false };
+    if (hull.value === null) return { n: found.n, words: NO_HULL, can: false };
+    if (!legFuel.value) {
+        const words = jumpLegParsecs.value === null && marketsChart.sectors ? 'The jump\'s parsecs are not known: an end of the leg is not a charted system.' : READING;
+        return { n: found.n, words, can: false };
+    }
+    return { n: found.n, words: jumpFuelWords(legFuel.value, aboard.value), can: aboard.value !== null };
+});
+/** The fuel the jump about to be written will offer (DT7's block), so the referee sees it before the press. */
+const planFuelSay = computed((): string => {
+    const planned = jumpPlan.value;
+    if (!planned) return '';
+    if (hull.value === null) return NO_HULL;
+    const fuel = jumpFuelOf(hull.value, planned.parsecs);
+    return fuel ? jumpFuelWords(fuel, aboard.value) + '. The leg offers Take the fuel once it is written.' : '';
+});
+/** Posts the tons against Fuel aboard with the line the referee can remove. Nothing is taken without the press. */
+function takeFuel(): void {
+    const now = record.value;
+    const fuel = legFuel.value;
+    const when = legDay.value;
+    if (!now || props.readOnly || !fuel || aboard.value === null || taken.value) return;
+    if (!when) return;
+    const line = fuelTakenLine(when, legDestination.value, fuel);
+    const left = Math.max(0, aboard.value - fuel.tons);
+    writeTrade(now, { status: statusWithTrade(now, { ledger: postLedger(ledgerOf(now), line), fuelTons: Math.max(0, aboard.value - fuel.tons) }) });
+    showToast(line.memo + '. Fuel aboard is now ' + tonsWords(left) + ' t.');
+}
+onMounted(() => { void startMarkets(); });
+
 /** Both legs, as the orbit view would write them: the flight, then the jump from its end. */
 function jumpNow(): void {
     const now = record.value;
@@ -209,6 +273,10 @@ watch(() => props.id, () => { all.value = false; });
           </span>
           <span v-if="row.note" class="trk-note">{{ row.note }}</span>
           <AdvanceClock v-if="now !== null && row.arrivesDays > now" :days="daysTo(now, row.arrivesDays)" :label="'Days to the arrival of leg ' + row.n" class="trk-advance" />
+          <span v-if="jumpFuelRow && row.n === jumpFuelRow.n" class="trk-fuel" data-jump-fuel :data-jump-fuel-taken="taken ? 'yes' : 'no'">
+            <span class="trk-fuel-words">{{ jumpFuelRow.words }}</span>
+            <button v-if="jumpFuelRow.can" type="button" class="ui-btn trk-take" data-take-fuel :disabled="readOnly" title="Post the tons against Fuel aboard, with a line on the Ledger" @click="takeFuel">Take the fuel</button>
+          </span>
         </li>
       </ol>
     </template>
@@ -218,6 +286,7 @@ watch(() => props.id, () => { all.value = false; });
       <p v-else-if="!target" class="trk-fine" data-jump-note>{{ NO_TARGET }}</p>
       <template v-else>
         <p class="trk-fine" data-jump-words>{{ jumpSay }}</p>
+        <p v-if="planFuelSay" class="trk-fine" data-jump-fuel-plan>{{ planFuelSay }}</p>
         <button type="button" class="ui-btn is-primary" data-jump-go :disabled="readOnly || !jumpPlan" :title="jumpPlan ? 'Write both legs to the track' : jumpSay" @click="jumpNow">
           <Icon name="shuttle-space" :size="12" />Jump to {{ target.name }}
         </button>
@@ -389,7 +458,29 @@ watch(() => props.id, () => { all.value = false; });
 }
 
 .trk-advance {
-  flex: 1 1 100%;
+  grid-column: 1 / -1;
+}
+
+/* The jump's fuel (DT8): one full row under the leg's dates, the words then the button. */
+.trk-fuel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin-top: 4px;
+  font: 400 12.5px/1.4 var(--font-text);
+  color: var(--text-muted);
+}
+
+.ui-btn.trk-take {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12.5px;
+}
+
+.trk-fuel[data-jump-fuel-taken="yes"] .trk-fuel-words {
+  color: var(--text-1);
 }
 
 .trk-note {

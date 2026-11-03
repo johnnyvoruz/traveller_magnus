@@ -15,6 +15,7 @@ import { campaign } from '../../campaign/store.ts';
 import { isBoarded } from '../passenger_fare.ts';
 import { fieldsOf } from '../sheet_fields.ts';
 import { periodsShown, shownRows } from '../traffic_here.ts';
+import { crewOf } from '../crew.ts';
 import { dayWords, ledgerOf, lotMeta, manifestOf } from '../vessel_trade.ts';
 import { fuelWords, holdWords, LEDGER_KIND_WORDS, tonsWords } from './player_ship.ts';
 
@@ -28,6 +29,8 @@ const record = computed(() => {
 });
 const cargo = computed(() => (record.value ? manifestOf(record.value).cargo : []));
 const passengers = computed(() => (record.value ? manifestOf(record.value).passengers : []));
+/** The crew (DS2): the rows the projection kept, names and roles. */
+const crew = computed(() => crewOf(record.value));
 const ledger = computed(() => (record.value ? ledgerOf(record.value) : []));
 const capacity = computed(() => (record.value ? capacityTons(fieldsOf(record.value.sheet)) : null));
 const used = computed(() => tonsUsed(cargo.value));
@@ -87,6 +90,19 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
       </ul>
       <p v-else class="pship-none">No passengers.</p>
       <button v-if="passengersShown.more" type="button" class="pship-more" data-passengers-more @click="allPassengers = true">Show all {{ passengers.length }} passengers</button>
+    </section>
+
+    <section v-if="crew.length" class="pship-sec ui-frame" data-player-crew aria-labelledby="pship-crew-h">
+      <h3 id="pship-crew-h" class="ui-frame-label">Crew <span class="ui-frame-count">{{ crew.length }}</span></h3>
+      <ul class="pship-rows">
+        <li v-for="row in crew" :key="row.personId" class="pship-row" data-crew-row>
+          <span class="pship-main">
+            <button v-if="personOf(row.personId)" type="button" class="pship-link" @click="emit('open', personOf(row.personId)!.id)">{{ personOf(row.personId)!.name }}</button>
+            <b v-else>Someone aboard</b>
+          </span>
+          <span class="pship-class">{{ row.role || 'Crew' }}</span>
+        </li>
+      </ul>
     </section>
 
     <section class="pship-sec ui-frame" data-player-fuel aria-labelledby="pship-fuel-h">

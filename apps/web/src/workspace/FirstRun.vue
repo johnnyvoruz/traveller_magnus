@@ -63,6 +63,7 @@ onBeforeUnmount(() => {
       <li class="ui-step" :class="{ 'is-lit': named }" data-first-run-name>
         <p>Name your campaign</p>
         <CampaignName :read-only="readOnly" label="Campaign name" />
+        <p class="first-run-solo">Playing solo? Everything here is yours; invite players later or never.</p>
         <span v-if="named" class="first-run-done">Done</span>
       </li>
       <li class="ui-step" :class="{ 'is-lit': card.world }" :aria-current="current === 1 ? 'step' : undefined">
@@ -112,6 +113,12 @@ onBeforeUnmount(() => {
 
 .first-run .ui-step p {
   margin: 0 0 var(--sp-2);
+}
+
+.first-run .first-run-solo {
+  margin: var(--sp-2) 0 0;
+  color: var(--text-2);
+  font: 400 13px/1.4 var(--font-text);
 }
 
 .first-run .ui-btn {

@@ -33,11 +33,16 @@ export function rollWords(roll: JumpRoll): string {
     return (roll.hours - sum) + ' + ' + sum + ' = ' + roll.hours + ' h';
 }
 
-/** "2 parsecs · about 20 tons · 100-ton hull assumed", from the hexes between the two systems. */
-export function jumpEstimateWords(parsecs: number): string {
+/**
+ * "2 parsecs · about 20 tons · 100-ton hull assumed", from the hexes between the two systems; with the ship
+ * sheet's hull (DT8, the Size box), "2 parsecs · 40 tons of jump fuel · 200-ton hull".
+ */
+export function jumpEstimateWords(parsecs: number, hullTons: number | null = null): string {
     const counted = jumpParsecsCounted(parsecs);
+    const parsecWords = counted + (counted === 1 ? ' parsec' : ' parsecs');
+    if (hullTons !== null) return parsecWords + ' · ' + tonsWords(jumpFuelTons(hullTons, parsecs)) + ' tons of jump fuel · ' + hullTons + '-ton hull';
     const fuel = jumpFuelTons(ASSUMED_HULL_TONS, parsecs);
-    return counted + (counted === 1 ? ' parsec' : ' parsecs') + ' · about ' + tonsWords(fuel) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed';
+    return parsecWords + ' · about ' + tonsWords(fuel) + ' tons · ' + ASSUMED_HULL_TONS + '-ton hull assumed';
 }
 
 /** A flight's hours over a distance at a G, or null where there is no distance to cross. */

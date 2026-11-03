@@ -16,6 +16,7 @@ import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
 import { mountAgentRoutes } from './agent';
 import { mountPlayerRoutes } from './players';
+import { detectPlayers } from '../auth/players_schema';
 import { courseReady, detectPublicCards, detectPublicGames, publicCardsReady, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
@@ -383,9 +384,17 @@ universesRoute.patch('/:id/campaign/changes', async (c) => {
             return privateNoStore(fail(c, 429, 'rate_limited', 'Too many requests.'));
         }
         const handles = await loadHandles(c.env.DB, access.row.id, access.row.ownerId);
+        let personId = '';
+        if (await detectPlayers(c.env.DB)) {
+            const member = await c.env.DB.prepare(
+                `SELECT person_id AS personId FROM universe_members WHERE universe_id = ? AND user_id = ?`,
+            ).bind(access.row.id, access.actor.id).first<{ personId: string | null }>();
+            personId = member?.personId ?? '';
+        }
         const forwarded = await access.forward(new Request(url, c.req.raw), {
             'x-voyage-member': access.actor.id,
             'x-voyage-handles': JSON.stringify(handles),
+            'x-voyage-person': personId,
         });
         const taken = await splitSummary(forwarded);
         if (taken.response.ok) {

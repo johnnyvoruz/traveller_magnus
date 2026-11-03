@@ -6,7 +6,7 @@
  * on the sheet: they are the manifest until the first edit writes it. Pure apart from `writeTrade`, which
  * is one commit, as the track's writes are.
  */
-import type { CampaignRecord, CargoLot, EntryChange, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
+import type { CampaignRecord, CargoLot, CrewRole, CrewRow, EntryChange, LedgerLine, OwnerShare, PassengerLot, ShipPayment } from '@voyage/shared';
 import { cargoFromSheet, MANIFEST_ROWS, passengersFromSheet, sheetFromCargo, sheetFromPassengers } from '../campaign/cargo.ts';
 import { commit } from '../campaign/commit.ts';
 import { formatCredits } from '../campaign/money.ts';
@@ -104,7 +104,7 @@ export function editedSheet(record: CampaignRecord, values: SheetValues): { shee
 /** The status with the lists given replaced. */
 export function statusWithTrade(
     record: CampaignRecord,
-    change: { cargo?: CargoLot[]; passengers?: PassengerLot[]; ledger?: LedgerLine[]; owners?: OwnerShare[]; payment?: ShipPayment; fuelTons?: number; fuelMark?: FuelMark },
+    change: { cargo?: CargoLot[]; passengers?: PassengerLot[]; crew?: CrewRow[]; roles?: CrewRole[]; ledger?: LedgerLine[]; owners?: OwnerShare[]; payment?: ShipPayment; fuelTons?: number; fuelMark?: FuelMark },
 ): Status {
     return { ...statusOf(record), ...change };
 }

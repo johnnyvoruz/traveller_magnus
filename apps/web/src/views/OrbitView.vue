@@ -13,6 +13,8 @@ import Icon from '../design/Icon.vue';
 import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName, type HexBody, type SystemDoc, type TreeRow } from '../dossier/model.ts';
 import { parsecsBetween } from '../map/geometry.ts';
+import { hullTonsOf } from '../workspace/jump_fuel.ts';
+import { fieldsOf } from '../workspace/sheet_fields.ts';
 import { bootChart, rememberedVersion, versionsAsk } from '../map/chart_version.ts';
 import { TruthClient } from '../map/truth_client.ts';
 import BodyChips from '../orbit/BodyChips.vue';
@@ -1618,7 +1620,8 @@ const jumpParsecs = computed((): number | null => {
         return sector ? { sx: sector.x, sy: sector.y } : null;
     });
 });
-const jumpEstimate = computed(() => (jumpTarget.value && jumpParsecs.value !== null ? jumpEstimateWords(jumpParsecs.value) : ''));
+/** The parsecs and the fuel: the ship sheet's hull when its Size box holds one (DT8), else the assumption. */
+const jumpEstimate = computed(() => (jumpTarget.value && jumpParsecs.value !== null ? jumpEstimateWords(jumpParsecs.value, shipRecord.value ? hullTonsOf(fieldsOf(shipRecord.value.sheet)) : null) : ''));
 
 function pickOnMap(): void {
     jumpReturnPath.value = route.fullPath;

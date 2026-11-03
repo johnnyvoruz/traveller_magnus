@@ -192,6 +192,6 @@ test('pins: the page mounts both under the rule; the words are the referee\'s; t
         assert.doesNotMatch(file, /\bwindow\.|\bdocument\./);
     }
     const projection = fs.readFileSync(path.join(root, 'packages/shared/src/players_view.ts'), 'utf8');
-    assert.match(projection, /if \(key === 'fuelMark'\) continue;/, 'the read the page uses drops the base fuel mark before it arrives');
+    assert.match(projection, /if \(key === 'fuelMark' \|\| key === 'roles'\) continue;/, 'the read the page uses drops the base fuel mark, and the crew switches, before it arrives');
     assert.match(projection, /sheet: redactValue\(record\.sheet, records, hiddenIds\),\s+status: projectStatus\(record\.status, records, hiddenIds, kept, index\),/, 'and keeps the sheet and the status');
 });

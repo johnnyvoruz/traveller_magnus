@@ -312,6 +312,14 @@ function projectStatus(
             out.passengers = value.map((lot) => projectIdLot(lot, 'personId', records, hiddenIds, kept));
             continue;
         }
+        if (key === 'crew' && Array.isArray(value)) {
+            // A crew row names a person: kept when the players can see that person, dropped otherwise (DS2).
+            out.crew = value.filter((row) => {
+                const item = asRow(row);
+                return !!item && typeof item.personId === 'string' && kept.has(item.personId);
+            }).map((row) => redactValue(row, records, hiddenIds));
+            continue;
+        }
         if (key === 'owners' && Array.isArray(value)) {
             const owners = [];
             for (const item of value) {
@@ -329,7 +337,7 @@ function projectStatus(
             out.owners = owners;
             continue;
         }
-        if (key === 'fuelMark') continue;
+        if (key === 'fuelMark' || key === 'roles') continue;
         out[key] = redactValue(value, records, hiddenIds);
     }
     return out as CampaignRecord['status'];

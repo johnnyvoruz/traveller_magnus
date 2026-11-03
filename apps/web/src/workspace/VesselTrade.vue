@@ -50,6 +50,7 @@ import { fieldsOf } from './sheet_fields.ts';
 import { anchorName } from './track_rows.ts';
 import { PAYMENT_IS_MORTGAGE, SET_MORTGAGE_HERE, leftOutWords, monthWithPayment } from './upkeep_payment.ts';
 import { dayOf, dayWords, fuelMarkOf, ledgerOf, lotMeta, manifestOf, signedAmount, statusWithTrade, writeTrade, type Day } from './vessel_trade.ts';
+import CrewList from './CrewList.vue';
 
 const props = defineProps<{
     id: string;
@@ -732,8 +733,10 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         </li>
       </ul>
       <button v-if="passengersShown.more" type="button" class="vt-more" data-passengers-more @click="allPassengers = true">Show all {{ passengers.length }} passengers</button>
-      <p v-else-if="!rolled" class="vt-none">No passengers. The ship sheet's Passenger rows are this list too.</p>
+      <p v-if="!passengers.length && !rolled" class="vt-none">No passengers. The ship sheet's Passenger rows are this list too.</p>
     </section>
+
+    <CrewList :id="id" :read-only="readOnly" />
 
     <section class="vt-sec ui-frame" data-vessel-owners aria-labelledby="vt-owners-h">
       <div class="vt-head">

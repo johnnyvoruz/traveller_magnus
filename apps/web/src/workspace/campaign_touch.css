@@ -82,6 +82,22 @@
     display: none;
   }
 
+  /*
+   * The party tab is the one that shrinks. With its line hidden, that shrink cuts the word Party
+   * into the Journal tab. On a phone the tab keeps its word. The side padding gives the three
+   * words back the width, so the menu stays on this row.
+   */
+  .camp .camp-tab {
+    box-sizing: border-box;
+    min-width: 44px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .camp .camp-tab.camp-tab-party {
+    flex: 0 0 auto;
+  }
+
   /* A tag's own remove button sits inside the tag: its hit area grows, not the tag. */
   .camp .rec-tag button,
   .camp .clock-date,
@@ -97,6 +113,12 @@
     position: absolute;
     inset: -13px -6px;
     content: "";
+  }
+
+  /* A short name, such as Kale, is under 32 px wide, so the 6 px inset misses 44. The hit grows. */
+  .camp .party-name::before {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   /* The smallest: a tag's 16 px remove button. */

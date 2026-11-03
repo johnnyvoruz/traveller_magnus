@@ -111,13 +111,6 @@ function greyTerrain(pixels: Uint8ClampedArray, ink: SurfaceInk): void {
     }
 }
 
-/** Ocean and shallows only. Ice and land stay the page and carry a symbol. */
-function paperWash(hex: HexRecord, ink: SurfaceInk): string | null {
-    if (hex.terrain === 'SH') return ink.washShallow;
-    if (hex.terrain === 'OC') return ink.wash;
-    return null;
-}
-
 function swatchInk(code: SurfaceCode, ink: SurfaceInk): string {
     const kind = CODE_TABLE[code].kind;
     if (code === 'SH') return ink.shallow;
@@ -143,48 +136,23 @@ function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout:
         const id = grid.vid[fi][i * (n + 1) + j];
         return id >= 0 ? model.hexes[id] : null;
     };
-    grid.faces.forEach((face, fi) => {
-        for (let i = 0; i < n; i += 1) {
-            for (let j = 0; i + j < n; j += 1) {
-                const tris: [number, number][][] = [[[i, j], [i + 1, j], [i, j + 1]]];
-                if (i + j + 2 <= n) tris.push([[i + 1, j], [i + 1, j + 1], [i, j + 1]]);
-                for (const tri of tris) {
-                    const hex = hexAt(fi, tri[0][0], tri[0][1]);
-                    if (!hex) continue;
-                    const wash = paperWash(hex, ink);
-                    if (!wash) continue;
-                    const p = tri.map(([a, b]) => at(face, a, b));
-                    ctx.fillStyle = wash;
-                    ctx.beginPath();
-                    ctx.moveTo(p[0][0], p[0][1]);
-                    ctx.lineTo(p[1][0], p[1][1]);
-                    ctx.lineTo(p[2][0], p[2][1]);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-            }
-        }
-    });
-    const strokeEdges = (coast: boolean): void => {
+    const strokeGrid = (): void => {
         ctx.beginPath();
         grid.faces.forEach((face, fi) => {
             for (let i = 0; i < n; i += 1) {
                 for (let j = 0; i + j < n; j += 1) {
-                    const pairs: [Point, Point][] = [];
                     const edge = (ai: number, aj: number, bi: number, bj: number): void => {
                         const a = hexAt(fi, ai, aj);
                         const b = hexAt(fi, bi, bj);
                         if (!a || !b) return;
-                        if (coast && a.water === b.water) return;
-                        pairs.push([at(face, ai, aj), at(face, bi, bj)]);
+                        const p = at(face, ai, aj);
+                        const q = at(face, bi, bj);
+                        ctx.moveTo(p[0], p[1]);
+                        ctx.lineTo(q[0], q[1]);
                     };
                     edge(i, j, i + 1, j);
                     edge(i, j, i, j + 1);
                     if (i + j + 1 <= n) edge(i + 1, j, i, j + 1);
-                    for (const [a, b] of pairs) {
-                        ctx.moveTo(a[0], a[1]);
-                        ctx.lineTo(b[0], b[1]);
-                    }
                 }
             }
         });
@@ -193,16 +161,14 @@ function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout:
     ctx.lineJoin = 'round';
     ctx.strokeStyle = ink.grid;
     ctx.lineWidth = Math.max(0.3, (s / n) * 0.035);
-    strokeEdges(false);
-    ctx.strokeStyle = ink.coast;
-    ctx.lineWidth = Math.max(0.7, (s / n) * 0.07);
-    strokeEdges(true);
+    strokeGrid();
     const cell = s / n;
     drawSymbols(ctx, model, layout, {
         set: iconSet,
         tint,
         outlines: true,
         icons: true,
+        plain: false,
         ink: ink.text,
         outlineInk: ink.grid,
         outlineWidth: Math.max(0.35, cell * 0.045),
