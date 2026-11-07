@@ -15,6 +15,7 @@ import type { Rect } from '../pop_place.ts';
 import BuildMenu, { type MenuItem } from './BuildMenu.vue';
 import DesignAsk from './DesignAsk.vue';
 import EditField from './EditField.vue';
+import { cellField, cellOf, wordsFor } from './world_card.ts';
 import OrbitPicker from './OrbitPicker.vue';
 import { canPick, openPicker, orbitPartner, pickFieldId, pickUi } from './orbit_pick.ts';
 import { draftHandle, edit, markOf, messagesFor, setField } from './edit.ts';
@@ -325,20 +326,21 @@ function endDrag(): void {
         <p v-if="rollNote(selected.id).text" class="build-fine hand-roll-note">{{ rollNote(selected.id).text }}</p>
         <p v-for="(message, index) in rollMessages" :key="'roll' + index" class="sysed-strip">{{ message.text }}</p>
         <div class="sysed-cells">
-          <EditField
-            v-for="field in fields.profile"
-            :key="field.id"
-            cell
-            :field="field"
-            :mark="mark(field)"
-            :was="edit.baseline[field.id]"
-            :locked="false"
-            :why="''"
-            :messages="[]"
-            :busy="busy"
-            :resync="edit.resync"
-            @set="set(field.id, $event)"
-          />
+          <div v-for="field in fields.profile" :key="field.id" class="sysed-cell-wrap" :data-digit="cellOf(field.id)">
+            <EditField
+              cell
+              :field="cellField(field)"
+              :mark="mark(field)"
+              :was="edit.baseline[field.id]"
+              :locked="false"
+              :why="''"
+              :messages="[]"
+              :busy="busy"
+              :resync="edit.resync"
+              @set="set(field.id, $event)"
+            />
+            <span v-if="cellOf(field.id) && wordsFor(cellOf(field.id)!, field.value)" class="sysed-cell-words" :data-digit-words="cellOf(field.id)">{{ wordsFor(cellOf(field.id)!, field.value) }}</span>
+          </div>
         </div>
         <template v-for="field in fields.profile" :key="'m' + field.id">
           <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>

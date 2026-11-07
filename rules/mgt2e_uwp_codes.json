@@ -1,0 +1,148 @@
+{
+  "note": "The words of the Universal World Profile digits, transcribed from the Mongoose Traveller 2e world creation text in assets/2eWorldCreation.txt by Lane D on 2026-11-02 on Johnny's word (question 144, the hex editor plan's question 1). Every entry cites the line or lines it was read from, as `source`, and keeps the text's wording, including its own spellings and ellipses. Words only: the rolls, DMs and conditions these tables sit beside are in rules/mgt2e_data.js. Where the text gives no words for a digit (Tech Level), the section says so and holds what the text does give. Written up in findings/uwp_codes.md.",
+  "source": "assets/2eWorldCreation.txt",
+  "starport": {
+    "source": "assets/2eWorldCreation.txt:1107-1158",
+    "note": "The text: 'Starports are classed from A to E' (1107); the class table gives X at '2 or less' (1116). The Starport Facilities table (1127-1158) gives each class its quality, berthing cost, fuel, facilities and the bases that may be rolled.",
+    "classes": [
+      { "code": "A", "quality": "Excellent", "berthingCost": "1D x Cr1000", "fuel": "Refined", "facilities": "Shipyard (all), Repair, Highport 6+", "bases": "Military 8+, Naval 8+, Scout 10+", "source": "assets/2eWorldCreation.txt:1129-1135" },
+      { "code": "B", "quality": "Good", "berthingCost": "1D x Cr500", "fuel": "Refined", "facilities": "Shipyard (spacecraft), Repair, Highport 8+", "bases": "Military 8+, Naval 8+, Scout 9+", "source": "assets/2eWorldCreation.txt:1137-1143" },
+      { "code": "C", "quality": "Routine", "berthingCost": "1D x Cr100", "fuel": "Unrefined", "facilities": "Shipyard (small craft), Repair, Highport 10+", "bases": "Military 10+, Scout 9+", "source": "assets/2eWorldCreation.txt:1145-1150" },
+      { "code": "D", "quality": "Poor", "berthingCost": "1D x Cr10", "fuel": "Unrefined", "facilities": "Limited Repair, Highport 12+", "bases": "Scout 8+, Corsair 12+", "source": "assets/2eWorldCreation.txt:1152-1156" },
+      { "code": "E", "quality": "Frontier", "berthingCost": "0", "fuel": "None", "facilities": "None", "bases": "Corsair 10+", "source": "assets/2eWorldCreation.txt:1157" },
+      { "code": "X", "quality": "No Starport", "berthingCost": "0", "fuel": "None", "facilities": "None", "bases": "Corsair 10+", "source": "assets/2eWorldCreation.txt:1158" }
+    ]
+  },
+  "size": {
+    "source": "assets/2eWorldCreation.txt:255-305",
+    "note": "The Size table (269-300): the code, the diameter, an example and the surface gravity in Gs, which 'assume that the world has a density similar to that of Earth' (259-261). 'Worlds of Size 1 or less are asteroids, planetoids, orbital complexes, space stations and other small satellites' (301-303).",
+    "codes": [
+      { "code": "0", "diameter": "Less than 1,000km", "example": "Asteroid, orbital complex", "gravity": "Negligible", "source": "assets/2eWorldCreation.txt:275-282" },
+      { "code": "1", "diameter": "1,600km", "example": "Triton", "gravity": "0.05", "source": "assets/2eWorldCreation.txt:284" },
+      { "code": "2", "diameter": "3,200km", "example": "Luna, Europa", "gravity": "0.15", "source": "assets/2eWorldCreation.txt:285-288" },
+      { "code": "3", "diameter": "4,800km", "example": "Mercury, Ganymede", "gravity": "0.25", "source": "assets/2eWorldCreation.txt:290-293" },
+      { "code": "4", "diameter": "6,400km", "example": "Mars", "gravity": "0.35", "source": "assets/2eWorldCreation.txt:294" },
+      { "code": "5", "diameter": "8,000km", "example": "", "gravity": "0.45", "source": "assets/2eWorldCreation.txt:295" },
+      { "code": "6", "diameter": "9,600km", "example": "", "gravity": "0.7", "source": "assets/2eWorldCreation.txt:296" },
+      { "code": "7", "diameter": "11,200km", "example": "", "gravity": "0.9", "source": "assets/2eWorldCreation.txt:297" },
+      { "code": "8", "diameter": "12,800km", "example": "Earth", "gravity": "1.0", "source": "assets/2eWorldCreation.txt:298" },
+      { "code": "9", "diameter": "14,400km", "example": "", "gravity": "1.25", "source": "assets/2eWorldCreation.txt:299" },
+      { "code": "A", "diameter": "16,000km", "example": "", "gravity": "1.4", "source": "assets/2eWorldCreation.txt:300" }
+    ]
+  },
+  "atmosphere": {
+    "source": "assets/2eWorldCreation.txt:307-397",
+    "note": "The Atmosphere table (307-324): composition, an example, the pressure and the survival gear required; an empty pressure or gear is empty in the text. The atmosphere types (348-397) are the text's paragraphs, each given by its first sentence and its lines.",
+    "codes": [
+      { "code": "0", "composition": "None", "example": "Moon", "pressure": "0.00", "gear": "Vacc Suit", "source": "assets/2eWorldCreation.txt:309" },
+      { "code": "1", "composition": "Trace", "example": "Mars", "pressure": "0.001 to 0.09", "gear": "Vacc Suit", "source": "assets/2eWorldCreation.txt:310" },
+      { "code": "2", "composition": "Very Thin, Tainted", "example": "", "pressure": "0.1 to 0.42", "gear": "Respirator, Filter", "source": "assets/2eWorldCreation.txt:311" },
+      { "code": "3", "composition": "Very Thin", "example": "", "pressure": "0.1 to 0.42", "gear": "Respirator", "source": "assets/2eWorldCreation.txt:312" },
+      { "code": "4", "composition": "Thin, Tainted", "example": "", "pressure": "0.43 to 0.7", "gear": "Filter", "source": "assets/2eWorldCreation.txt:313" },
+      { "code": "5", "composition": "Thin", "example": "", "pressure": "0.43 to 0.7", "gear": "", "source": "assets/2eWorldCreation.txt:314" },
+      { "code": "6", "composition": "Standard", "example": "Earth", "pressure": "0.71-1.49", "gear": "", "source": "assets/2eWorldCreation.txt:315" },
+      { "code": "7", "composition": "Standard, Tainted", "example": "", "pressure": "0.71-1.49", "gear": "Filter", "source": "assets/2eWorldCreation.txt:316" },
+      { "code": "8", "composition": "Dense", "example": "", "pressure": "1.5 to 2.49", "gear": "", "source": "assets/2eWorldCreation.txt:317" },
+      { "code": "9", "composition": "Dense, tainted", "example": "", "pressure": "1.5 to 2.49", "gear": "Filter", "source": "assets/2eWorldCreation.txt:318" },
+      { "code": "A", "composition": "Exotic", "example": "", "pressure": "Varies", "gear": "Air Supply", "source": "assets/2eWorldCreation.txt:319" },
+      { "code": "B", "composition": "Corrosive", "example": "Venus", "pressure": "Varies", "gear": "Vacc Suit", "source": "assets/2eWorldCreation.txt:320" },
+      { "code": "C", "composition": "Insidious", "example": "", "pressure": "Varies", "gear": "Vacc Suit", "source": "assets/2eWorldCreation.txt:321" },
+      { "code": "D", "composition": "Very Dense", "example": "", "pressure": "2.5+", "gear": "", "source": "assets/2eWorldCreation.txt:322" },
+      { "code": "E", "composition": "Low", "example": "", "pressure": "0.5 or less", "gear": "", "source": "assets/2eWorldCreation.txt:323" },
+      { "code": "F", "composition": "Unusual", "example": "", "pressure": "Varies", "gear": "Varies", "source": "assets/2eWorldCreation.txt:324" }
+    ],
+    "types": [
+      { "name": "Tainted", "words": "Tainted atmospheres contain some element harmful to humans, such as an unusually high proportion of carbon dioxide.", "source": "assets/2eWorldCreation.txt:349-355" },
+      { "name": "Exotic", "words": "An exotic atmosphere is unbreathable by humans but not otherwise hazardous.", "source": "assets/2eWorldCreation.txt:357-360" },
+      { "name": "Corrosive", "words": "Corrosive atmospheres are highly dangerous.", "source": "assets/2eWorldCreation.txt:361-363" },
+      { "name": "Insidious", "words": "An insidious atmosphere is like a corrosive one but is so potent that it attacks equipment as well.", "source": "assets/2eWorldCreation.txt:364-371" },
+      { "name": "Very Dense", "words": "These worlds have thick N2/O2 atmospheres but their mean surface pressure is too high to support unprotected human life (high pressure nitrogen and oxygen are deadly to humans).", "source": "assets/2eWorldCreation.txt:372-381" },
+      { "name": "Low", "words": "The opposite of a Very Dense atmosphere, these massive worlds have thin N2/O2 atmospheres that settle in the lowlands and depressions and are only breathable there – the pressure drops off so rapidly with altitude that the highest topographic points of the surface may be close to vacuum.", "source": "assets/2eWorldCreation.txt:382-387" },
+      { "name": "Unusual", "words": "An Unusual atmosphere is a catchall term for an atmosphere that behaves in a strange manner.", "source": "assets/2eWorldCreation.txt:388-397" }
+    ]
+  },
+  "hydrographics": {
+    "source": "assets/2eWorldCreation.txt:464-499",
+    "note": "The Hydrographics table (482-499): the code, the percentage of surface liquid and the description. 'For normal worlds, this will be water; on other worlds with corrosive or exotic atmospheres, it could be a corrosive or exotic liquid like ammonia or methane' (468-471).",
+    "codes": [
+      { "code": "0", "percentage": "0%–5%", "description": "Desert world", "source": "assets/2eWorldCreation.txt:487" },
+      { "code": "1", "percentage": "6%–15%", "description": "Dry world", "source": "assets/2eWorldCreation.txt:488" },
+      { "code": "2", "percentage": "16%–25%", "description": "A few small seas", "source": "assets/2eWorldCreation.txt:489" },
+      { "code": "3", "percentage": "26%–35%", "description": "Small seas and oceans", "source": "assets/2eWorldCreation.txt:490-491" },
+      { "code": "4", "percentage": "36%–45%", "description": "Wet world", "source": "assets/2eWorldCreation.txt:492" },
+      { "code": "5", "percentage": "46%–55%", "description": "A large ocean", "source": "assets/2eWorldCreation.txt:493" },
+      { "code": "6", "percentage": "56%–65%", "description": "Large oceans", "source": "assets/2eWorldCreation.txt:494" },
+      { "code": "7", "percentage": "66%–75%", "description": "Earth-like world", "source": "assets/2eWorldCreation.txt:495" },
+      { "code": "8", "percentage": "76%–85%", "description": "Only a few islands and archipelagos", "source": "assets/2eWorldCreation.txt:496-497" },
+      { "code": "9", "percentage": "86%–95%", "description": "Almost entirely water", "source": "assets/2eWorldCreation.txt:498" },
+      { "code": "A", "percentage": "96%–100%", "description": "Waterworld", "source": "assets/2eWorldCreation.txt:499" }
+    ]
+  },
+  "population": {
+    "source": "assets/2eWorldCreation.txt:501-534",
+    "note": "The Population table (501-515): the code, the inhabitants in words, the range and the description; a dash in the text is a dash here. 'The Population code can be generalised as the number of zeroes following a one' (519-520). 'If a world has Population 0, it is uninhabited and so has a Government, Law Level and Technology Level of 0' (533-534).",
+    "codes": [
+      { "code": "0", "inhabitants": "None", "range": "0", "description": "—", "source": "assets/2eWorldCreation.txt:503" },
+      { "code": "1", "inhabitants": "Few", "range": "1+", "description": "A tiny farmstead or a single family", "source": "assets/2eWorldCreation.txt:504" },
+      { "code": "2", "inhabitants": "Hundreds", "range": "100+", "description": "A village", "source": "assets/2eWorldCreation.txt:505" },
+      { "code": "3", "inhabitants": "Thousands", "range": "1,000+", "description": "—", "source": "assets/2eWorldCreation.txt:506" },
+      { "code": "4", "inhabitants": "Tens of thousands", "range": "10,000+", "description": "Small town", "source": "assets/2eWorldCreation.txt:507" },
+      { "code": "5", "inhabitants": "Hundreds of thousands", "range": "100,000+", "description": "Average city", "source": "assets/2eWorldCreation.txt:508" },
+      { "code": "6", "inhabitants": "Millions", "range": "1,000,000+", "description": "—", "source": "assets/2eWorldCreation.txt:509" },
+      { "code": "7", "inhabitants": "Tens of millions", "range": "10,000,000+", "description": "Large city", "source": "assets/2eWorldCreation.txt:510" },
+      { "code": "8", "inhabitants": "Hundreds of millions", "range": "100,000,000+", "description": "—", "source": "assets/2eWorldCreation.txt:511" },
+      { "code": "9", "inhabitants": "Billions", "range": "1,000,000,000+", "description": "Present day Earth", "source": "assets/2eWorldCreation.txt:512" },
+      { "code": "A", "inhabitants": "Tens of billions", "range": "10,000,000,000+", "description": "—", "source": "assets/2eWorldCreation.txt:513" },
+      { "code": "B", "inhabitants": "Hundreds of billions", "range": "100,000,000,000+", "description": "Incredibly crowded world", "source": "assets/2eWorldCreation.txt:514" },
+      { "code": "C", "inhabitants": "Trillions", "range": "1,000,000,000,000+", "description": "World-city", "source": "assets/2eWorldCreation.txt:515" }
+    ]
+  },
+  "government": {
+    "source": "assets/2eWorldCreation.txt:535-743",
+    "note": "The Government table (543-743): the code, the government type, the description, the examples and the example contraband, each as the text's lines have them; the text's own spellings are kept ('complete for control' at 635).",
+    "codes": [
+      { "code": "0", "type": "None", "description": "No government structure. In many cases, family bonds predominate.", "examples": "Family, clan, anarchy", "contraband": "None", "source": "assets/2eWorldCreation.txt:549-552" },
+      { "code": "1", "type": "Company/Corporation", "description": "Ruling functions are assumed by a company managerial elite and most citizenry are company employees or dependants.", "examples": "Corporate outpost, asteroid mine, feudal domain", "contraband": "Weapons, Drugs, Travellers", "source": "assets/2eWorldCreation.txt:554-566" },
+      { "code": "2", "type": "Participating Democracy", "description": "Ruling functions are reached by the advice and consent of the citizenry directly.", "examples": "Collective, tribal council, comm-linked consensus", "contraband": "Drugs", "source": "assets/2eWorldCreation.txt:568-577" },
+      { "code": "3", "type": "Self-Perpetuating Oligarchy", "description": "Ruling functions are performed by a restricted minority, with little or no input from the mass of citizenry.", "examples": "Plutocracy, hereditary ruling caste", "contraband": "Technology, Weapons, Travellers", "source": "assets/2eWorldCreation.txt:579-591" },
+      { "code": "4", "type": "Representative Democracy", "description": "Ruling functions are performed by elected representatives.", "examples": "Republic, democracy", "contraband": "Drugs, Weapons, Psionics", "source": "assets/2eWorldCreation.txt:593-600" },
+      { "code": "5", "type": "Feudal Technocracy", "description": "Ruling functions are performed by specific individuals for persons who agree to be ruled by them. Relationships are based on the performance of technical activities that are mutually beneficial.", "examples": "Those with access to advanced technology tend to have higher social status", "contraband": "Technology, Weapons, Computers", "source": "assets/2eWorldCreation.txt:602-618" },
+      { "code": "6", "type": "Captive Government", "description": "Ruling functions are performed by an imposed leadership answerable to an outside group.", "examples": "A colony or conquered area", "contraband": "Weapons, Technology, Travellers", "source": "assets/2eWorldCreation.txt:620-632" },
+      { "code": "7", "type": "Balkanisation", "description": "No central authority exists; rival governments complete for control. Law level refers to the government nearest the starport.", "examples": "Multiple governments, civil war", "contraband": "Varies", "source": "assets/2eWorldCreation.txt:634-642" },
+      { "code": "8", "type": "Civil Service Bureaucracy", "description": "Ruling functions are performed by government agencies employing individuals selected for their expertise.", "examples": "Technocracy, Communism", "contraband": "Drugs, Weapons", "source": "assets/2eWorldCreation.txt:644-654" },
+      { "code": "9", "type": "Impersonal Bureaucracy", "description": "Ruling functions are performed by agencies that have become insulated from the governed citizens.", "examples": "Entrenched castes of bureaucrats, decaying empire", "contraband": "Technology, Weapons, Drugs, Travellers, Psionics", "source": "assets/2eWorldCreation.txt:656-670" },
+      { "code": "A", "type": "Charismatic Dictator", "description": "Ruling functions are performed by agencies directed by a single leader who enjoys the overwhelming confidence of the citizens.", "examples": "Revolutionary leader, messiah, emperor", "contraband": "None", "source": "assets/2eWorldCreation.txt:672-683" },
+      { "code": "B", "type": "Non-Charismatic Leader", "description": "A previous charismatic dictator has been replaced by a leader through normal channels.", "examples": "Military dictatorship, hereditary kingship", "contraband": "Weapons, Technology, Computers", "source": "assets/2eWorldCreation.txt:685-697" },
+      { "code": "C", "type": "Charismatic Oligarchy", "description": "Ruling functions are performed by a select group of members of an organisation or class that enjoys the overwhelming confidence of the citizenry.", "examples": "Junta, revolutionary council", "contraband": "Weapons", "source": "assets/2eWorldCreation.txt:699-710" },
+      { "code": "D", "type": "Religious Dictatorship", "description": "Ruling functions are performed by a religious organisation without regard to the specific individual needs of the citizenry.", "examples": "Cult, transcendent philosophy, psionic group mind", "contraband": "Varies", "source": "assets/2eWorldCreation.txt:712-723" },
+      { "code": "E", "type": "Religious Autocracy", "description": "Government by a single religious leader having absolute power over the citizenry.", "examples": "Messiah", "contraband": "Varies", "source": "assets/2eWorldCreation.txt:725-731" },
+      { "code": "F", "type": "Totalitarian Oligarchy", "description": "Government by an all-powerful minority which maintains absolute control through widespread coercion and oppression.", "examples": "World church, ruthless corporation", "contraband": "Varies", "source": "assets/2eWorldCreation.txt:733-743" }
+    ]
+  },
+  "lawLevel": {
+    "source": "assets/2eWorldCreation.txt:919-1004",
+    "note": "The Law Level table (967-1004): the level, the weapons banned and the armour banned; an empty armour cell is empty in the text. The text's last row is '9+', which this file keeps as the level '9+': a digit of 9 or more reads that row. 'A high Law Level indicates that visitors to the world will have their activities curtailed' (921-922).",
+    "levels": [
+      { "level": "0", "weaponsBanned": "No restrictions – heavy armour and a handy weapon recommended…", "armourBanned": "", "source": "assets/2eWorldCreation.txt:970-971" },
+      { "level": "1", "weaponsBanned": "Poison gas, explosives, undetectable weapons, WMD", "armourBanned": "Battle dress", "source": "assets/2eWorldCreation.txt:972-976" },
+      { "level": "2", "weaponsBanned": "Portable energy and laser weapons", "armourBanned": "Combat armour", "source": "assets/2eWorldCreation.txt:978-982" },
+      { "level": "3", "weaponsBanned": "Military weapons", "armourBanned": "Flak", "source": "assets/2eWorldCreation.txt:983" },
+      { "level": "4", "weaponsBanned": "Light assault weapons and submachine guns", "armourBanned": "Cloth", "source": "assets/2eWorldCreation.txt:984-987" },
+      { "level": "5", "weaponsBanned": "Personal concealable weapons", "armourBanned": "Mesh", "source": "assets/2eWorldCreation.txt:989-992" },
+      { "level": "6", "weaponsBanned": "All firearms except shotguns & stunners; carrying weapons discouraged", "armourBanned": "", "source": "assets/2eWorldCreation.txt:994-997" },
+      { "level": "7", "weaponsBanned": "Shotguns", "armourBanned": "", "source": "assets/2eWorldCreation.txt:998" },
+      { "level": "8", "weaponsBanned": "All bladed weapons, stunners", "armourBanned": "All visible armour", "source": "assets/2eWorldCreation.txt:999-1003" },
+      { "level": "9+", "weaponsBanned": "All weapons", "armourBanned": "All armour", "source": "assets/2eWorldCreation.txt:1004" }
+    ]
+  },
+  "techLevel": {
+    "source": "assets/2eWorldCreation.txt:1224-1283",
+    "note": "The text gives no words per Tech Level digit. Its Tech Level table (1249-1267) is the roll's DMs by starport, size, atmosphere, hydrographics, population and government, already in rules/mgt2e_data.js (techLevel.modifiers), and its Tech Level and Environment table (1274-1283) the minimum Tech Level an atmosphere needs (mgt2e_data.js techLevel.environmentalMinimums). What the text does say in words is the communications a Tech Level brings (1238-1247), kept here; the editor shows the Tech Level digit with no words beside it.",
+    "communications": [
+      { "techLevels": "below 3", "words": "no telecommunication system whatsoever except for whatever facilities the starport offers", "source": "assets/2eWorldCreation.txt:1239-1241" },
+      { "techLevels": "4 to 6", "words": "radio and telephone communications between major cities at least but no satellite facilities", "source": "assets/2eWorldCreation.txt:1241-1243" },
+      { "techLevels": "7 onwards", "words": "a progressively more advanced communications grid", "source": "assets/2eWorldCreation.txt:1243-1245" },
+      { "techLevels": "9", "words": "accessible from every point of the surface (communications satellites become cheap and easy to deploy)", "source": "assets/2eWorldCreation.txt:1245-1247" }
+    ]
+  }
+}

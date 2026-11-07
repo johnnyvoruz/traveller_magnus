@@ -177,8 +177,29 @@ test('two appends land, and a stale whole-record save drops neither', () => {
     assert.equal(hidden.code, 'forbidden');
     const loose = refusal(() => applyCampaignChanges(sql, { appends: [{ id: LOOSE, append: { ledger: [line('Loose')] } }] }, NOW, false, ada));
     assert.equal(loose.code, 'forbidden');
-    const missing = refusal(() => applyCampaignChanges(sql, { appends: [{ id: CLOSED, append: { ledger: [line('Closed')] } }] }, NOW, false, ada));
-    assert.equal(missing.code, 'forbidden');
+    const opened = applyCampaignChanges(sql, { appends: [{ id: CLOSED, append: { ledger: [line('Closed')] } }] }, NOW, false, ada);
+    assert.equal(opened.conflicts.length, 0);
+    const openShip = shipOf(sql, CLOSED);
+    assert.equal(openShip.status.ledger.length, 1);
+    assert.equal(openShip.status.ledger[0].memo, 'Closed');
+    assert.equal(openShip.status.ledger[0].by, ADA);
+    const gap = { ...openShip.status, roles: [{ name: 'Pilot', ledger: false, trade: true, locker: true }] };
+    applyCampaignChanges(sql, { records: [{ ...openShip, status: gap, baseRev: openShip.rev }] }, NOW);
+    applyCampaignChanges(sql, { appends: [{ id: CLOSED, append: { ledger: [line('Still')] } }] }, NOW, false, ada);
+    const gapped = shipOf(sql, CLOSED);
+    assert.equal(gapped.status.ledger.length, 2);
+    const shut = {
+        ...gapped.status,
+        roles: [{ name: 'Captain', ledger: false, trade: true, locker: true }],
+    };
+    applyCampaignChanges(sql, { records: [{ ...gapped, status: shut, baseRev: gapped.rev }] }, NOW);
+    const denied = refusal(() => applyCampaignChanges(sql, { appends: [{ id: CLOSED, append: { ledger: [line('Shut')] } }] }, NOW, false, ada));
+    assert.equal(denied.code, 'forbidden');
+    assert.equal(denied.message, 'You cannot change that.');
+    assert.equal(shipOf(sql, CLOSED).status.ledger.length, 2);
+    const outsider = 'cr_00000000-0000-4000-8000-0000000000a7';
+    const offCrew = refusal(() => applyCampaignChanges(sql, { appends: [{ id: SHIP, append: { ledger: [line('Out')] } }] }, NOW, false, { userId: 'out', personId: outsider }));
+    assert.equal(offCrew.code, 'forbidden');
     assert.equal(shipOf(sql).status.cargo.length, 2);
 });
 

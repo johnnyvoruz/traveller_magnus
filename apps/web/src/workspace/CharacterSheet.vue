@@ -37,6 +37,8 @@ const props = defineProps<{
     folded?: Record<string, boolean>;
     /** Boxes whose value comes from elsewhere (the credit register's balance): what to show, and whether typing is locked. */
     readouts?: Readonly<Record<string, { value: string; locked: boolean }>>;
+    /** One table's rows get a button the page acts on (DS6: "To the locker" on Equipment). Omitted, or null, no row has one. */
+    rowAction?: { table: string; label: string; title: string } | null;
 }>();
 
 const emit = defineEmits<{
@@ -49,6 +51,8 @@ const emit = defineEmits<{
     homeworld: [act: 'choose' | 'open' | 'clear'];
     /** A linked record's pill was pressed. */
     openLink: [id: string];
+    /** The row action's button was pressed on row `n` (1 to the table's rows) of its table. */
+    rowAction: [n: number];
 }>();
 
 const sections = characterSections();
@@ -67,6 +71,16 @@ const values = computed(() => props.doc.fields);
 
 function held(field: Pick<SheetField, 'name' | 'type'>): string | boolean {
     return valueOf(values.value, field);
+}
+
+/** The page's row action stands on this table's rows, while the sheet can be edited. */
+function actsOn(block: { kind: string; name?: string }): boolean {
+    return props.editable && !!props.rowAction && block.kind === 'table' && block.name === props.rowAction.table;
+}
+
+/** A row with something typed in it: the one a row action is offered on. */
+function rowFilled(row: readonly Pick<SheetField, 'name' | 'type'>[]): boolean {
+    return row.some((field) => { const value = held(field); return typeof value === 'string' ? value.trim() !== '' : value === true; });
 }
 
 /** What a loose box shows: a readout when one is given for it, else what is held. */
@@ -431,6 +445,7 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
               <thead>
                 <tr>
                   <th v-for="(column, at) in block.columns" :key="column.label" scope="col" class="sheet-th" :class="{ 'is-row': at === 0, 'is-tick': column.type === 'checkbox' }">{{ column.label }}</th>
+                  <th v-if="actsOn(block)" scope="col" class="sheet-th is-act"><span class="csheet-visually">Move</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -447,6 +462,9 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
                       @enter="emit('enter', $event)"
                       @leave="emit('leave', $event)"
                     />
+                  </td>
+                  <td v-if="actsOn(block)" class="csheet-act">
+                    <button v-if="rowFilled(row)" type="button" class="ui-btn csheet-row-act" :title="rowAction!.title" :data-row-action="block.name + ':' + (n + 1)" @click="emit('rowAction', n + 1)">{{ rowAction!.label }}</button>
                   </td>
                 </tr>
               </tbody>
@@ -857,5 +875,25 @@ function linked(slot: SlotName): readonly { id: string; name: string }[] {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+}
+
+/* A row action (DS6): one small button at the row's end, only on rows with something in them. */
+.csheet-act {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.ui-btn.csheet-row-act {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.csheet-visually {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 </style>

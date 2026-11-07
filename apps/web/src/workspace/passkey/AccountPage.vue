@@ -840,4 +840,25 @@ watch(() => (session.user ? session.user.id : ''), (id) => {
 .pk-page .signin {
   margin: 0;
 }
+
+/* On a phone the account's controls meet 44 px. The version line keeps its look and grows a hit. */
+@media (max-width: 599px) {
+  .pk-page .ui-btn,
+  .pk-page .signin-input {
+    box-sizing: border-box;
+    min-height: 44px;
+  }
+
+  .pk-page .pk-version {
+    position: relative;
+  }
+
+  .pk-page .pk-version::before {
+    position: absolute;
+    inset: -13px -6px;
+    min-width: 44px;
+    min-height: 44px;
+    content: "";
+  }
+}
 </style>

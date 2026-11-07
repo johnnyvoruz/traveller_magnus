@@ -17,6 +17,8 @@ import {
     edit, firstLine, groupFields, groupTitle, keepMine, leaveDiscarding, leaveKeeping, looseMessages, markOf, messagesFor, moreLines, rollField, rulesAfter,
     setField, stay, takeTheirs, whyOf, draftHandle,
 } from './edit.ts';
+import { WORLD_SECTION_IDS, cellField, cellOf, orderChart, uwpOf, wordsFor } from './world_card.ts';
+import { digitsOf, fromDigitsWords, sameCodes, tradeCodesOf } from './trade_codes.ts';
 
 defineProps<{ span: PanelSpan }>();
 
@@ -27,13 +29,53 @@ const messages = computed(() => (handle.value ? handle.value.messages.value : []
 /** Keep lost a race: a newer copy is stored. Either its row came back, or its tree is no longer the one this draft names. */
 const conflict = computed(() => handle.value !== null && (handle.value.conflict.value !== null || handle.value.replaced.value));
 const dropped = computed(() => (handle.value ? handle.value.dropped.value : []));
-/** The sections drawn as sections; the rule places are drawn where they belong. */
-const sections = computed(() => (form.value ? form.value.sections.filter((section) => section.id !== 'rules').map((section) => ({
+/** The sections drawn as sections after the World card; the rule places are drawn where they belong. */
+const sections = computed(() => (form.value ? form.value.sections.filter((section) => section.id !== 'rules' && !(WORLD_SECTION_IDS as readonly string[]).includes(section.id)).map((section) => ({
     id: section.id,
     label: section.label,
     groups: groupFields(section),
     rules: form.value ? rulesAfter(form.value, section.id) : [],
 })) : []));
+/**
+ * The World card (DH3; findings/hex_editor_plan.md §3.2): the name, the profile and the chart sections
+ * drawn first as one card, in the legacy editor's order; the profile cells with the rules text's words
+ * beside them and the UWP string under them. The sections' fields and ids are the server's, as everywhere.
+ */
+const world = computed(() => {
+    const held = form.value;
+    if (!held) return [];
+    return WORLD_SECTION_IDS.map((id) => held.sections.find((section) => section.id === id)).filter((section): section is EditForm['sections'][number] => !!section).map((section) => ({
+        id: section.id,
+        label: section.label,
+        groups: groupFields(section),
+        rules: rulesAfter(held, section.id),
+    }));
+});
+/**
+ * Trade codes from the digits (DH5): what the rules table says the cells earn, offered under the Trade codes
+ * box and written only by the press; the typed list (the chart's survey codes) stays until then.
+ */
+const fromDigits = computed(() => {
+    const profile = world.value.find((section) => section.id === 'profile');
+    const chart = world.value.find((section) => section.id === 'chart');
+    const codes = profile ? tradeCodesOf(digitsOf(profile.groups.flatMap((group) => group.fields))) : [];
+    const typed = chart ? chart.groups.flatMap((group) => group.fields).find((field) => field.id === 'chart.trade') : undefined;
+    const held = typed && typeof typed.value === 'string' ? typed.value : '';
+    return { codes, words: fromDigitsWords(codes), same: sameCodes(held, codes) };
+});
+/** The words the rules text gives a cell's digit, or '' (a Tech Level; a digit outside the text's table). */
+function cellWords(field: { id: string; value: FormValue }): string {
+    const cell = cellOf(field.id);
+    return cell ? wordsFor(cell, field.value) : '';
+}
+/**
+ * A rule place's words: the server's own text in its field, then the auditor's lines the draft put there (DH6;
+ * a line at a digit or the Trade codes box stands by that field instead). Never a hold on Keep.
+ */
+function ruleWords(rule: { id: string; value: FormValue }): string {
+    const own = typeof rule.value === 'string' ? rule.value : '';
+    return [own, ...messagesFor(rule.id, messages.value).map((item) => item.text)].filter(Boolean).join('\n');
+}
 /** The rule places of a hand-designed system: the form's own `rules` section, whatever it holds. */
 const handRules = computed(() => (form.value ? (form.value.sections.find((section) => section.id === 'rules')?.fields ?? []) : []));
 /** By hand, the server's word on a remove ("Removing this star also removes 4 bodies.") is said by the remove's own ask, and on a profile roll under the Profile heading: not again at the top. */
@@ -101,6 +143,66 @@ function set(id: string, value: FormValue): void {
 
     <HandDesigner v-if="edit.mode === 'hand'" :span="span" />
     <template v-else>
+    <section v-if="world.length" class="sysed-section sysed-world" data-section="world">
+      <h3 class="ui-heading ui-kicker">World</h3>
+      <template v-for="section in world" :key="section.id">
+        <template v-for="group in section.groups" :key="section.id + (group.owner || '')">
+          <div v-if="section.id === 'profile'" class="sysed-cells">
+            <div v-for="field in group.fields" :key="field.id" class="sysed-cell-wrap" :data-digit="cellOf(field.id)">
+              <EditField
+                cell
+                :field="cellField(field)"
+                :mark="markOf(field.id, edit.mine, edit.rolled, changed)"
+                :was="edit.baseline[field.id]"
+                :locked="field.id in edit.mine"
+                :why="''"
+                :messages="[]"
+                :busy="busy"
+                :resync="edit.resync"
+                @set="set(field.id, $event)"
+                @roll="rollField(field.id)"
+              />
+              <span v-if="cellWords(field)" class="sysed-cell-words" :data-digit-words="cellOf(field.id)">{{ cellWords(field) }}</span>
+            </div>
+          </div>
+          <p v-if="section.id === 'profile'" class="sysed-uwp" data-uwp-string>{{ uwpOf(group.fields) }}</p>
+          <div v-else class="sysed-group">
+            <template v-for="field in (section.id === 'chart' ? orderChart(group.fields) : group.fields)" :key="field.id">
+              <EditField
+                :field="field"
+                :mark="markOf(field.id, edit.mine, edit.rolled, changed)"
+                :was="edit.baseline[field.id]"
+                :locked="field.id in edit.mine"
+                :why="field.id in edit.mine ? '' : whyOf(field.id, changed)"
+                :messages="messagesFor(field.id, messages)"
+                :busy="busy"
+                :resync="edit.resync"
+                @set="set(field.id, $event)"
+                @roll="rollField(field.id)"
+              />
+              <!-- Trade codes from the digits (DH5): offered, never written without the press. -->
+              <div v-if="field.id === 'chart.trade'" class="sysed-from-digits" data-from-digits>
+                <span class="sysed-from-digits-words">{{ fromDigits.words }}</span>
+                <button type="button" class="ui-btn sysed-use-codes" data-use-codes :disabled="busy || fromDigits.same" :title="fromDigits.same ? 'The box already says this' : 'Put these codes in the box in place of what it holds'" @click="set('chart.trade', fromDigits.codes.join(' '))">Use these</button>
+              </div>
+            </template>
+          </div>
+        </template>
+        <!-- A profile cell has no room for the engine's words: what is said about one is said under the row. -->
+        <template v-if="section.id === 'profile'">
+          <template v-for="group in section.groups" :key="'w' + group.owner">
+            <template v-for="field in group.fields" :key="'w' + field.id">
+              <details v-if="!(field.id in edit.mine) && whyOf(field.id, changed)" class="sysed-strip is-note sysed-why">
+                <summary>{{ field.label }}: {{ firstLine(whyOf(field.id, changed)) }}<em v-if="moreLines(whyOf(field.id, changed)) === 1">and one more line</em><em v-else-if="moreLines(whyOf(field.id, changed))">and {{ moreLines(whyOf(field.id, changed)) }} more lines</em></summary>
+                <p v-if="moreLines(whyOf(field.id, changed))">{{ whyOf(field.id, changed) }}</p>
+              </details>
+              <p v-for="(message, index) in messagesFor(field.id, messages)" :key="field.id + index" class="sysed-strip" :class="{ 'is-error': message.holds }">{{ field.label }}: {{ message.text }}</p>
+            </template>
+          </template>
+        </template>
+        <div v-for="rule in section.rules" :key="rule.id" class="sysed-rule" :data-rule="rule.id" :aria-hidden="ruleWords(rule) ? undefined : 'true'">{{ ruleWords(rule) }}</div>
+      </template>
+    </section>
     <section v-for="section in sections" :key="section.id" class="sysed-section" :data-section="section.id">
       <h3 class="ui-heading ui-kicker">{{ section.label }}</h3>
       <template v-for="group in section.groups" :key="group.owner || section.id">
@@ -156,12 +258,12 @@ function set(id: string, value: FormValue): void {
         </template>
       </template>
       <!-- The rule places for this section: present, empty, and silent unless the server ever fills one. -->
-      <div v-for="rule in section.rules" :key="rule.id" class="sysed-rule" :data-rule="rule.id" :aria-hidden="rule.value ? undefined : 'true'">{{ rule.value || '' }}</div>
+      <div v-for="rule in section.rules" :key="rule.id" class="sysed-rule" :data-rule="rule.id" :aria-hidden="ruleWords(rule) ? undefined : 'true'">{{ ruleWords(rule) }}</div>
     </section>
     </template>
     <!-- By hand, the seven rule places stand after the designer: present, empty and silent, as everywhere. -->
     <template v-if="edit.mode === 'hand'">
-      <div v-for="rule in handRules" :key="rule.id" class="sysed-rule" :data-rule="rule.id" :aria-hidden="rule.value ? undefined : 'true'">{{ rule.value || '' }}</div>
+      <div v-for="rule in handRules" :key="rule.id" class="sysed-rule" :data-rule="rule.id" :aria-hidden="ruleWords(rule) ? undefined : 'true'">{{ ruleWords(rule) }}</div>
     </template>
   </div>
 </template>
@@ -192,6 +294,51 @@ function set(id: string, value: FormValue): void {
 
 .sysed-top {
   column-span: all;
+}
+
+/* The World card (DH3): across the columns, first; a cell with the text's words under it; the UWP string under the row. */
+.sysed-world {
+  column-span: all;
+  margin-bottom: 8px;
+}
+
+.sysed-cell-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 180px;
+}
+
+.sysed-cell-words {
+  color: var(--text-muted);
+  font: 400 11px/1.3 var(--font-text);
+}
+
+.sysed-uwp {
+  margin: 8px 0 0;
+  color: var(--text-1);
+  font: 500 13px/1.4 var(--font-code);
+  letter-spacing: 0.04em;
+}
+
+/* Trade codes from the digits (DH5): one line under the box, the words and the press. */
+.sysed-from-digits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-muted);
+  font: 400 12px/1.4 var(--font-text);
+}
+
+.ui-btn.sysed-use-codes {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12.5px;
 }
 
 .sysed:is([data-span="half"], [data-span="full"]) .sysed-section {
@@ -313,6 +460,7 @@ function set(id: string, value: FormValue): void {
 }
 
 .sysed-rule:not(:empty) {
+  white-space: pre-wrap;
   margin: 6px 0;
   padding: 6px 9px;
   border: 1px solid var(--line-2);

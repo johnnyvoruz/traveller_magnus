@@ -111,6 +111,10 @@ import { PUBLIC_GAMES_LABEL } from './public_games.ts';
         <p>Open Campaign, then Party. Select Choose the ship, and Add people. Where are we shows the place. Select Move the party to change it. Where the ship is, the party is. Under Ships, select Add a ship. The first ship is the lead. Select Make lead to change it. Under The party, select Add someone. Choose Aboard, or No ship. Where is everyone lists each person and ship. Select Locate to show one on the map. The invite is in Invite your players.</p>
       </li>
       <li class="ui-step">
+        <h3>The crew</h3>
+        <p>Open a ship's page. Crew sits under Passengers. Choose a Character, type a Role, and select Add to the crew. The Role starts as Captain when the crew is empty. A character crews one ship at a time. Select Remove to take someone off. Select Permissions. The fold lists one row for each role in use, with The Ledger, Trade, and The locker. Every switch is on until you turn one off. The line under the table is The referee alone: the sheet, Set up the ship, the owners and the payment, Players, the course and the clock. On the Party tab, under Players, the line under a person names their role and ship. A player sees the crew names and roles, and not the switches.</p>
+      </li>
+      <li class="ui-step">
         <h3>Account</h3>
         <p>Open the account menu at the foot of the rail and select Account and sign-in. Select Create an account and choose a username. Select Sign in to use a passkey you already have. Select I lost my passkey, then enter your username and one recovery code. On the account page, select Add a passkey, Rename, or Remove under Passkeys. Recovery codes shows how many are left. Select Make new codes to replace them. Each code works once, and the page shows the new set only then. Save them before you leave.</p>
       </li>

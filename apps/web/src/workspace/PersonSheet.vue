@@ -25,6 +25,9 @@ import { showToast } from '../shell/toast.ts';
 import { saveRecord } from './actions.ts';
 import { CHARACTER_RULES, characterDoc, characterSheetWith, otherKeys, type SlotName } from './character_sheet.ts';
 import CharacterSheet from './CharacterSheet.vue';
+import { partyShips, shipHolding } from './crew.ts';
+import { NOT_MOVED, equipmentRows, equipmentSets, isBlank, movedToLockerWords, rowFromEquipment } from './locker.ts';
+import { toLocker } from './locker_move.ts';
 import { cashTyped, readoutsFor } from './credit_register.ts';
 import CreditRegister from './CreditRegister.vue';
 // The Characters store registers itself behind the seam (the one hookup file).
@@ -118,6 +121,29 @@ function change(name: string, value: string | boolean): void {
     if (props.readOnly || !record.value || !doc.value || !field) return;
     typed[name] = value;
     save();
+}
+
+// ---- The Ship's locker (DS6; Johnny 142): an Equipment row moves to the party ship this character crews ----
+
+/** The party ship whose crew this person is on, or null. */
+const lockerShip = computed(() => (record.value && campaign.settings ? shipHolding(partyShips(campaign.records, campaign.settings.party), record.value.id, '') : null));
+const lockerAction = computed(() => (lockerShip.value && !props.readOnly ? { table: 'Equipment', label: 'To the locker', title: 'Move this item to ' + lockerShip.value.name + '’s locker' } : null));
+
+/**
+ * Equipment row `n` to the locker: the four boxes cleared through this page's own writer (the
+ * plain sheet's save, or the Character's live room), then the row added to the ship. A failed
+ * add writes the boxes back.
+ */
+async function rowToLocker(n: number, fields: Readonly<Record<string, string | boolean>>, write: (name: string, value: string | boolean) => void): Promise<void> {
+    const ship = lockerShip.value;
+    const row = equipmentRows(fields).find((item) => item.n === n);
+    if (!ship || !row || props.readOnly) return;
+    const item = rowFromEquipment(row);
+    if (isBlank(item)) return;
+    const cleared = equipmentSets(n, null);
+    const before = equipmentSets(n, item);
+    const outcome = await toLocker(ship, item, 'referee', () => { for (const set of cleared) write(set.field, set.value); return true; }, () => { for (const set of before) write(set.field, set.value); });
+    showToast(outcome.ok ? movedToLockerWords(item, ship.name) : NOT_MOVED);
 }
 
 // ---- The second wiring: a Character, live ----
@@ -293,7 +319,9 @@ function openLink(id: string): void {
         :links="links"
         :folded="folded"
         :readouts="readouts"
+        :row-action="liveEditable ? lockerAction : null"
         @change="liveChange"
+        @row-action="(n) => liveDoc && rowToLocker(n, liveDoc.fields, liveChange)"
         @enter="(name) => handle && handle.focusField(name)"
         @leave="() => handle && handle.focusField(null)"
         @homeworld="onHomeworld"
@@ -318,7 +346,9 @@ function openLink(id: string): void {
       :homeworld="home"
       :links="links"
       :folded="folded"
+      :row-action="lockerAction"
       @change="change"
+      @row-action="(n) => doc && rowToLocker(n, doc.fields, change)"
       @homeworld="onHomeworld"
       @open-link="openLink"
     />

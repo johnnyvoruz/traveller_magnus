@@ -51,6 +51,7 @@ import { anchorName } from './track_rows.ts';
 import { PAYMENT_IS_MORTGAGE, SET_MORTGAGE_HERE, leftOutWords, monthWithPayment } from './upkeep_payment.ts';
 import { dayOf, dayWords, fuelMarkOf, ledgerOf, lotMeta, manifestOf, signedAmount, statusWithTrade, writeTrade, type Day } from './vessel_trade.ts';
 import CrewList from './CrewList.vue';
+import ShipLocker from './ShipLocker.vue';
 
 const props = defineProps<{
     id: string;
@@ -643,6 +644,8 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
         </div>
       </form>
     </section>
+
+    <ShipLocker :id="id" :read-only="readOnly" who="referee" />
 
     <section class="vt-sec ui-frame" data-vessel-ledger aria-labelledby="vt-ledger-h">
       <div class="vt-head">

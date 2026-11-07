@@ -84,6 +84,7 @@ describe('rendered', { concurrency: 1 }, () => {
             'The orbit view',
             'The system page',
             'The party',
+            'The crew',
             'Account',
             'The Marketplace',
             'What&#39;s new',
@@ -105,6 +106,15 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /Select Set the date for the clock/);
         assert.match(html, /select New session or New note/);
         assert.match(html, /Leave Get the invite link, Players, and View as players until you want them/);
+        assert.match(html, /Crew sits under Passengers/);
+        assert.match(html, /select Add to the crew/);
+        assert.match(html, /The Role starts as Captain when the crew is empty/);
+        assert.match(html, /A character crews one ship at a time/);
+        assert.match(html, /Select Permissions/);
+        assert.match(html, /The Ledger, Trade, and The locker/);
+        assert.match(html, /The referee alone: the sheet, Set up the ship, the owners and the payment, Players, the course and the clock/);
+        assert.match(html, /names their role and ship/);
+        assert.match(html, /A player sees the crew names and roles, and not the switches/);
         assert.match(html, /Get the invite link/);
         assert.match(html, /Select Copy, and send the address/);
         assert.match(html, /selects Join/);

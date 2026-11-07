@@ -16,6 +16,7 @@ import { isBoarded } from '../passenger_fare.ts';
 import { fieldsOf } from '../sheet_fields.ts';
 import { periodsShown, shownRows } from '../traffic_here.ts';
 import { crewOf } from '../crew.ts';
+import ShipLocker from '../ShipLocker.vue';
 import { dayWords, ledgerOf, lotMeta, manifestOf } from '../vessel_trade.ts';
 import { fuelWords, holdWords, LEDGER_KIND_WORDS, tonsWords } from './player_ship.ts';
 
@@ -75,6 +76,8 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
       </ol>
       <p v-else class="pship-none">The hold is empty.</p>
     </section>
+
+    <ShipLocker :id="id" :read-only="false" who="player" />
 
     <section class="pship-sec ui-frame" data-player-passengers aria-labelledby="pship-pass-h">
       <h3 id="pship-pass-h" class="ui-frame-label">Passengers <span v-if="passengers.length" class="ui-frame-count">{{ passengers.length }}</span></h3>

@@ -5,6 +5,7 @@
  * `js/hex_editor.js` `saveHexEditorChanges`). No step is added.
  */
 import {
+    auditMgT2ESystem,
     configure,
     convertAuToOrbit,
     fromEHex,
@@ -1280,6 +1281,93 @@ function messagesFromTrace(lines: string[]): FormMessage[] {
     }));
 }
 
+/**
+ * DH6 (findings/hex_editor_plan.md §3.2 item 9, §4 DH6): the engine's auditor read over the mainworld as the
+ * card shows it. Its lines come back as messages that never hold a Keep (Rule Zero): the trade-code line at
+ * the Trade codes box, a base line at its switch, a size line at the Size cell, the rest at the Profile
+ * digits place (`rule.R1`). Only the mainworld's lines; the subordinate worlds are the engine's own, and
+ * their lines stay in the engine's audit backlog.
+ */
+const AUDITOR_SAYS = 'The auditor says: ';
+const ORBIT_TAIL = / at orbit (?:Moon|\d+(?:\.\d+)?)/;
+const SECTION_LABEL = /^[A-Za-z &/]+: /;
+const TRADE_LINE = /^Trade Codes: .* generated \[([^\]]*)\] but physics dictate \[([^\]]*)\]\.?$/;
+
+/**
+ * The mainworld as the form reads it: the row's columns over the engine's object, every digit in both
+ * spellings the auditor reads (`atm` and `atmCode`), the trade list and the base flags of the source.
+ */
+function auditedMainworld(body: Row, edition: 'MgT2E' | 'AoW'): Row {
+    const main = mainworld(body, edition);
+    const source = profileSource(body, edition);
+    const chars = profileChars(source);
+    const flags = basesNow(source);
+    const trade = Array.isArray(source.tradeCodes) ? source.tradeCodes.map(String) : text(source.tradeCodes).split(/[\s,]+/).filter(Boolean);
+    const digits = { size: fromEHex(chars.s), atm: fromEHex(chars.a), hydro: fromEHex(chars.h), pop: fromEHex(chars.p), gov: fromEHex(chars.g), law: fromEHex(chars.l), tl: fromEHex(chars.tl) };
+    return {
+        ...main,
+        type: main.isLunarMainworld ? main.type : 'Mainworld',
+        uwp: `${chars.st}${chars.s}${chars.a}${chars.h}${chars.p}${chars.g}${chars.l}-${chars.tl}`,
+        starport: chars.st,
+        ...digits,
+        atmCode: digits.atm,
+        hydroCode: digits.hydro,
+        popCode: digits.pop,
+        govCode: digits.gov,
+        lawCode: digits.law,
+        tlCode: digits.tl,
+        tradeCodes: trade,
+        navalBase: !!flags.naval,
+        scoutBase: !!flags.scout,
+    };
+}
+
+/** One auditor line as a message at the field it names; the orbit and the section label come off the words. */
+function auditMessage(raw: string): FormMessage {
+    const trade = TRADE_LINE.exec(raw);
+    if (trade) {
+        return { id: 'chart.trade', text: `${AUDITOR_SAYS}Trade codes from the digits are ${trade[2].trim() || 'none'}; the world has ${trade[1].trim() || 'none'}.`, holds: false };
+    }
+    const plain = raw.replace(ORBIT_TAIL, '').replace(SECTION_LABEL, '').trim();
+    const line = plain.endsWith('.') ? plain : plain + '.';
+    const id = plain.startsWith('Naval Base') ? 'chart.base.naval' : plain.startsWith('Scout Base') ? 'chart.base.scout' : plain.startsWith('Size 0 world') ? 'profile.s' : 'rule.R1';
+    return { id, text: AUDITOR_SAYS + line, holds: false };
+}
+
+/** The auditor's lines for the mainworld of a Mongoose system; none for another edition until its auditor reaches the editor. */
+function auditLines(body: Row, edition: 'MgT2E' | 'AoW'): FormMessage[] {
+    if (edition !== 'MgT2E') return [];
+    const sys = systemOf(body, edition);
+    if (!sys || typeof sys !== 'object' || !Array.isArray(sys.worlds)) return [];
+    const main = mainworld(body, edition);
+    const audited = auditedMainworld(body, edition);
+    let placed = false;
+    const worlds: Row[] = sys.worlds.map((world: Row) => {
+        if (world === main) { placed = true; return audited; }
+        if (world && Array.isArray(world.moons) && world.moons.includes(main)) {
+            placed = true;
+            return { ...world, moons: world.moons.map((moon: Row) => (moon === main ? audited : moon)) };
+        }
+        return world;
+    });
+    if (!placed) {
+        // A fleshed chart tree keeps its mainworld beside the list, not in it: the auditor's collector must still reach it.
+        const twin = worlds.findIndex((world) => world && (world.type === 'Mainworld' || world.isLunarMainworld));
+        if (twin >= 0) worlds[twin] = audited;
+        else worlds.push(audited);
+    }
+    const result = auditMgT2ESystem({ ...sys, worlds }) as { errors: { orbitId?: unknown; message?: unknown }[] };
+    const orbit = main.orbitId ?? null;
+    const out: FormMessage[] = [];
+    for (const error of result.errors) {
+        if (!error || typeof error.message !== 'string') continue;
+        if ((error.orbitId ?? null) !== orbit) continue;
+        const message = auditMessage(error.message);
+        if (!out.some((item) => item.id === message.id && item.text === message.text)) out.push(message);
+    }
+    return out;
+}
+
 export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange[] = [], roll: { id: string }[] = []): { envelope: Envelope | HandEnvelope; answer: FormAnswer } {
     if (envelope.kind === 'hand') {
         try {
@@ -1351,6 +1439,7 @@ export function applyForm(envelope: Envelope | HandEnvelope, changes: FormChange
             return prior ? prior.value !== item.value : true;
         })
         .map(([id]) => ({ id, why: whyFor(id, traceLines) }));
+    messages.push(...auditLines(nextBody, copy.edition));
     return { envelope: next, answer: { form, changed, messages } };
 }
 

@@ -130,7 +130,21 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
                     const close = document.querySelector('[aria-label="Close panel"]');
                     if (close instanceof HTMLElement) close.click();
                 });
-                await page.waitForTimeout(300);
+                // The boxes below are what this width measures. Wait until the panel
+                // has shut and those boxes read the same twice, however long the close takes.
+                await page.waitForFunction(() => {
+                    if (document.querySelector('.panel.is-open')) return false;
+                    const stage = document.querySelector('.orbit-stage');
+                    const slot = document.querySelector('.orbit-comms');
+                    if (!stage || !slot) return false;
+                    const stageBox = stage.getBoundingClientRect();
+                    const slotBox = slot.getBoundingClientRect();
+                    const key = [stageBox.right, slotBox.right, slotBox.width, slotBox.height].join(',');
+                    const root = document.documentElement;
+                    if (root.dataset.stageBox === key) return true;
+                    root.dataset.stageBox = key;
+                    return false;
+                }, null, { timeout: 120000 });
             }
             const measure = () => page.evaluate(() => {
                 function box(selector) {
@@ -249,7 +263,6 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
                     const el = document.querySelector('.orbit-comms');
                     const root = document.documentElement;
                     root.dataset.commsDuring = '';
-                    root.dataset.commsEnded = '';
                     const sample = (node) => {
                         if (!(node instanceof Element) || !node.isConnected || !node.classList.contains('is-hidden')) return;
                         if (root.dataset.commsDuring) return;
@@ -257,42 +270,29 @@ test('System Comms, Fit, the receiver and the chips do not overlap', { timeout: 
                         root.dataset.commsDuring = b.width + 'x' + b.height;
                     };
                     if (el instanceof Element) {
-                        el.addEventListener('transitionend', (event) => {
+                        const onFade = (event) => {
                             if (event.target === el && event.propertyName === 'opacity') sample(el);
-                        });
-                        if (el.parentElement) {
-                            const obs = new MutationObserver((records) => {
-                                for (const record of records) {
-                                    if (record.type === 'attributes') sample(record.target);
-                                    if (record.type === 'childList') {
-                                        for (const node of record.removedNodes) {
-                                            if (node instanceof Element && node.classList.contains('orbit-comms')) root.dataset.commsEnded = '1';
-                                        }
-                                    }
-                                }
-                            });
-                            obs.observe(el, { attributes: true, attributeFilter: ['class'] });
-                            obs.observe(el.parentElement, { childList: true });
-                        }
+                        };
+                        el.addEventListener('transitionstart', onFade);
+                        el.addEventListener('transitionend', onFade);
+                        const obs = new MutationObserver(() => sample(el));
+                        obs.observe(el, { attributes: true, attributeFilter: ['class'] });
                     }
-                    const tick = () => {
-                        const node = document.querySelector('.orbit-comms');
-                        if (!node) {
-                            root.dataset.commsEnded = '1';
-                            return;
-                        }
-                        sample(node);
-                        setTimeout(tick, 16);
-                    };
-                    setTimeout(tick, 16);
                     const b = el.getBoundingClientRect();
                     return b.width + 'x' + b.height;
                 });
                 await page.click('[data-command="system-comms"]');
-                // The second argument is the page function's arg. The ceiling is the
-                // third: the fade's own end, on a slow machine, not a one-second glance
-                // that the suite can miss once the receiver has already left.
-                await page.waitForFunction(() => document.documentElement.dataset.commsEnded === '1', null, { timeout: 120000 });
+                // The box while the receiver is fading, still mounted. The class change
+                // and the opacity transition record it. Leaving the page is not the signal.
+                await page.waitForFunction(() => {
+                    const root = document.documentElement;
+                    if (root.dataset.commsDuring) return true;
+                    const node = document.querySelector('.orbit-comms');
+                    if (!(node instanceof Element) || !node.isConnected || !node.classList.contains('is-hidden')) return false;
+                    const b = node.getBoundingClientRect();
+                    root.dataset.commsDuring = b.width + 'x' + b.height;
+                    return true;
+                }, null, { timeout: 120000 });
                 const during = await page.evaluate(() => document.documentElement.dataset.commsDuring || '');
                 if (!during) hits.push('1600 fade had no settled box');
                 else if (during !== before) hits.push('1600 fade moved ' + before + ' to ' + during);

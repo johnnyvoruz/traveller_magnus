@@ -17,20 +17,38 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.9',
+        date: '2026-11-03',
+        title: 'The World card',
+        story: [
+            'Edit this system opens with the World card: the profile digits with the rules text\'s words beside each, lists for Starport, Size and Atmosphere, and the UWP string as you change it.',
+            'Trade codes are offered from the digits, the auditor\'s lines show as messages, and a ship has a locker whose items move to and from a character\'s sheet one at a time.',
+        ],
+        items: [
+            'The World card: Edit this system starts with the name, the eight profile cells in the legacy order, the UWP string rebuilt as the cells change, and the chart fields after them. Starport, Size and Atmosphere are lists from the rules text, and the words beside every cell are the text\'s own.',
+            'Trade codes: under the Trade codes box, the codes the digits earn and Use these. Nothing is written without the press.',
+            'The auditor: its lines for the mainworld show as messages at the box, the switch or the cell they concern. Keep is never refused by one.',
+            'The Ship\'s locker: after Cargo on a ship\'s page, a table of Type, TL, KG and Notes with the kg in the locker. Move to puts an item on a character\'s Equipment table, and To the locker on a sheet\'s Equipment row brings one back. One item per press.',
+            'Help has The crew. A crew role with no Permissions row may act on the server as on the page.',
+            'Smaller: the 1.3.8 entry reads back with its picture; the account panel fits a phone.',
+        ],
+    },
+    {
         version: '1.3.8',
         date: '2026-11-02',
         title: 'The crew',
+        picture: '/changes/1.3.8.png',
         story: [
-            'A ship has a crew: party characters with roles, Captain first, and switches per role for the Ledger, trade and the locker.',
-            'A jump offers its fuel from the sheet, the Player Pack prints the party ship, and the paper print is symbols only.',
+            'On a ship\'s page, Crew sits under Passengers: choose a character, type a Role, select Add to the crew, and open Permissions for The Ledger, Trade, and The locker.',
+            'Under the latest jump leg, select Take the fuel, print the party ship with Download the Player Pack, and choose On paper in Save image for symbols only.',
         ],
         items: [
-            'The crew: under Passengers, add a party character and say what they do aboard, Captain preset for the first. A character crews one ship at a time. The Players list says who is Captain of which ship, and players see the crew on the ship\'s page.',
-            'Permissions: one row per role in use with three switches, the Ledger, trade and the locker, all on until you turn one off. The sheet, Set up the ship, the owners and the payment, Players, the course and the clock stay yours.',
-            'Jump fuel: under the latest jump leg, the tons the rules give for the ship\'s Size and a Take the fuel button. Nothing comes off the tanks without the press, and the orbit view\'s estimate reads Size too.',
-            'The Player Pack prints the party ship\'s Cargo, Passengers, Fuel, Ledger and sheet as lines. Playing solo is said on Start here and in Help.',
-            'Save image On paper draws a symbol in every cell, ocean and shallows included, with no coast line and no wash.',
-            'Smaller: a world edited from the chart keeps its edited digits on the map, the trade screens and a published package; a short passenger list no longer says No passengers; the Records chips, the Players section and the Party tab fit a phone.',
+            'Crew, under Passengers on a ship\'s page: choose a Character, type a Role, and select Add to the crew. The Role starts as Captain when the crew is empty. Select Remove to take someone off. A character crews one ship at a time, and adding them to a second ship moves them. On the Party tab, under Players, the line under a person names their role and ship. Players see the crew on the ship\'s page.',
+            'Select Permissions on the Crew list. The fold lists one row for each role in use, with The Ledger, Trade, and The locker. Every switch is on until you turn one off. The line under the table is The referee alone: the sheet, Set up the ship, the owners and the payment, Players, the course and the clock.',
+            'Under the latest jump leg on Track, the line says Jump fuel and the tons the rules give for the ship\'s Size. Select Take the fuel. Nothing comes off the tanks until you select it, and the press posts once. The orbit view\'s estimate reads Size too.',
+            'Select Download the Player Pack. It prints the party ship\'s Cargo, Passengers, Fuel, Ledger, and Sheet as lines. Playing solo is on Start here, under Name your campaign, and in Help.',
+            'Save image: select On paper. The world map draws a symbol in every cell, ocean and shallows included, with no coast line and no wash.',
+            'Smaller: a world edited from the chart keeps its edited digits on the map, the trade screens, and a published package; a short passenger list no longer says No passengers; the Records chips, the Players section, and the Party tab fit a phone.',
         ],
     },
     {

@@ -896,8 +896,9 @@ function rowList(value: unknown): unknown[] {
 }
 
 /**
- * The crew row's role switch. Until the switches part stores a role row, a missing
- * list or a missing row refuses. A row is open only when its switch is true.
+ * The crew row's role switch. A missing list or a missing row is all on (DS3 stores
+ * a row only once a switch is turned off). A stored row is open only when its switch
+ * is true. Someone who is not on the crew is refused.
  */
 function roleSwitch(status: Record<string, unknown>, personId: string | null, name: CrewSwitch): boolean {
     if (!personId) return false;
@@ -906,12 +907,14 @@ function roleSwitch(status: Record<string, unknown>, personId: string | null, na
         const item = row as { personId?: unknown; role?: unknown };
         return item.personId === personId && typeof item.role === 'string';
     }) as { role: string } | undefined;
-    if (!seat || !Array.isArray(status.roles)) return false;
+    if (!seat) return false;
+    if (!Array.isArray(status.roles)) return true;
     const role = status.roles.find((row) => {
         if (!row || typeof row !== 'object') return false;
         return (row as { name?: unknown }).name === seat.role;
     }) as Partial<Record<CrewSwitch, unknown>> | undefined;
-    return role?.[name] === true;
+    if (!role) return true;
+    return role[name] === true;
 }
 
 function appendSwitches(append: StatusAppend['append']): CrewSwitch[] {

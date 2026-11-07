@@ -666,20 +666,43 @@ describe('the animated day and night layer', () => {
         const hexes = JSON.stringify(model.hexes);
         const field = fieldOf(halfLayout(SHEET_LAYOUT), model.grid.n);
         let images;
-        // One warm-up, then the best of three. The budget stays 4 ms (AQ3).
+        // One warm-up, then the best of three pairs. A single scan of the shadow is a
+        // small fraction of the paint, so the baseline repeats it until it is the same
+        // kind of work. The frame stays under eight times that same-run baseline (AT8).
+        const SCAN_PASSES = 24;
         const frameAt = (frame) => {
             const sun = sunVector(20 * Math.sin(frame / 9), frame * 6 - 180);
             images = paintDayNight(field, { sun, declinationDeg: 20, mix: frame % 2 ? 0.4 : 0, airless: false, sheenPhase: frame }, images);
             cityLights(model, SHEET_LAYOUT, sun, frame % 2 ? (s) => nightShare(s, 20) : null, frame % 2 ? 0.4 : 0, frame);
         };
+        const scanOf = (px) => {
+            let s = 0;
+            for (let pass = 0; pass < SCAN_PASSES; pass += 1) {
+                for (let i = 0; i < px.length; i += 4) s += px[i];
+            }
+            return s;
+        };
         frameAt(0);
+        const baselinePx = new Uint8ClampedArray(images.shadow.length);
+        scanOf(baselinePx);
         let best = Infinity;
+        let baselineAtBest = Infinity;
+        let bestRatio = Infinity;
         for (let frame = 1; frame <= 3; frame += 1) {
+            const b0 = performance.now();
+            scanOf(baselinePx);
+            const base = performance.now() - b0;
             const t0 = performance.now();
             frameAt(frame);
-            best = Math.min(best, performance.now() - t0);
+            const took = performance.now() - t0;
+            const ratio = took / Math.max(base, 1e-3);
+            if (ratio < bestRatio) {
+                bestRatio = ratio;
+                best = took;
+                baselineAtBest = base;
+            }
         }
-        assert.ok(best < 4, 'the best of three day/night frames took ' + best.toFixed(2) + ' ms');
+        assert.ok(bestRatio < 8, 'the best of three day/night frames took ' + best.toFixed(2) + ' ms, ' + bestRatio.toFixed(2) + 'x a same-run baseline of ' + baselineAtBest.toFixed(2) + ' ms');
 
         const sum = (px, k) => { let s = 0; for (let i = k; i < px.length; i += 4) s += px[i]; return s; };
         const oneInk = (px) => {
@@ -703,7 +726,17 @@ describe('the animated day and night layer', () => {
         const layer = createDayNightLayer(fakeHost());
         const shadow = fakeCtx();
         const glow = fakeCtx();
-        // One warm-up, then the best of three. The budget stays 4 ms (AQ3).
+        // One warm-up, then the best of three pairs. The layer paints the half sheet,
+        // so the baseline is 24 passes over that buffer, as the frame above (AT8).
+        const half = halfLayout(SHEET_LAYOUT);
+        const layerPx = new Uint8ClampedArray(half.width * half.height * 4);
+        const scanLayer = () => {
+            let s = 0;
+            for (let pass = 0; pass < 24; pass += 1) {
+                for (let i = 0; i < layerPx.length; i += 4) s += layerPx[i];
+            }
+            return s;
+        };
         const drawLayer = (i) => {
             const sub = subsolarOn(turning, false, 10 + i / 240, 0.3);
             return layer.draw({ model, sub, playing: true, rate: 1 / 24, jumped: false, nowMs: i * 16 }, shadow, glow, SHEET_LAYOUT);
@@ -711,15 +744,27 @@ describe('the animated day and night layer', () => {
         const warmed = drawLayer(0);
         assert.equal(warmed.drawn, true);
         assert.equal(warmed.busy, true);
+        scanLayer();
         let bestLayer = Infinity;
+        let baselineLayer = Infinity;
+        let bestLayerRatio = Infinity;
         for (let i = 1; i <= 3; i += 1) {
+            const b0 = performance.now();
+            scanLayer();
+            const base = performance.now() - b0;
             const t0 = performance.now();
             const out = drawLayer(i);
-            bestLayer = Math.min(bestLayer, performance.now() - t0);
+            const took = performance.now() - t0;
+            const ratio = took / Math.max(base, 1e-3);
+            if (ratio < bestLayerRatio) {
+                bestLayerRatio = ratio;
+                bestLayer = took;
+                baselineLayer = base;
+            }
             assert.equal(out.drawn, true);
             assert.equal(out.busy, true);
         }
-        assert.ok(bestLayer < 4, 'the best of three layer frames took ' + bestLayer.toFixed(2) + ' ms');
+        assert.ok(bestLayerRatio < 8, 'the best of three layer frames took ' + bestLayer.toFixed(2) + ' ms, ' + bestLayerRatio.toFixed(2) + 'x a same-run baseline of ' + baselineLayer.toFixed(2) + ' ms');
         assert.equal(glow.calls.arc, 0, 'no terminator outline');
         assert.ok(glow.calls.drawImage > 0, 'settlement lights stay');
         assert.equal(JSON.stringify(model.hexes), hexes);
