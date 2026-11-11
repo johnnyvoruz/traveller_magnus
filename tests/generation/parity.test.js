@@ -15,7 +15,9 @@ const require = createRequire(import.meta.url);
 const engineVersion = require('../../packages/engines/package.json').version;
 // Engine 1.1.0 corrects MgT2E rules the legacy oracle still breaks (findings/engine_1_1_0_rule_fixes.md).
 // Every resulting difference is listed exactly, path by path, with both values. No masks.
-// Engine 1.2.0: findings/liquid_temperature_minimal.md (a charted mainworld keeps its atmosphere and hydrographics; the surface liquid is decided once from the final temperatures). The ledger file is named by the engine version.
+// Engine 1.2.0: findings/liquid_temperature_minimal.md (a charted mainworld keeps its atmosphere and hydrographics; the surface liquid is decided once from the final temperatures).
+// Engine 1.3.0: findings/wbh_may24/11_alignment.md (audited May 2024 World Builder's Handbook rows).
+// Engine 1.4.0: findings/wbh_may24/12_settled.md. The ledger file is named by the engine version.
 const DEVIATIONS = JSON.parse(fs.readFileSync(new URL(`./parity_deviations_${engineVersion}.json`, import.meta.url), 'utf8'));
 
 function allDiffs(a, b, path, out = []) {

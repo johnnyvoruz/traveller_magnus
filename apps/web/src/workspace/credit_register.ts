@@ -85,9 +85,17 @@ export function canAccept(line: CreditLine, you: string | null): boolean {
     return line.pending === 1 && (you === null || line.byUser !== you);
 }
 
-/** A counted line that no later line reverses. */
+/** In Void's place on a transfer's line (Johnny 140: a transfer is taken back by moving the credits back). */
+export const TRANSFER_NOT_VOIDED = 'A transfer is not voided; move the credits back.';
+
+/** A line one half of a transfer between two books: its pair is in the other book. */
+export function isTransferHalf(line: CreditLine): boolean {
+    return typeof line.linkId === 'string' && line.linkId !== '';
+}
+
+/** A counted line that no later line reverses and that is not half of a transfer. */
 export function canVoid(line: CreditLine, lines: readonly CreditLine[]): boolean {
-    return line.pending === 0 && !lines.some((row) => row.voidOf === line.id);
+    return line.pending === 0 && !isTransferHalf(line) && !lines.some((row) => row.voidOf === line.id);
 }
 
 /**

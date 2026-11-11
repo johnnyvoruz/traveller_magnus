@@ -108,7 +108,10 @@ describe('the board renders', { concurrency: 1 }, () => {
         assert.match(html, /Works until November 16, 2026 · Used once\. Anyone with the link can join as a player\./);
         assert.match(html, /Playing <span class="ui-count">2<\/span>/);
         assert.match(html, /<b>mara<\/b><small>Joined October 17, 2026<\/small>/);
-        assert.match(html, /<select value="cr_00000000-0000-4000-8000-000000000002" aria-label="Which person mara plays">/);
+        // BM2c: Which one is a tick box per party character; mara plays Ara Silt.
+        assert.match(html, /<fieldset class="players-which" data-players-which="u1"><legend>Which one<\/legend>/);
+        assert.match(html, /<input type="checkbox" checked aria-label="Ara Silt, played by mara">/);
+        assert.match(html, /<input type="checkbox" aria-label="Ysa Quen, played by mara">/);
         assert.match(html, /data-players-archive="u1"[^>]*>Archive/);
         assert.match(html, /Archived <span class="ui-count">1<\/span>/);
         assert.match(html, /<b>sel<\/b><small>Left on October 18, 2026<\/small>/);
@@ -131,7 +134,7 @@ test('the calls: Archive, Bring back and Which one on the contract\'s paths', ()
     const calls = read('workspace/players/referee_calls.ts');
     assert.match(calls, /return call\(member\(userId\), \{ method: 'DELETE' \}, null\)/);
     assert.match(calls, /method: 'PATCH', body: JSON\.stringify\(\{ status: 'active' \}\) \}, PlayerStatus\)/);
-    assert.match(calls, /method: 'PATCH', body: JSON\.stringify\(\{ personId \}\) \}, PlayerPerson\)/);
+    assert.match(calls, /method: 'PATCH', body: JSON\.stringify\(\{ personIds \}\) \}, PlayerPeople\)/, 'BM2c: the whole list');
 });
 
 test('where: Players on the Party tab for the referee only; Playing in on the Campaigns panel', () => {

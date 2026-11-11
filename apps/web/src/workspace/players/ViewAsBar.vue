@@ -16,7 +16,7 @@ import { endViewAs, startViewAs, VIEW_AS_BANNER, viewAs } from './view_as.ts';
 const props = withDefaults(defineProps<{ place?: 'bar' | 'banner' | 'head'; words?: boolean }>(), { place: 'bar', words: true });
 
 const VIEW_AS_LABEL = 'View as players';
-const VIEW_AS_TITLE = "See the campaign as your players see it. You can't change anything while you look.";
+const VIEW_AS_TITLE = "See the campaign as your players see it. You cannot change anything while you look.";
 </script>
 
 <template>

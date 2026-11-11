@@ -90,6 +90,14 @@ onBeforeUnmount(() => {
   margin-left: auto;
 }
 
+/* The icon button in base.css is 30. On a phone the help close is 44. */
+@media (max-width: 599px) {
+  .help .ui-btn.is-icon.help-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 @media (max-width: 480px) {
   .ui-modal.help {
     padding: 8px;

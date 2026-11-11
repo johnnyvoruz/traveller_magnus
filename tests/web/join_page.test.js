@@ -42,7 +42,16 @@ test('the invite names the campaign and the referee', () => {
         refusal: '',
         people: [],
     });
-    assert.equal(signedOut.title, "You're invited to Hollow Verge");
+    assert.equal(signedOut.title, 'You are invited to Hollow Verge');
+    assert.equal(joinFace({
+        signedIn: false,
+        refused: false,
+        chosen: false,
+        name: '',
+        ownerHandle: 'ada',
+        refusal: '',
+        people: [],
+    }).title, 'You are invited');
     assert.equal(signedOut.line, 'ada runs this campaign. Sign in to join. You return to this page.');
     const ready = joinFace({
         signedIn: true,
@@ -74,7 +83,7 @@ test('the invite names the campaign and the referee', () => {
         refusal: '',
         people: [{ id: 'cr_1', name: 'Jamison' }],
     });
-    assert.equal(people.line, 'Select the person you play, or select Not yet.');
+    assert.equal(people.line, 'Select each character you play, then select Continue. Or select Not yet.');
 });
 
 test('a bad link uses the claim page sentences, and an archive says who did it', () => {
@@ -114,4 +123,5 @@ test('the token leaves the address bar and stays for the return from sign-in', (
     assert.match(router, /path: '\/join\/:token'/);
     assert.match(router, /path: '\/join'/);
     assert.match(html, /<meta name="referrer" content="same-origin" \/>/);
+    assert.match(page, /@media \(max-width: 599px\) \{[\s\S]*\.join-card \.ui-btn \{[\s\S]*min-height: 44px;/);
 });

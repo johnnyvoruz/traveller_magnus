@@ -567,6 +567,11 @@ defineExpose({ transmit, idle });
   78% { opacity: 0.16; }
   100% { transform: scale(1.38); opacity: 0; }
 }
+@media (max-width: 599px) {
+  /* The brand and the status are wider than a phone receiver. The status takes the next line, whole. */
+  .trx-header { flex-wrap: wrap; row-gap: 4px; }
+  .trx-top-status { flex: 1 1 100%; justify-content: flex-end; }
+}
 @media (max-width: 540px) {
   .trx-receiver { height: 212px; }
   .trx-panel { padding: 8px 12px 8px; }
@@ -587,6 +592,11 @@ defineExpose({ transmit, idle });
   .trx-chip--channel { font-size: 7px; }
   .trx-chip--signal { width: 58px; padding: 0 3px; gap: 3px; }
   .trx-sigbars i:nth-child(-n + 3) { display: none; }
+}
+@media (max-width: 599px) {
+  /* The status line above gives its height back to the message. */
+  .trx-copy { padding-top: 0; }
+  .trx-wave-frame { height: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .trx-receiver, .trx-receiver *, .trx-receiver *::before, .trx-receiver *::after { animation: none !important; transition: none !important; }

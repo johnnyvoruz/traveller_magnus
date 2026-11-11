@@ -1,7 +1,8 @@
 /**
- * AQ11. A players vessel that is one of the party's ships prints the player's
- * page: Cargo, Passengers, Fuel, Ledger and the sheet, as lines. A vessel that
- * is not the party's stays on the AQ10 sheet lines, with no status.
+ * AQ11 and AQ12. A players vessel that is one of the party's ships prints the
+ * player's page: Cargo, Passengers, Fuel, Ledger and the sheet, then the crew
+ * and the Ship's locker, as lines. A vessel that is not the party's stays on
+ * the AQ10 sheet lines, with no status. An empty crew or locker prints nothing.
  * planPack is apps/web/src/pack/plan.ts. renderPack is apps/web/src/pack/html.ts.
  */
 import assert from 'node:assert/strict';
@@ -11,6 +12,7 @@ import { renderPack } from '../../apps/web/src/pack/html.ts';
 
 const HIDDEN = 'cr_22222222-2222-4222-8222-222222222222';
 const PERSON = 'cr_11111111-1111-4111-8111-111111111111';
+const TAM = 'cr_99999999-9999-4999-8999-999999999999';
 const SHIP = 'cr_33333333-3333-4333-8333-333333333333';
 const OTHER = 'cr_44444444-4444-4444-8444-444444444444';
 const EMPTY = 'cr_55555555-5555-4555-8555-555555555555';
@@ -73,6 +75,7 @@ function link(id, from, to) {
 
 function campaign() {
     const person = row(PERSON, 'person', 'Ada');
+    const tam = row(TAM, 'person', 'Tam Oduya');
     const ghost = row(HIDDEN, 'person', 'Ghost');
     ghost.visibility = 'referee';
     const ship = row(SHIP, 'vessel', 'Beowulf');
@@ -118,6 +121,19 @@ function campaign() {
         payment: { amountCr: 1000, everyDays: 30, nextDueDay: { year: 1105, day: 30 }, payee: 'PayeeSecret' },
         fuelTons: 30,
         fuelMark: 'naval',
+        crew: [
+            { personId: PERSON, role: 'Captain' },
+            { personId: HIDDEN, role: 'Navigator' },
+            { personId: TAM, role: 'Engineer' },
+            { personId: PERSON, role: '' },
+        ],
+        roles: [{ name: 'Captain', ledger: false, trade: true, locker: true }],
+        locker: [
+            { type: 'Vacc suit', tl: '12', kg: 8, notes: 'Field kit' },
+            { type: 'Medkit', tl: '8', kg: 1, notes: 'See ' + HIDDEN },
+            { type: 'Cutlass', tl: '', kg: 0, notes: 'Belt' },
+            { type: 'Broken' },
+        ],
     };
     const other = row(OTHER, 'vessel', 'Pinnace');
     other.sheet = {
@@ -131,6 +147,8 @@ function campaign() {
         cargo: [{ label: 'SideLot', tons: 1 }],
         fuelTons: 4,
         fuelMark: 'scout',
+        crew: [{ personId: PERSON, role: 'Pilot' }],
+        locker: [{ type: 'SideArm', tl: '9', kg: 2, notes: 'kept off the pack' }],
     };
     const empty = row(EMPTY, 'vessel', 'Empty Hull');
     const hiddenShip = row('cr_88888888-8888-4888-8888-888888888888', 'vessel', 'Black Box');
@@ -139,6 +157,7 @@ function campaign() {
     return {
         records: {
             [PERSON]: person,
+            [TAM]: tam,
             [HIDDEN]: ghost,
             [SHIP]: ship,
             [OTHER]: other,
@@ -153,7 +172,7 @@ function campaign() {
             party: {
                 vesselIds: [SHIP, EMPTY, hiddenShip.id],
                 aboard: {},
-                memberIds: [PERSON],
+                memberIds: [PERSON, TAM],
                 anchor: null,
             },
             kinds: {},
@@ -238,10 +257,24 @@ test('a party ship prints the player page as lines', () => {
     assert.equal(JSON.stringify(ship).includes('Ghost'), false);
     assert.equal(JSON.stringify(ship).includes('Ada label'), false);
     assert.equal(JSON.stringify(ship).includes('fuelMark'), false);
+    assert.equal(JSON.stringify(ship).includes('"ledger":false'), false, 'the file leaves the switches off');
     assert.equal(JSON.stringify(ship).includes('berthed-secret'), false);
     assert.equal(JSON.stringify(ship).includes('OwnerSecret'), false);
     assert.equal(JSON.stringify(ship).includes('PayeeSecret'), false);
     assert.equal(JSON.stringify(ship).includes('naval'), false);
+    assert.equal(
+        ship.crew,
+        'Ada, Captain\nTam Oduya, Engineer\nAda, Crew',
+    );
+    assert.equal(
+        ship.locker,
+        'Vacc suit · TL 12 · 8 kg · Field kit\n'
+        + 'Medkit · TL 8 · 1 kg · See a record\n'
+        + 'Cutlass · Belt\n'
+        + '9 kg in the locker',
+    );
+    assert.equal(ship.crew.includes('Navigator'), false);
+    assert.equal(ship.locker.includes('Broken'), false);
 
     const html = renderPack(plan, PAINT);
     const body = article(html, SHIP);
@@ -250,6 +283,10 @@ test('a party ship prints the player page as lines', () => {
     assert.equal(body.includes('<h3>Fuel</h3>'), true);
     assert.equal(body.includes('<h3>Ledger</h3>'), true);
     assert.equal(body.includes('<h3>Sheet</h3>'), true);
+    assert.equal(body.includes('<h3>Crew</h3>'), true);
+    assert.equal(body.includes('<h3>Ship\'s locker</h3>'), true);
+    assert.equal(body.indexOf('<h3>Sheet</h3>') < body.indexOf('<h3>Crew</h3>'), true);
+    assert.equal(body.indexOf('<h3>Crew</h3>') < body.indexOf('<h3>Ship\'s locker</h3>'), true);
     assert.equal(body.includes('<h3>Status</h3>'), false);
     assert.equal(body.includes('Show all'), false);
     assert.equal(html.includes('Black Box'), false);
@@ -266,6 +303,8 @@ test('a players vessel that is not the party ship prints as before', () => {
     assert.equal(other.passengers, null);
     assert.equal(other.fuel, null);
     assert.equal(other.ledger, null);
+    assert.equal(other.crew, null);
+    assert.equal(other.locker, null);
     assert.equal(
         other.sheet,
         'Distinguishing Features: plain hull\nArmour Critical Hit 1: yes',
@@ -276,8 +315,12 @@ test('a players vessel that is not the party ship prints as before', () => {
     assert.equal(body.includes('<h3>Passengers</h3>'), false);
     assert.equal(body.includes('<h3>Fuel</h3>'), false);
     assert.equal(body.includes('<h3>Ledger</h3>'), false);
+    assert.equal(body.includes('<h3>Crew</h3>'), false);
+    assert.equal(body.includes('<h3>Ship\'s locker</h3>'), false);
     assert.equal(body.includes('<h3>Status</h3>'), false);
     assert.equal(body.includes('SideLot'), false);
+    assert.equal(body.includes('SideArm'), false);
+    assert.equal(body.includes('Pilot'), false);
     assert.equal(body.includes('scout'), false);
     assert.equal(body.includes('plain hull'), true);
 });
@@ -290,6 +333,8 @@ test('an empty party ship still prints the four sections', () => {
     assert.equal(empty.fuel, 'The ship sheet says nothing about fuel yet.');
     assert.equal(empty.ledger, 'Cr0\nNothing on the ledger yet.');
     assert.equal(empty.sheet, null);
+    assert.equal(empty.crew, null);
+    assert.equal(empty.locker, null);
     assert.equal(empty.status, null);
     const body = article(renderPack(plan, PAINT), EMPTY);
     assert.equal(body.includes('<h3>Cargo</h3>'), true);
@@ -297,6 +342,9 @@ test('an empty party ship still prints the four sections', () => {
     assert.equal(body.includes('<h3>Fuel</h3>'), true);
     assert.equal(body.includes('<h3>Ledger</h3>'), true);
     assert.equal(body.includes('<h3>Sheet</h3>'), false);
+    assert.equal(body.includes('<h3>Crew</h3>'), false);
+    assert.equal(body.includes('<h3>Ship\'s locker</h3>'), false);
+    assert.equal(body.includes('Nothing in the locker.'), false);
     assert.equal(body.includes('<h3>Status</h3>'), false);
     assert.equal(body.includes('The hold is empty.'), true);
     assert.equal(body.includes('Nothing on the ledger yet.'), true);

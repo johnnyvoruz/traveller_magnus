@@ -46,12 +46,13 @@ test('the first entry is this app version, and every release is in order', () =>
         assert.ok(release.title.trim().length > 0, release.version);
         assert.ok(release.items.length >= 1 && release.items.length <= 6, release.version);
         assert.equal(release.story.length, 2, release.version);
-        if (release.version === '1.3.0' || release.version === '1.3.1' || release.version === '1.3.2' || release.version === '1.3.5' || release.version === '1.3.6' || release.version === '1.3.8') {
+        if (release.version === '1.3.0' || release.version === '1.3.1' || release.version === '1.3.2' || release.version === '1.3.5' || release.version === '1.3.6' || release.version === '1.3.8' || release.version === '1.3.9' || release.version === '1.3.10') {
             assert.equal(release.picture, '/changes/' + release.version + '.png', release.version);
             const file = path.join(webRoot, 'public', 'changes', release.version + '.png');
             const bytes = fs.readFileSync(file);
             assert.ok(bytes.length < 300 * 1024, release.version);
             assert.equal(bytes.readUInt32BE(16), 1200, release.version);
+            if (release.version === '1.3.10') assert.equal(bytes.readUInt32BE(20), 675, release.version);
         } else {
             assert.equal(release.picture, undefined, release.version);
         }

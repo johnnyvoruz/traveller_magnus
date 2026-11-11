@@ -60,7 +60,7 @@ export function joinFace(input: {
     }
     const name = input.name.trim();
     const handle = input.ownerHandle.trim();
-    const title = name ? "You're invited to " + name : "You're invited";
+    const title = name ? 'You are invited to ' + name : 'You are invited';
     if (!input.signedIn) {
         const who = handle ? handle + ' runs this campaign. ' : '';
         return {
@@ -75,7 +75,7 @@ export function joinFace(input: {
             title: 'Which one is you?',
             line: input.people.length === 0
                 ? 'There is nobody in the party yet. Select Not yet.'
-                : 'Select the person you play, or select Not yet.',
+                : 'Select each character you play, then select Continue. Or select Not yet.',
         };
     }
     return {

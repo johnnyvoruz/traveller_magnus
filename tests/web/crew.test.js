@@ -100,7 +100,7 @@ test('the schema takes the rows beside the passengers; the projection keeps a ro
 
 test('pins: the list under Passengers on the vessel page, the role on the Players list, the Crew section on the player\'s page', () => {
     const trade = read('workspace/VesselTrade.vue');
-    assert.match(trade, /<\/section>\s+<CrewList :id="id" :read-only="readOnly" \/>\s+<section class="vt-sec ui-frame" data-vessel-owners/, 'under Passengers, before Owners');
+    assert.match(trade, /<\/section>\s+<CrewList v-if="!player" :id="id" :read-only="readOnly" \/>\s+<section v-if="!player" class="vt-sec ui-frame" data-vessel-owners/, 'under Passengers, before Owners');
     const list = read('workspace/CrewList.vue');
     assert.match(list, /data-vessel-crew/);
     assert.match(list, /if \(other\) records\.push\(withCrew\(other, crewWithout\(crewOf\(other\), personId\)\)\);/, 'the move is one commit');
@@ -109,7 +109,9 @@ test('pins: the list under Passengers on the vessel page, the role on the Player
     assert.doesNotMatch(list, /#[0-9a-f]{3,6}\b/i, 'tokens only');
     assert.doesNotMatch(list, /\bwindow\.|\bdocument\./);
     const board = read('workspace/players/PlayersBoard.vue');
-    assert.match(board, /<small v-if="member\.personId && \(roles \?\? \{\}\)\[member\.personId\]" class="players-role" :data-players-role="member\.userId">/);
+    // BM2c: one line per character the member plays, each with its crew line.
+    assert.match(board, /<small v-for="line in tiedLines\(member\)" :key="line\.id" class="players-role" :data-players-role="member\.userId">/);
+    assert.match(board, /const line = \(props\.roles \?\? \{\}\)\[id\];/);
     const section = read('workspace/players/PlayersSection.vue');
     assert.match(section, /crewLine\(ships, person\.id\)/);
     assert.match(section, /:roles="roles"/);
@@ -146,7 +148,7 @@ test('DS3: the switches are all on by default, a flipped switch is read, a perso
     assert.equal(CampaignRecord.safeParse(vessel).success, true);
     const view = playersView({ records: [vessel, tam(), ree(), mara()], links: [], journal: [], settings: null, clock: null });
     const seen = view.records.find((row) => row.id === rid(1));
-    assert.equal('roles' in seen.status, false, 'players never see the switches');
+    assert.deepEqual(seen.status.roles, roles, 'the live page keeps the switches');
     assert.equal(REFEREE_ALONE, 'The referee alone: the sheet, Set up the ship, the owners and the payment, Players, the course and the clock.');
     assert.equal(ALL_ON, 'Every role may do everything until a switch is turned off.');
     const list = read('workspace/CrewList.vue');
@@ -202,7 +204,8 @@ describe('the player\'s page renders the Crew section', { concurrency: 1 }, () =
     test('names and roles, the person a link, nothing to change; no section without a crew', async () => {
         hold([ship([{ personId: rid(2), role: 'Captain' }, { personId: rid(3), role: '' }]), tam(), ree()], { vesselIds: [rid(1)], memberIds: [rid(2), rid(3)] });
         const html = await render('/src/workspace/players/PlayerShip.vue', { id: rid(1) });
-        const crew = html.slice(html.indexOf('data-player-crew'), html.indexOf('data-player-fuel'));
+        // The Crew section closes the player's page, under Passengers, in both its modes (DS4b).
+        const crew = html.slice(html.indexOf('data-player-crew'), html.indexOf('</section>', html.indexOf('data-player-crew')));
         assert.match(crew, /Crew <span class="ui-frame-count">2<\/span>/);
         assert.match(crew, /<button type="button" class="pship-link">Tam Oduya<\/button>/);
         assert.match(crew, /<span class="pship-class">Captain<\/span>/);

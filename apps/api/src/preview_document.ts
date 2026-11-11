@@ -108,7 +108,7 @@ async function joinTags(env: Env, token: string): Promise<{ title: string; descr
     } catch {
         name = null;
     }
-    const title = name ? `You're invited to ${name}` : ENDED;
+    const title = name ? `You are invited to ${name}` : ENDED;
     return { title, description: title };
 }
 

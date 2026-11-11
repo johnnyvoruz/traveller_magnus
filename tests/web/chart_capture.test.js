@@ -188,7 +188,9 @@ test('the button, the sheet, the command and the menu entry', () => {
     const button = read('capture/SaveImageButton.vue');
     assert.match(button, /aria-label="Save image"/);
     assert.match(button, /<Icon name="file-export" :size="16" \/>/);
+    assert.match(button, /@media \(max-width: 599px\) \{[\s\S]*\.save-img-btn \{[\s\S]*width: 44px;/);
     assert.match(button, /@media \(prefers-reduced-motion: reduce\)/);
+    assert.match(view, /@media \(max-width: 599px\) \{[\s\S]*\.map > \.save-img-btn \{[\s\S]*--sheet-cover/);
 });
 
 test('DF20: a capture with an area draws only its own worlds; the screen and a capture without an area draw them all', async () => {

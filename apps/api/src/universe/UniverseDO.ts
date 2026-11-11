@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from '../env';
 import { chargesMutationBudget, MUTATION_BUDGET, MUTATION_WINDOW_MS, PROPOSAL_SUBMIT_BUDGET } from './budget';
 import { respondProposals } from './proposals';
-import { applyCampaignChanges, CampaignRefusal, characterAttached, journalAuthorReady, parseJournalParent, parseJournalRead, playersCampaignHashes, readCampaign, readDemoCampaign, readPlayersCampaign, type Sql } from './campaign';
+import { applyCampaignChanges, CampaignRefusal, characterAttached, journalAuthorReady, parseJournalParent, parseJournalRead, playersCampaignHashes, readCampaign, readDemoCampaign, readPlayersCampaign, type MemberCaller, type Sql } from './campaign';
 import { respondBuilder } from './hexes';
 import { applyInstall, InstallRefusal, previewInstall, removeInstall, type InstallBody, type InstallRemoveBody } from './install';
 import { readPublishSources } from './publish_read';
@@ -25,6 +25,23 @@ function handleMap(raw: string | null): Record<string, string> {
     }
 }
 
+/** The member's characters. A missing header keeps the single person header. */
+function memberCaller(userId: string, request: Request): MemberCaller {
+    const personId = request.headers.get('x-voyage-person') || null;
+    const raw = request.headers.get('x-voyage-people');
+    let listed: string[] | null = null;
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed) && parsed.every((id) => typeof id === 'string')) listed = parsed;
+        } catch {
+            listed = null;
+        }
+    }
+    if (listed) return { userId, personId: listed[0] ?? null, personIds: listed };
+    return { userId, personId, personIds: personId ? [personId] : [] };
+}
+
 export class UniverseDO extends DurableObject<Env> {
     private mutationHits: number[] = [];
     private proposalHits: number[] = [];
@@ -32,6 +49,46 @@ export class UniverseDO extends DurableObject<Env> {
     constructor(ctx: DurableObjectState, env: Env) {
         super(ctx, env);
         ctx.blockConcurrencyWhile(() => migrate(ctx.storage));
+    }
+
+    /** One notice per open panel. The page pulls the GET it already uses. Incoming text is ignored. */
+    private joinCampaign(request: Request): Response {
+        if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+            return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
+        }
+        const userId = request.headers.get('x-voyage-user-id') ?? '';
+        const role = request.headers.get('x-voyage-role');
+        if (!userId || (role !== 'owner' && role !== 'member')) {
+            return Response.json({ ok: false, error: { code: 'validation', message: 'That request could not be read. Try again.' } }, { status: 400 });
+        }
+        const pair = new WebSocketPair();
+        const client = pair[0];
+        const server = pair[1];
+        this.ctx.acceptWebSocket(server);
+        return new Response(null, { status: 101, webSocket: client });
+    }
+
+    /** `{ t: 'changed', seq }` and nothing else. A closing socket is skipped. */
+    private tellChanged(sql: Sql): void {
+        const counter = sql.exec(`SELECT value FROM meta WHERE key = 'campaignSeq'`);
+        const text = JSON.stringify({ t: 'changed', seq: Number(counter[0]?.value ?? 0) });
+        for (const socket of this.ctx.getWebSockets()) {
+            try {
+                socket.send(text);
+            } catch {
+                // The socket closed between the list and the send.
+            }
+        }
+    }
+
+    webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer): void {
+        // A write stays on PATCH /campaign/changes. The socket carries no body.
+    }
+
+    webSocketClose(_ws: WebSocket): void {}
+
+    webSocketError(ws: WebSocket): void {
+        this.webSocketClose(ws);
     }
 
     private allowMutation(): boolean {
@@ -94,6 +151,7 @@ export class UniverseDO extends DurableObject<Env> {
             const id = url.searchParams.get('id') ?? '';
             return Response.json({ ok: true, data: { holds: id !== '' && characterAttached(sql, id) } });
         }
+        if (request.method === 'GET' && url.pathname === '/campaign/live') return this.joinCampaign(request);
         if (request.method === 'GET' && url.pathname === '/campaign/players') {
             const memberId = request.headers.get('x-voyage-member');
             if (!memberId) {
@@ -142,9 +200,10 @@ export class UniverseDO extends DurableObject<Env> {
                     body,
                     new Date().toISOString(),
                     acknowledgePublic,
-                    memberId ? { userId: memberId, personId: request.headers.get('x-voyage-person') || null } : null,
+                    memberId ? memberCaller(memberId, request) : null,
                     memberId ? null : actorId,
                 );
+                if (result.applied.length) this.tellChanged(sql);
                 return Response.json({ ok: true, data: result });
             } catch (err) {
                 if (err instanceof CampaignRefusal) {

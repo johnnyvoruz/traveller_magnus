@@ -212,7 +212,7 @@ test('DT2b: the referee\'s mark is naval or scout, and nothing else', () => {
 test('DT2b: Refuel offers what the world sells, from the rules file; the mark only on a party vessel', () => {
     const page = fs.readFileSync(path.join(webRoot, 'src', 'workspace/VesselTrade.vue'), 'utf8');
     assert.match(page, /fuelOffers\(world\.value\.port, world\.value\.bases, inParty\.value, mark\.value\)/);
-    assert.match(page, /<label v-if="inParty" class="vt-fld vt-mark"><span>Base fuel \(referee only\)<\/span>/);
+    assert.match(page, /<label v-if="inParty && !player" class="vt-fld vt-mark"><span>Base fuel \(referee only\)<\/span>/);
     assert.match(page, /<option value="naval">Naval vessel<\/option>\s+<option value="scout">Scout ship<\/option>/);
     // A price the file leaves to the referee is typed before anything is posted.
     assert.match(page, /<label v-if="offer && offer\.crPerTon === null" class="vt-fld"><span>Price \(Cr per ton\)<\/span>/);

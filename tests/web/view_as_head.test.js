@@ -21,7 +21,7 @@ describe('View as players in the head (DU36)', () => {
         assert.match(bar, /<p v-else-if="viewAs\.on" class="viewas-bar" role="status" data-view-as-on>/, 'the banner as before, in the bar and the banner places');
         assert.match(bar, /v-else-if="props\.place === 'bar' && campaign\.role === 'owner' && campaign\.status === 'ready'"/, 'the bar place keeps the old button');
         assert.match(bar, /const VIEW_AS_LABEL = 'View as players';/);
-        assert.match(bar, /const VIEW_AS_TITLE = "See the campaign as your players see it\. You can't change anything while you look\.";/);
+        assert.match(bar, /const VIEW_AS_TITLE = "See the campaign as your players see it\. You cannot change anything while you look\.";/);
         assert.equal((bar.match(/data-view-as\b(?!-)/g) || []).length, 2, 'both buttons carry data-view-as');
     });
 

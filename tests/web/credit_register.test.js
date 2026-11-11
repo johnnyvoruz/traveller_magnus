@@ -15,7 +15,7 @@ import { attachLive } from '../../apps/web/src/characters/live.ts';
 import { noteLedgerFrame, openRegister, parseCreditLine, resetRegisters } from '../../apps/web/src/characters/register.ts';
 import { resetTransport, transport } from '../../apps/web/src/characters/transport.ts';
 import {
-    CASH_FIELD, DAY_MAX, amountTyped, canAccept, canVoid, cashTyped, dateTyped, dayBeyondBound, dayPlaceholder, dayWithin, lineDraft, readoutsFor, registerRows,
+    CASH_FIELD, DAY_MAX, TRANSFER_NOT_VOIDED, amountTyped, canAccept, canVoid, cashTyped, dateTyped, dayBeyondBound, dayPlaceholder, dayWithin, lineDraft, readoutsFor, registerRows,
 } from '../../apps/web/src/workspace/credit_register.ts';
 import { totalDays } from '../../apps/web/src/orbit/clock.ts';
 
@@ -62,6 +62,13 @@ describe('the rows', () => {
         assert.equal(canVoid(LINES[1], LINES), false, 'already reversed');
         assert.equal(canVoid(pending, LINES), false, 'pending');
         assert.equal(canVoid(LINES[3], LINES), true, 'a reversal can itself be reversed');
+    });
+
+    test('DF40: half of a transfer is never voided; the credits are moved back (Johnny 140)', () => {
+        const half = line({ id: 't1', seq: 9, kind: 'transfer', memo: 'From Kestrel Dawn: Spending money', amount: 200, linkId: 'lk_1' });
+        assert.equal(canVoid(half, [...LINES, half]), false);
+        assert.equal(canVoid({ ...half, linkId: null }, [...LINES, half]), true, 'a transfer typed by hand, with no pair, is voided as before');
+        assert.equal(TRANSFER_NOT_VOIDED, 'A transfer is not voided; move the credits back.');
     });
 });
 
@@ -339,6 +346,18 @@ describe('the register on screen', { concurrency: 1 }, () => {
         assert.match(html, /data-credit-add/);
     });
 
+    test('DF40: a transfer line shows the sentence in the place of Void; the kind word never breaks', async () => {
+        const half = line({ id: 'l5', seq: 5, kind: 'transfer', memo: 'From Kestrel Dawn: Spending money', amount: 200, linkId: 'lk_1' });
+        const html = await render({ register: fakeRegister({ lines: [...LINES, half] }), you: 'player', access: true, canPost: true, day: DAY });
+        const row = html.match(/<tr[^>]*data-credit-line="l5"[\s\S]*?<\/tr>/)[0];
+        assert.doesNotMatch(row, /data-credit-void/);
+        assert.match(row, /data-credit-transfer>A transfer is not voided; move the credits back\.</);
+        const reader = await render({ register: fakeRegister({ lines: [...LINES, half] }), you: 'player', access: true, canPost: false, day: DAY });
+        assert.doesNotMatch(reader, /data-credit-transfer/, 'no actions column, no sentence');
+        const css = fs.readFileSync(path.join(webRoot, 'src/workspace/CreditRegister.vue'), 'utf8');
+        assert.match(css, /\.creg-memo small \{[^}]*white-space: nowrap;[^}]*overflow-wrap: normal;/);
+    });
+
     test('the one who posted the pending line sees no Accept; without canPost no buttons at all', async () => {
         const poster = await render({ register: fakeRegister(), you: 'ref1', access: true, canPost: true, day: DAY });
         assert.doesNotMatch(poster, /data-credit-accept/);
@@ -362,7 +381,7 @@ describe('the register on screen', { concurrency: 1 }, () => {
 
     test('the referee who cannot see the register: the note and Add a line, nothing else', async () => {
         const html = await render({ register: fakeRegister({ status: 'denied', lines: [] }), you: null, access: false, canPost: true, day: DAY });
-        assert.match(html, /You can&#39;t see this character&#39;s register\. A line you add waits for the player to accept it\./);
+        assert.match(html, /You cannot see this character&#39;s register\. A line you add waits for the player to accept it\./);
         assert.match(html, /data-credit-add/);
         assert.doesNotMatch(html, /data-credit-lines|data-credit-mode/);
     });

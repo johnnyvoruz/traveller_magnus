@@ -129,7 +129,7 @@ test('the schema takes the rows; the projection keeps every one; the door takes 
 
 test('pins: the section beside Cargo on both pages, the player writes only through the door, the row action on the sheet, the put-back', () => {
     const trade = read('workspace/VesselTrade.vue');
-    assert.match(trade, /<\/section>\s+<ShipLocker :id="id" :read-only="readOnly" who="referee" \/>\s+<section class="vt-sec ui-frame" data-vessel-ledger/, 'after Cargo, before the Ledger');
+    assert.match(trade, /<\/section>\s+<ShipLocker :id="id" :read-only="readOnly" :who="who" \/>\s+<section class="vt-sec ui-frame" data-vessel-ledger/, 'after Cargo, before the Ledger');
     const player = read('workspace/players/PlayerShip.vue');
     assert.match(player, /<\/section>\s+<ShipLocker :id="id" :read-only="false" who="player" \/>\s+<section class="pship-sec ui-frame" data-player-passengers/, 'after Cargo on the player\'s page');
     const section = read('workspace/ShipLocker.vue');
@@ -146,8 +146,8 @@ test('pins: the section beside Cargo on both pages, the player writes only throu
     assert.match(move, /'\/api\/characters\/' \+ encodeURIComponent\(taker\.id\) \+ '\/fields'/, 'a Character is written through the route its sheet writes today');
     assert.match(move, /saveRecord\(person\.id, \{ sheet: characterSheetWith\(now\.sheet, withSets\(fields, sets\)\) \}\);/, 'a plain sheet through the record save');
     const door = read('campaign/append.ts');
-    assert.match(door, /body: JSON\.stringify\(\{ appends: \[\{ id, append \}\] \}\),/);
-    assert.match(door, /await loadPlayerPages\(campaign\.universeId\);/, 'both lists re-read after');
+    assert.match(door, /body: JSON\.stringify\(\{ appends: \[\{ id, \.\.\.\(personId \? \{ personId \} : \{\}\), append \}\] \}\),/);
+    assert.match(door, /await rereadPlayerPages\(campaign\.universeId\);/, 'both lists re-read in place after');
     const sheet = read('workspace/CharacterSheet.vue');
     assert.match(sheet, /rowAction\?: \{ table: string; label: string; title: string \} \| null;/);
     assert.match(sheet, /<button v-if="rowFilled\(row\)" type="button" class="ui-btn csheet-row-act" :title="rowAction!\.title" :data-row-action="block\.name \+ ':' \+ \(n \+ 1\)" @click="emit\('rowAction', n \+ 1\)">\{\{ rowAction!\.label \}\}<\/button>/);
@@ -203,7 +203,8 @@ describe('the player\'s page renders the locker; the move refuses before any wri
     }
 
     const crewed = (over = {}) => ship({ crew: [{ personId: rid(2), role: 'Captain' }], locker: [suit, kit], ...over });
-    const section = (html) => html.slice(html.indexOf('data-vessel-locker'), html.indexOf('data-player-passengers'));
+    // The locker's own section: on the read page and inside the referee's sections a crewed player acts in (DS4b).
+    const section = (html) => { const at = html.indexOf('data-vessel-locker'); return html.slice(at, html.indexOf('</section>', at)); };
 
     test('without the switch, or with no tied character known, the rows read as text: no box, no button', async () => {
         me.setMyPersonIds([]);

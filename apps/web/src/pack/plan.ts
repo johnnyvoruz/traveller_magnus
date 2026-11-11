@@ -20,7 +20,9 @@ import { ledgerBalance, ledgerByPeriod } from '../campaign/ledger.ts';
 import { formatCredits } from '../campaign/money.ts';
 import { fuelCapacityTons, fuelTonsOf } from '../campaign/refuel.ts';
 import { CHARACTER_RULES, CHARACTER_SCHEMA } from '../workspace/character_sheet.ts';
+import { crewOf, roleName } from '../workspace/crew.ts';
 import { kindWord, whenText } from '../workspace/journal/list.ts';
+import { kgWords, lockerOf } from '../workspace/locker.ts';
 import { fareOfPassageField, isBoarded } from '../workspace/passenger_fare.ts';
 import { deckPlanOf, fuelWords, holdWords, isPartyShip, LEDGER_KIND_WORDS, tonsWords } from '../workspace/players/player_ship.ts';
 import { typeInfo } from '../workspace/records.ts';
@@ -76,6 +78,10 @@ export type PackRecord = {
     passengers: string | null;
     fuel: string | null;
     ledger: string | null;
+    /** A party ship's crew, in stored order. Null when there is none, and on every other record. */
+    crew: string | null;
+    /** A party ship's locker. Null when there is none, and on every other record. */
+    locker: string | null;
 };
 
 export type PackEntry = {
@@ -178,9 +184,9 @@ function placeOf(
 }
 
 /**
- * The status object is not a pack section. A party ship's cargo, passengers, fuel, ledger
- * and sheet are their own lines. The track, the owners, the payment and the naval or scout
- * mark (AF2) stay off the file, so the Status heading stays out.
+ * The status object is not a pack section. A party ship's cargo, passengers, fuel, ledger,
+ * sheet, crew and locker are their own lines. The track, the owners, the payment, the role
+ * switches and the naval or scout mark (AF2) stay off the file, so the Status heading stays out.
  */
 function statusText(): null {
     return null;
@@ -376,6 +382,36 @@ function passengersText(record: CampaignRecord, viewRecords: Readonly<Record<str
     }).join('\n');
 }
 
+/** "Tam Oduya, Captain", in the crew's stored order. A person the projection dropped is already gone. */
+function crewText(record: CampaignRecord, viewRecords: Readonly<Record<string, CampaignRecord>>): string | null {
+    const rows = crewOf(record);
+    if (!rows.length) return null;
+    return rows.map((row) => {
+        const name = keptPersonName(row.personId, viewRecords) ?? 'Someone aboard';
+        return name + ', ' + roleName(row);
+    }).join('\n');
+}
+
+/**
+ * One locker row as the item names it: type, "TL 12", "8 kg", notes, with an empty column left out.
+ * The kg line under the rows is `kgWords` from the ship's locker.
+ */
+function lockerText(record: CampaignRecord): string | null {
+    const rows = lockerOf(record);
+    if (!rows.length) return null;
+    const lines: string[] = [];
+    for (const row of rows) {
+        const parts: string[] = [];
+        if (row.type.trim()) parts.push(row.type.trim());
+        if (row.tl.trim()) parts.push('TL ' + row.tl.trim());
+        if (row.kg > 0) parts.push(row.kg + ' kg');
+        if (row.notes.trim()) parts.push(row.notes.trim());
+        if (parts.length) lines.push(parts.join(' · '));
+    }
+    lines.push(kgWords(rows));
+    return lines.join('\n');
+}
+
 function ledgerText(record: CampaignRecord): string {
     const lines = ledgerOf(record);
     const out = [formatCredits(ledgerBalance(lines))];
@@ -406,6 +442,15 @@ function linkKind(kind: CampaignLink['kind']): string {
     return found ? found.labelFrom : kind;
 }
 
+/** The live read keeps the switches. The file does not (AQ12). */
+function withoutRoles(row: CampaignRecord): CampaignRecord {
+    const status = row.status;
+    if (!status || typeof status !== 'object' || !Object.hasOwn(status, 'roles')) return row;
+    const next = { ...status };
+    delete next.roles;
+    return { ...row, status: next };
+}
+
 /** The selection, the redaction, and the counts. The HTML is built from this. */
 export function planPack(input: PackInput): PackPlan {
     // The same read the server will hand a player (Epic P, decision 3).
@@ -433,7 +478,7 @@ export function planPack(input: PackInput): PackPlan {
     const clock = clockDay(input.clockDays);
     const records: PackRecord[] = [];
     const viewRecords: Record<string, CampaignRecord> = {};
-    for (const row of view.records) viewRecords[row.id] = row as CampaignRecord;
+    for (const row of view.records) viewRecords[row.id] = withoutRoles(row as CampaignRecord);
     const viewLinks: Record<string, CampaignLink> = {};
     for (const row of view.links) viewLinks[row.id] = row as CampaignLink;
     const namedParty = input.settings ? input.settings.party : null;
@@ -466,6 +511,8 @@ export function planPack(input: PackInput): PackPlan {
             passengers: ship ? redactText(passengersText(ship, viewRecords), input.records, counts) : null,
             fuel: ship ? redactText(fuelWords(fuelTonsOf(ship.status), fuelCapacityTons(fieldsOf(ship.sheet))), input.records, counts) : null,
             ledger: ship ? redactText(ledgerText(ship), input.records, counts) : null,
+            crew: ship ? redactText(crewText(ship, viewRecords) ?? '', input.records, counts) || null : null,
+            locker: ship ? redactText(lockerText(ship) ?? '', input.records, counts) || null : null,
         });
     }
     records.sort((a, b) => a.typeName.localeCompare(b.typeName) || a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));

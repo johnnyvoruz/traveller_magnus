@@ -14,6 +14,7 @@ import DensityAsk from './DensityAsk.vue';
 import { edit, openBlank } from './edit.ts';
 import Spinner from '../../design/Spinner.vue';
 import GenerateSheet from './GenerateSheet.vue';
+import SetMany from './SetMany.vue';
 import PublishForm from '../market/PublishForm.vue';
 import { EMPTY_ALONE, marketUi } from '../market/market.ts';
 import { generateGrowing, growUi } from './grow_acts.ts';
@@ -245,6 +246,8 @@ const asking = computed(() => {
         </button>
       </div>
 
+      <SetMany v-if="mode === 'many' && filled > 0" :keys="keys" :busy="busy" />
+
       <p v-if="slots.length && !twoSay" class="build-fine">These systems are saved as they are generated, with no preview. To remove the new {{ slots.length === 1 ? 'sector and its systems' : 'sectors and their systems' }}, select Undo. Undo also works while the job is running.</p>
       <p v-else-if="mode === 'empty'" class="build-fine">Generate a system shows a preview first. The system is saved only when you select Keep. Blank system saves an empty system right away and opens it in the designer, where you add each body yourself. {{ EMPTY_ALONE }}</p>
       <p v-else-if="mode === 'removed'" class="build-fine">While Build is on, a removed hex shows as a faint outline. When Build is off, the hex doesn’t show.</p>
@@ -433,6 +436,17 @@ const asking = computed(() => {
 
 .build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) > :is(.build-sheet, .mk-form) {
   grid-column: 1 / -1;
+}
+
+/* A phone shows the pane as a sheet the screen's width, whatever span was kept: one column, the list under the acts. */
+@media (max-width: 599px) {
+  .build-pane[data-mode="many"]:is([data-span="half"], [data-span="full"]) {
+    display: block;
+  }
+
+  .build-pane[data-mode="many"] .build-side {
+    margin-top: 16px;
+  }
 }
 
 .build-pane:is([data-span="half"], [data-span="full"]) .build-side > .ui-heading {

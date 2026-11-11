@@ -192,7 +192,7 @@ export type CrewRow = z.infer<typeof CrewRow>;
 /**
  * A role's three switches (DS3; Johnny 131: "Default that every role can access everything"; 136): what a
  * player in that role may do on the ship's page. A role with no row is all on; a row is made all on and
- * flipped by the referee. Players never see this key (the projection drops it, as `fuelMark`).
+ * flipped by the referee. The live players read keeps this key. The Player Pack and a published package leave it off. `fuelMark` stays off every players read.
  */
 export const CrewRole = z.object({
     name: z.string().max(80),
@@ -546,11 +546,25 @@ const LockerChange = z.object({
 }).strict();
 
 /**
+ * Board one stored passenger (BT2). `seen` is `passengerSeen` of the row at `index`.
+ * `parsecs` names the fares-table row. The object writes the class and the fare.
+ */
+const PassengerBoard = z.object({
+    index: z.number().int().nonnegative(),
+    class: z.string().min(1),
+    fareCr: z.number().finite().nonnegative(),
+    parsecs: z.number().int().positive(),
+    seen: z.string().min(1),
+}).strict();
+
+/**
  * One piece a player adds to a ship. No `baseRev`: the object merges it into the
  * record it holds. A referee's whole-record save is still `RecordChange`.
  */
 export const StatusAppend = z.object({
     id: z.string().regex(RECORD_ID),
+    /** Which of this member's characters is pressing. Omitted when they have one. */
+    personId: z.string().regex(RECORD_ID).optional(),
     append: z.object({
         ledger: z.array(LedgerLine).min(1).max(AppendPiece).optional(),
         cargo: z.object({
@@ -560,6 +574,7 @@ export const StatusAppend = z.object({
         passengers: z.object({
             add: z.array(PassengerLot).max(AppendPiece).optional(),
             remove: IndexList.optional(),
+            board: z.array(PassengerBoard).max(AppendPiece).optional(),
         }).strict().optional(),
         fuelTons: z.number().finite().nonnegative().optional(),
         locker: z.object({
@@ -567,11 +582,19 @@ export const StatusAppend = z.object({
             change: z.array(LockerChange).max(AppendPiece).optional(),
             remove: IndexList.optional(),
         }).strict().optional(),
+        /** Pay the stored ship payment. `paymentSeen` is required with it and only with it. */
+        payNow: z.literal(true).optional(),
+        paymentSeen: z.string().min(1).optional(),
     }).strict().superRefine((append, ctx) => {
         const cargo = (append.cargo?.add?.length ?? 0) > 0 || (append.cargo?.remove?.length ?? 0) > 0;
-        const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0;
+        const boarding = (append.passengers?.board?.length ?? 0) > 0;
+        const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0 || boarding;
         const locker = (append.locker?.add?.length ?? 0) > 0 || (append.locker?.change?.length ?? 0) > 0 || (append.locker?.remove?.length ?? 0) > 0;
-        if (!append.ledger?.length && !cargo && !passengers && append.fuelTons === undefined && !locker) {
+        const paying = append.payNow === true;
+        if (paying !== (append.paymentSeen !== undefined)) {
+            ctx.addIssue({ code: 'custom', message: 'empty', path: ['paymentSeen'] });
+        }
+        if (!append.ledger?.length && !cargo && !passengers && append.fuelTons === undefined && !locker && !paying) {
             ctx.addIssue({ code: 'custom', message: 'empty', path: [] });
         }
     }),

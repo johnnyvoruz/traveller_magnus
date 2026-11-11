@@ -1,5 +1,6 @@
-// The six liquid/temperature invariants as a census on a fixed sample, engine 1.2.0
-// (findings/liquid_temperature_minimal.md). Fails on any regression.
+// The six liquid/temperature invariants as a census on a fixed sample.
+// Engine 1.2.0 set the decision (findings/liquid_temperature_minimal.md).
+// Engine 1.3.0 moved later bodies (findings/wbh_may24/11_alignment.md), so the counted remainder changed. Fails on any regression.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -49,7 +50,11 @@ test('liquid and temperature census: every invariant holds on the fixed sample',
         assert.deepEqual(fails.slice(0, 5), [], `${fails.length} invariant failures`);
         // The one counted remainder (handoff 198): atmosphere 10-12, no listed liquid holds the mean.
         // A change in this number is a change in generation and must be explained.
-        assert.equal(counted.length, 353);
+        // 353 on engine 1.2.0. Engine 1.3.0 draws belt span and belt composition on the shared
+        // stream and drops the gas-giant class modifier, so five of those exotic atmospheres
+        // are no longer unresolved (348). Engine 1.4.0 builds a fresh hex by the expanded
+        // method, so the 60 uncharted hexes move. 352 is the count on this same sample.
+        assert.equal(counted.length, 352);
     });
 });
 
@@ -63,7 +68,8 @@ test('Regina keeps her chart and her liquid agrees with her temperature', async 
         assert.equal(m.hydroCode, 8);
         assert.ok(!m.tradeCodes.includes('Fl'));
         // Her stored mean is below Water's melting point (273 K), so her water is Ice (mean rule).
-        assert.equal(m.meanTempK, 204.41937560732526);
+        // Engine 1.4.0 extreme-tilt dice move this chart world's temperature. The chart UWP stays.
+        assert.equal(m.meanTempK, 226.61253136097818);
         assert.equal(m.liquidType, 'Ice');
         assert.equal(m.liquidStatus, undefined);
     });

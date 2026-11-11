@@ -21,8 +21,12 @@ import {
     type EntryChange,
     type LinkChange,
     type RecordChange,
+    ShipPayment,
+    passengerSeen,
+    paymentSeen,
     type StatusAppend,
 } from '@voyage/shared';
+import { campaignCalendarDay, fareMemo, nextDueDay, officialFare } from './trade_door.ts';
 
 /**
  * One statement per call. SELECT returns rows; other statements return none.
@@ -858,7 +862,7 @@ const PLAYER_NOTES = 65_535;
 const PLAYER_NOTE_SENTENCE = 'You have 65,535 notes in this campaign, the most one player can keep.';
 const MEMBER_FORBIDDEN = 'You cannot change that.';
 
-export type MemberCaller = { userId: string; personId?: string | null };
+export type MemberCaller = { userId: string; personId?: string | null; personIds?: readonly string[] };
 
 function countPlayerNotes(sql: Sql, userId: string): number {
     const rows = sql.exec(`SELECT COUNT(*) AS n FROM campaign_journal WHERE deleted = 0 AND author_id = ?`, userId);
@@ -919,21 +923,103 @@ function roleSwitch(status: Record<string, unknown>, personId: string | null, na
 
 function appendSwitches(append: StatusAppend['append']): CrewSwitch[] {
     const names: CrewSwitch[] = [];
-    if (append.ledger?.length) names.push('ledger');
+    const boarding = (append.passengers?.board?.length ?? 0) > 0;
+    const paying = append.payNow === true;
+    if (append.ledger?.length || boarding || paying) names.push('ledger');
     const cargo = (append.cargo?.add?.length ?? 0) > 0 || (append.cargo?.remove?.length ?? 0) > 0;
-    const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0;
-    if (cargo || passengers || append.fuelTons !== undefined) names.push('trade');
+    const passengers = (append.passengers?.add?.length ?? 0) > 0 || (append.passengers?.remove?.length ?? 0) > 0 || boarding;
+    if (cargo || passengers || append.fuelTons !== undefined || paying) names.push('trade');
     const locker = append.locker;
     if (locker && ((locker.add?.length ?? 0) > 0 || (locker.change?.length ?? 0) > 0 || (locker.remove?.length ?? 0) > 0)) names.push('locker');
     return names;
 }
 
+const UNREADABLE = 'That request could not be read. Try again.';
+
+function unreadable(): never {
+    throw new CampaignRefusal('validation', UNREADABLE);
+}
+
 function dropIndexes(rows: unknown[], indexes: readonly number[]): unknown[] {
     const drop = new Set(indexes);
-    if (drop.size !== indexes.length || indexes.some((index) => index >= rows.length)) {
-        throw new CampaignRefusal('validation', 'That request could not be read. Try again.');
-    }
+    if (drop.size !== indexes.length || indexes.some((index) => index >= rows.length)) unreadable();
     return rows.filter((_, index) => !drop.has(index));
+}
+
+function lotObject(row: unknown): Record<string, unknown> | null {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+    return row as Record<string, unknown>;
+}
+
+/** The referee's passenger name: the live person's name, else the lot's label. */
+function passengerWords(sql: Sql, lot: Record<string, unknown>): string {
+    const personId = typeof lot.personId === 'string' ? lot.personId : '';
+    if (personId) {
+        const person = loadRecord(sql, personId);
+        if (person && !bit(person.deleted)) {
+            const name = String(person.name ?? '').trim();
+            if (name) return name;
+        }
+    }
+    return typeof lot.label === 'string' ? lot.label : '';
+}
+
+/**
+ * Board each named row and post its fare. Remove and add have already run.
+ * A miss refuses the piece; the caller writes nothing until this returns.
+ */
+function boardPassengers(
+    sql: Sql,
+    passengers: unknown[],
+    boards: NonNullable<NonNullable<StatusAppend['append']['passengers']>['board']>,
+    ledger: unknown[],
+    personId: string,
+    when: { year: number; day: number },
+): { passengers: unknown[]; ledger: unknown[] } {
+    const next = passengers.slice();
+    const lines = ledger.slice();
+    for (const piece of boards) {
+        if (piece.index >= next.length) unreadable();
+        const row = lotObject(next[piece.index]);
+        if (!row) unreadable();
+        const label = typeof row.label === 'string' ? row.label : '';
+        const className = typeof row.class === 'string' ? row.class : '';
+        const note = typeof row.note === 'string' ? row.note : undefined;
+        const person = typeof row.personId === 'string' ? row.personId : undefined;
+        const fare = typeof row.fareCr === 'number' ? row.fareCr : undefined;
+        if (passengerSeen({ personId: person, label, class: className, note, fareCr: fare }) !== piece.seen) unreadable();
+        if (typeof row.fareCr === 'number') unreadable();
+        const stored = officialFare(className, piece.parsecs);
+        const asked = officialFare(piece.class, piece.parsecs);
+        if (!stored || !asked || stored.name !== asked.name || stored.credits !== piece.fareCr) unreadable();
+        next[piece.index] = { ...row, class: stored.name, fareCr: stored.credits };
+        lines.push({
+            when,
+            amount: Math.abs(stored.credits),
+            memo: fareMemo(passengerWords(sql, row), stored.name, piece.parsecs),
+            kind: 'income',
+            by: personId,
+        });
+    }
+    return { passengers: next, ledger: lines };
+}
+
+/** Post the stored payment and move its next due day. The amount is the stored one. */
+function applyPayNow(status: Record<string, unknown>, seen: string, personId: string, when: { year: number; day: number }): void {
+    const parsed = ShipPayment.safeParse(status.payment);
+    if (!parsed.success || paymentSeen(parsed.data) !== seen) unreadable();
+    const payment = parsed.data;
+    if (!Number.isFinite(payment.amountCr) || !Number.isInteger(payment.everyDays) || payment.everyDays <= 0) unreadable();
+    const ledger = rowList(status.ledger);
+    ledger.push({
+        when,
+        amount: -payment.amountCr,
+        memo: payment.payee ? 'Ship payment to ' + payment.payee : 'Ship payment',
+        kind: 'expense',
+        by: personId,
+    });
+    status.ledger = ledger;
+    status.payment = { ...payment, nextDueDay: nextDueDay(payment.nextDueDay, payment.everyDays) };
 }
 
 function partyShip(sql: Sql, id: string): boolean {
@@ -944,17 +1030,30 @@ function partyShip(sql: Sql, id: string): boolean {
  * Merge one piece into the ship the object holds now. The record's other fields stay.
  * `by` on a ledger line is this member's person.
  */
+function actingPerson(member: MemberCaller, named: string | undefined): string {
+    const list = member.personIds ?? (member.personId ? [member.personId] : []);
+    if (named !== undefined) {
+        if (!list.includes(named)) refuseMember();
+        return named;
+    }
+    if (list.length > 1) throw new CampaignRefusal('validation', UNREADABLE);
+    const only = list[0];
+    if (list.length === 1 && only) return only;
+    refuseMember();
+}
+
 function mergeAppend(sql: Sql, change: StatusAppend, now: string, member: MemberCaller, applied: CampaignChangesResult['applied']): void {
     const stored = loadRecord(sql, change.id);
     if (!stored || bit(stored.deleted) || String(stored.type) !== 'vessel' || String(stored.visibility) !== 'players') refuseMember();
     if (!partyShip(sql, change.id)) refuseMember();
-    const personId = member.personId ?? null;
+    const personId = actingPerson(member, change.personId);
     const status = statusObject(parseJson(stored.status));
     for (const name of appendSwitches(change.append)) {
         if (!roleSwitch(status, personId, name)) refuseMember();
     }
     if (!personId) refuseMember();
     const append = change.append;
+    const when = campaignCalendarDay(readClock(sql)?.days ?? null);
     if (append.ledger?.length) {
         const ledger = rowList(status.ledger);
         for (const line of append.ledger) {
@@ -969,23 +1068,31 @@ function mergeAppend(sql: Sql, change: StatusAppend, now: string, member: Member
         if (append.cargo.add?.length) cargo.push(...append.cargo.add);
         status.cargo = cargo;
     }
-    if (append.passengers && ((append.passengers.add?.length ?? 0) > 0 || (append.passengers.remove?.length ?? 0) > 0)) {
-        let passengers = rowList(status.passengers);
-        if (append.passengers.remove?.length) passengers = dropIndexes(passengers, append.passengers.remove);
-        if (append.passengers.add?.length) passengers.push(...append.passengers.add);
-        status.passengers = passengers;
+    const passengers = append.passengers;
+    const passengerWrite = (passengers?.add?.length ?? 0) > 0 || (passengers?.remove?.length ?? 0) > 0 || (passengers?.board?.length ?? 0) > 0;
+    if (passengers && passengerWrite) {
+        let rows = rowList(status.passengers);
+        if (passengers.remove?.length) rows = dropIndexes(rows, passengers.remove);
+        if (passengers.add?.length) rows.push(...passengers.add);
+        if (passengers.board?.length) {
+            const boarded = boardPassengers(sql, rows, passengers.board, rowList(status.ledger), personId, when);
+            rows = boarded.passengers;
+            status.ledger = boarded.ledger;
+        }
+        status.passengers = rows;
     }
     if (append.fuelTons !== undefined) status.fuelTons = append.fuelTons;
     if (append.locker && ((append.locker.add?.length ?? 0) > 0 || (append.locker.change?.length ?? 0) > 0 || (append.locker.remove?.length ?? 0) > 0)) {
         let locker = rowList(status.locker);
         if (append.locker.remove?.length) locker = dropIndexes(locker, append.locker.remove);
         for (const edit of append.locker.change ?? []) {
-            if (edit.index >= locker.length) throw new CampaignRefusal('validation', 'That request could not be read. Try again.');
+            if (edit.index >= locker.length) unreadable();
             locker[edit.index] = edit.row;
         }
         if (append.locker.add?.length) locker.push(...append.locker.add);
         status.locker = locker;
     }
+    if (append.payNow === true) applyPayNow(status, append.paymentSeen ?? '', personId, when);
     const rev = Number(stored.rev) + 1;
     const seq = nextSeq(sql);
     sql.exec(

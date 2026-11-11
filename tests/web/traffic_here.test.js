@@ -115,7 +115,7 @@ test('the screen\'s wiring: the record page mounts it after Trade here; the roll
     assert.match(screen, /passengerTraffic\(\{ from, to, parsecs: row\.parsecs, effect, steward, face: cryptoFace, set: ownSet\.value \}\)/, 'the query as typed, the file or the chosen set');
     assert.match(screen, /const steward = stewardOf\(who\.steward\);/);
     assert.match(screen, /const effect = effectOf\(who\.effect\);/);
-    assert.match(screen, /writeTrade\(now, \{ status: statusWithTrade\(now, \{ passengers: lots, ledger \}\) \}\);/, 'one commit: the lots and the fare lines');
+    assert.match(screen, /push\(now, \{ status: statusWithTrade\(now, \{ passengers: lots, ledger \}\) \}\);/, 'one commit: the lots and the fare lines');
     assert.match(screen, /data-traffic-dest/);
     assert.match(screen, /data-traffic-roll>Roll for passengers</);
     assert.match(screen, /:data-traffic-kind="roll\.kind"/);
@@ -166,14 +166,14 @@ test('Deliver posts the pay as income, less the file\'s late cut when the refere
     const screen = src('workspace/TrafficHere.vue');
     assert.match(screen, /freightTraffic\(\{ from, to, parsecs: row\.parsecs, effect, face: cryptoFace, set: ownSet\.value \}\)/, 'the freight roll: no steward row');
     assert.match(screen, /data-traffic-roll-freight @click="rollFreight">Roll for freight</);
-    assert.match(screen, /writeTrade\(now, \{ status: statusWithTrade\(now, \{ cargo: addCargo\(hold\.value, cargo\) \}\) \}\);/, 'Take a lot: one commit into the hold');
+    assert.match(screen, /push\(now, \{ status: statusWithTrade\(now, \{ cargo: addCargo\(hold\.value, cargo\) \}\) \}\);/, 'Take a lot: one commit into the hold');
     assert.match(screen, /data-traffic-take-lot @click="takeLot\(at\)"/);
     const vessel = src('workspace/VesselTrade.vue');
-    assert.match(vessel, /<button v-if="isFreight\(item\) && delivering !== i && !underway" type="button" class="ui-btn" :disabled="readOnly" data-deliver @click="openDeliver\(i\)">Deliver</, 'Deliver only when the ship is somewhere (DW3 round 5)');
+    assert.match(vessel, /<button v-if="isFreight\(item\) && delivering !== i && !underway && can\('trade'\) && can\('ledger'\)" type="button" class="ui-btn" :disabled="readOnly" data-deliver @click="openDeliver\(i\)">Deliver</, 'Deliver only when the ship is somewhere (DW3 round 5)');
     assert.match(vessel, /<span v-else-if="isFreight\(item\) && underway" class="vt-fine" data-deliver-wait>Deliver when the ship arrives\.</);
     assert.match(vessel, /deliveredLine\(item, today\.value, late, world\.value \? world\.value\.name : undefined\)/, 'the memo names the world the ship is at');
     assert.match(vessel, /const late = deliver\.choice === 'late' \? lateReduction\(cryptoFace\) : null;/, 'the late choice (DU48) rolls the cut');
-    assert.match(vessel, /writeTrade\(now, \{ status: statusWithTrade\(now, \{ cargo: removeCargo\(cargo\.value, i\), ledger: postLedger\(ledger\.value, line\) \}\) \}\);/, 'Deliver: the lot out, the line in, one commit');
+    assert.match(vessel, /push\(now, \{ status: statusWithTrade\(now, \{ cargo: removeCargo\(cargo\.value, i\), ledger: postLedger\(ledger\.value, line\) \}\) \}\);/, 'Deliver: the lot out, the line in, one commit');
 });
 
 test('mail (DT6c): the offer in words from the file, the one lot it makes, all or none, paid on delivery', () => {
@@ -200,7 +200,7 @@ test('mail (DT6c): the offer in words from the file, the one lot it makes, all o
     const screen = src('workspace/TrafficHere.vue');
     assert.match(screen, /mailOffer\(\{ freightDm: found\.sharedDm, armed: post\.armed, world: from, navalOrScoutRank: rank, socDm: soc, face: cryptoFace, set: ownSet\.value \}\)/, 'the freight roll\'s DM is the band (ZT0 Q8); the referee\'s word on the rest');
     assert.match(screen, /data-traffic-roll-mail>Is there mail\?</);
-    assert.match(screen, /writeTrade\(now, \{ status: statusWithTrade\(now, \{ cargo: addCargo\(hold\.value, mailLot\(offer, worldName\.value, freightDest\.value\)\) \}\) \}\);/, 'Take the mail: one lot, one commit');
+    assert.match(screen, /push\(now, \{ status: statusWithTrade\(now, \{ cargo: addCargo\(hold\.value, mailLot\(offer, worldName\.value, freightDest\.value\)\) \}\) \}\);/, 'Take the mail: one lot, one commit');
     assert.match(screen, /data-traffic-take-mail @click="takeMail"/);
 });
 
@@ -271,7 +271,7 @@ test('arrival (DW3 round 5): Deliver names the world the ship is at; boarded pas
     assert.equal(disembarkWords(3, ''), '3 passengers disembarked.');
     const vessel = src('workspace/VesselTrade.vue');
     assert.match(vessel, /data-disembark-all @click="disembarkAll">Disembark all</);
-    assert.match(vessel, /<button v-if="isBoarded\(item\) && !underway" type="button" class="ui-btn" :disabled="readOnly" data-disembark @click="disembarkOne\(i\)">Disembark</);
+    assert.match(vessel, /<button v-if="isBoarded\(item\) && !underway && can\('trade'\)" type="button" class="ui-btn" :disabled="readOnly" data-disembark @click="disembarkOne\(i\)">Disembark</);
     assert.match(vessel, /passengers: disembarked\(passengers\.value\) \}\) \}\);/, 'one commit, CRUD over undo');
     assert.match(vessel, /const underway = computed\(\(\) => \{[\s\S]*?\.underway;\s*\}\);/);
 });

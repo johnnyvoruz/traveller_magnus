@@ -14,6 +14,7 @@ import { formatDisplayNumber } from '../dossier/labels.ts';
 import { overviewModel, pickSystem, type AllegianceName, type HexBody, type SystemDoc, type TreeRow } from '../dossier/model.ts';
 import { parsecsBetween } from '../map/geometry.ts';
 import { hullTonsOf } from '../workspace/jump_fuel.ts';
+import { thrustOf } from '../workspace/jump_from_here.ts';
 import { fieldsOf } from '../workspace/sheet_fields.ts';
 import { bootChart, rememberedVersion, versionsAsk } from '../map/chart_version.ts';
 import { TruthClient } from '../map/truth_client.ts';
@@ -33,7 +34,7 @@ import { rollJumpHours } from '../campaign/travel.ts';
 import { formatDistance } from '../design/units.ts';
 import { anchorEnd, planMainworldKey, pointWords, realDistanceKmBetween, realPositionAu, type PlaceEnd } from '../orbit/distance.ts';
 import {
-    appendedTail, courseLegs, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, picturePreview, planCourse, routeFixed, routePreview, samePlace,
+    appendedTail, courseLegs, courseReady, courseTotals, editedTail, lastThrust, movedWaypoint, openingThrust, picturePreview, planCourse, routeFixed, routePreview, samePlace,
     storedRoute, tagWords, toGoWords, underwayWords, type EditedTail, type PlannedLeg, type Waypoint,
 } from '../orbit/course.ts';
 import { flightFuelWords, hoursWords, jumpEstimateWords, rollWords, type JumpRoll } from '../orbit/estimates.ts';
@@ -792,7 +793,7 @@ const laying = ref(false);
 const waypoints = ref<Waypoint[]>([]);
 /** One thrust for the course, in G; null until it is set. None is assumed. */
 const plotAccel = ref<number | null>(null);
-/** The thrust last set for each ship this visit; before that, its last flight leg's (course.ts lastThrust). */
+/** The thrust last set for each ship this visit. Before that, the sheet's Manoeuvre Drive Output, then the last flight (course.ts openingThrust). */
 const thrustSet = new Map<string, number>();
 const canPlot = computed(() => canSetDate.value && ships.value.length > 0 && state.value === 'ready');
 /** System Comms sits above the planet tabs while the switch is on for this device. */
@@ -1371,7 +1372,7 @@ const flightPreview = computed(() => {
     return lead.value ? [...kept.slice(0, lead.value), ...shown] : shown;
 });
 
-/** Takes the selected ship in hand, or lets it go. The thrust offered is the one last used for that ship; the first time there is none. */
+/** Takes the selected ship in hand, or lets it go. The thrust offered is the one last set this visit, else the sheet's whole G, else the last flight. */
 function setPlotting(on: boolean): void {
     if (on && !canPlot.value) return;
     plotting.value = on;
@@ -1380,7 +1381,11 @@ function setPlotting(on: boolean): void {
     held.value = null;
     const id = selectedShip.value;
     const record = shipRecord.value;
-    plotAccel.value = on && id ? thrustSet.get(id) ?? (record ? lastThrust(trackOf(record)) : null) : null;
+    plotAccel.value = on && id ? openingThrust({
+        visit: thrustSet.has(id) ? (thrustSet.get(id) as number) : null,
+        sheet: record ? thrustOf(fieldsOf(record.sheet)) : null,
+        flown: record ? lastThrust(trackOf(record)) : null,
+    }) : null;
     laying.value = on && plotAccel.value !== null;
     if (on && plotAccel.value === null) void nextTick(() => { if (consoleEl.value) consoleEl.value.focusThrottle(); });
 }
@@ -2906,9 +2911,11 @@ async function saveImage(choice: SheetChoice): Promise<void> {
 
   .orbit-stage-tools {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     margin: 6px 8px 0;
+    min-width: 0;
+    overflow-x: auto;
   }
 
   .orbit-stage-chips {

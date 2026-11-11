@@ -10,7 +10,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { passengerSeen, paymentSeen } from '@voyage/shared';
 import { applyCampaignChanges, installCampaignSchema, readCampaign } from '../../apps/api/src/universe/campaign.ts';
+import { officialFare } from '../../apps/api/src/universe/trade_door.ts';
 import { runWrangler } from './session.js';
 import { startDev, stopDev } from './server.js';
 
@@ -203,6 +205,227 @@ test('two appends land, and a stale whole-record save drops neither', () => {
     assert.equal(shipOf(sql).status.cargo.length, 2);
 });
 
+test('the piece names which of the member\'s characters acts', () => {
+    const sql = open();
+    applyCampaignChanges(sql, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(BEN, { type: 'person', name: 'Ben' }),
+            record(SHIP, { status: crew() }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const one = applyCampaignChanges(sql, { appends: [{ id: SHIP, append: { ledger: [line('Ada')] } }] }, NOW, false, { userId: 'ada', personId: ADA });
+    assert.equal(one.conflicts.length, 0);
+    assert.equal(shipOf(sql).status.ledger[0].by, ADA);
+    const both = { userId: 'ada', personId: ADA, personIds: [ADA, BEN] };
+    const unnamed = refusal(() => applyCampaignChanges(sql, { appends: [{ id: SHIP, append: { ledger: [line('Which')] } }] }, NOW, false, both));
+    assert.equal(unnamed.code, 'validation');
+    assert.equal(unnamed.message, 'That request could not be read. Try again.');
+    const named = applyCampaignChanges(sql, { appends: [{ id: SHIP, personId: BEN, append: { ledger: [line('Ben')] } }] }, NOW, false, both);
+    assert.equal(named.conflicts.length, 0);
+    assert.equal(shipOf(sql).status.ledger[1].by, BEN);
+    const crossed = refusal(() => applyCampaignChanges(sql, { appends: [{ id: SHIP, personId: ADA, append: { ledger: [{ ...line('Cross'), by: BEN }] } }] }, NOW, false, both));
+    assert.equal(crossed.code, 'forbidden');
+    assert.equal(crossed.message, 'You cannot change that.');
+    const outsider = 'cr_00000000-0000-4000-8000-0000000000b9';
+    const other = refusal(() => applyCampaignChanges(sql, { appends: [{ id: SHIP, personId: outsider, append: { ledger: [line('No')] } }] }, NOW, false, both));
+    assert.equal(other.code, 'forbidden');
+    assert.equal(shipOf(sql).status.ledger.length, 2);
+});
+
+/** High over 2 parsecs is 14000 Cr (rules/mgt2e_trade.json fares, assets/trade.txt:162). */
+function highFare() {
+    const fare = officialFare('High', 2);
+    if (!fare || fare.credits !== 14000 || fare.name !== 'High') throw new Error('the official high fare for 2 parsecs changed');
+    return fare;
+}
+
+function tradeShip(passengers, extra = {}) {
+    return {
+        ledger: [],
+        passengers,
+        crew: [{ personId: ADA, role: 'Captain' }],
+        roles: [{ name: 'Captain', ledger: true, trade: true, locker: true }],
+        ...extra,
+    };
+}
+
+function boardedPiece(lot, index, over = {}) {
+    const fare = highFare();
+    return {
+        index,
+        class: 'High',
+        fareCr: fare.credits,
+        parsecs: 2,
+        seen: passengerSeen(lot),
+        ...over,
+    };
+}
+
+test('Board posts the file fare on the stored row, and a stale index is refused', () => {
+    const adaLot = { personId: ADA, label: 'a berth', class: 'High' };
+    const other = { label: 'Other', class: 'Low' };
+    const sql = open();
+    applyCampaignChanges(sql, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(SHIP, { status: tradeShip([adaLot, other]) }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const ada = { userId: 'ada', personId: ADA };
+    const posted = applyCampaignChanges(sql, {
+        appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(adaLot, 0)] } } }],
+    }, NOW, false, ada);
+    assert.equal(posted.conflicts.length, 0);
+    const ship = shipOf(sql);
+    assert.equal(ship.status.passengers[0].class, 'High');
+    assert.equal(ship.status.passengers[0].fareCr, 14000);
+    assert.equal(ship.status.passengers[0].label, 'a berth');
+    assert.deepEqual(ship.status.passengers[1], other);
+    assert.equal(ship.status.ledger.length, 1);
+    assert.equal(ship.status.ledger[0].kind, 'income');
+    assert.equal(ship.status.ledger[0].amount, 14000);
+    assert.equal(ship.status.ledger[0].memo, 'Fare: Ada, High passage, 2 parsecs');
+    assert.equal(ship.status.ledger[0].by, ADA);
+    assert.deepEqual(ship.status.ledger[0].when, { year: 1105, day: 2 });
+    const low = officialFare('Low', 1);
+    if (!low || low.credits !== 700 || low.name !== 'Low') throw new Error('the official low fare for 1 parsec changed');
+    const one = applyCampaignChanges(sql, {
+        appends: [{ id: SHIP, append: { passengers: { board: [{ index: 1, class: 'Low', fareCr: low.credits, parsecs: 1, seen: passengerSeen(other) }] } } }],
+    }, NOW, false, ada);
+    assert.equal(one.conflicts.length, 0);
+    assert.equal(shipOf(sql).status.passengers[1].fareCr, 700);
+    assert.equal(shipOf(sql).status.ledger[1].memo, 'Fare: Other, Low passage, 1 parsec');
+    const again = refusal(() => applyCampaignChanges(sql, {
+        appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(ship.status.passengers[0], 0)] } } }],
+    }, NOW, false, ada));
+    assert.equal(again.code, 'validation');
+    assert.equal(again.message, 'That request could not be read. Try again.');
+    assert.equal(shipOf(sql).status.ledger.length, 2);
+    const fresh = open();
+    applyCampaignChanges(fresh, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(SHIP, { status: tradeShip([adaLot, other]) }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const stale = refusal(() => applyCampaignChanges(fresh, {
+        appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(other, 0)] } } }],
+    }, NOW, false, ada));
+    assert.equal(stale.code, 'validation');
+    const past = refusal(() => applyCampaignChanges(fresh, {
+        appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(adaLot, 4)] } } }],
+    }, NOW, false, ada));
+    assert.equal(past.code, 'validation');
+    const wrong = refusal(() => applyCampaignChanges(fresh, {
+        appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(adaLot, 0, { fareCr: 1 })] } } }],
+    }, NOW, false, ada));
+    assert.equal(wrong.code, 'validation');
+    assert.equal(shipOf(fresh).status.ledger.length, 0);
+    assert.equal(shipOf(fresh).status.passengers[0].fareCr, undefined);
+    const noTrade = { ...tradeShip([adaLot, other]), roles: [{ name: 'Captain', ledger: true, trade: false, locker: true }] };
+    const noLedger = { ...tradeShip([adaLot, other]), roles: [{ name: 'Captain', ledger: false, trade: true, locker: true }] };
+    for (const status of [noTrade, noLedger]) {
+        const held = open();
+        applyCampaignChanges(held, {
+            records: [
+                record(ADA, { type: 'person', name: 'Ada' }),
+                record(SHIP, { status }),
+            ],
+            settings: settings([SHIP]),
+        }, NOW);
+        const denied = refusal(() => applyCampaignChanges(held, {
+            appends: [{ id: SHIP, append: { passengers: { board: [boardedPiece(adaLot, 0)] } } }],
+        }, NOW, false, ada));
+        assert.equal(denied.code, 'forbidden');
+        assert.equal(denied.message, 'You cannot change that.');
+        assert.equal(shipOf(held).status.ledger.length, 0);
+        assert.equal(shipOf(held).status.passengers[0].fareCr, undefined);
+    }
+});
+
+test('Pay now posts the stored payment and moves its due day', () => {
+    const payment = { amountCr: 5000, everyDays: 30, nextDueDay: { year: 1105, day: 10 }, payee: 'Bank' };
+    const sql = open();
+    applyCampaignChanges(sql, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(SHIP, { status: tradeShip([], { payment }) }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const ada = { userId: 'ada', personId: ADA };
+    const paid = applyCampaignChanges(sql, {
+        appends: [{ id: SHIP, append: { payNow: true, paymentSeen: paymentSeen(payment) } }],
+    }, NOW, false, ada);
+    assert.equal(paid.conflicts.length, 0);
+    const ship = shipOf(sql);
+    assert.equal(ship.status.ledger.length, 1);
+    assert.equal(ship.status.ledger[0].kind, 'expense');
+    assert.equal(ship.status.ledger[0].amount, -5000);
+    assert.equal(ship.status.ledger[0].memo, 'Ship payment to Bank');
+    assert.equal(ship.status.ledger[0].by, ADA);
+    assert.deepEqual(ship.status.ledger[0].when, { year: 1105, day: 2 });
+    assert.deepEqual(ship.status.payment.nextDueDay, { year: 1105, day: 40 });
+    assert.equal(ship.status.payment.amountCr, 5000);
+    assert.equal(ship.status.payment.payee, 'Bank');
+    const stalePay = { ...payment, amountCr: 1 };
+    const fresh = open();
+    applyCampaignChanges(fresh, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(SHIP, { status: tradeShip([], { payment }) }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const stale = refusal(() => applyCampaignChanges(fresh, {
+        appends: [{ id: SHIP, append: { payNow: true, paymentSeen: paymentSeen(stalePay) } }],
+    }, NOW, false, ada));
+    assert.equal(stale.code, 'validation');
+    assert.equal(stale.message, 'That request could not be read. Try again.');
+    assert.deepEqual(shipOf(fresh).status.payment, payment);
+    assert.equal(shipOf(fresh).status.ledger.length, 0);
+    const unpaid = open();
+    applyCampaignChanges(unpaid, {
+        records: [
+            record(ADA, { type: 'person', name: 'Ada' }),
+            record(SHIP, { status: tradeShip([]) }),
+        ],
+        settings: settings([SHIP]),
+    }, NOW);
+    const missing = refusal(() => applyCampaignChanges(unpaid, {
+        appends: [{ id: SHIP, append: { payNow: true, paymentSeen: paymentSeen(payment) } }],
+    }, NOW, false, ada));
+    assert.equal(missing.code, 'validation');
+    const bare = refusal(() => applyCampaignChanges(fresh, {
+        appends: [{ id: SHIP, append: { payNow: true } }],
+    }, NOW, false, ada));
+    assert.equal(bare.code, 'validation');
+    for (const roles of [
+        [{ name: 'Captain', ledger: true, trade: false, locker: true }],
+        [{ name: 'Captain', ledger: false, trade: true, locker: true }],
+    ]) {
+        const held = open();
+        applyCampaignChanges(held, {
+            records: [
+                record(ADA, { type: 'person', name: 'Ada' }),
+                record(SHIP, { status: tradeShip([], { payment, roles }) }),
+            ],
+            settings: settings([SHIP]),
+        }, NOW);
+        const denied = refusal(() => applyCampaignChanges(held, {
+            appends: [{ id: SHIP, append: { payNow: true, paymentSeen: paymentSeen(payment) } }],
+        }, NOW, false, ada));
+        assert.equal(denied.code, 'forbidden');
+        assert.equal(denied.message, 'You cannot change that.');
+        assert.deepEqual(shipOf(held).status.payment.nextDueDay, payment.nextDueDay);
+        assert.equal(shipOf(held).status.ledger.length, 0);
+    }
+});
+
 function authSecret() {
     const text = readFileSync(path.join(root, 'apps', 'api', '.dev.vars'), 'utf8');
     const line = text.split(/\r?\n/).find((item) => item.startsWith('BETTER_AUTH_SECRET='));
@@ -334,6 +557,44 @@ if (process.env.RUN_API_TESTS !== '1') {
             assert.equal(ship.status.ledger.length, 1);
             assert.equal(ship.status.ledger[0].by, ADA);
             assert.equal(ship.status.cargo[0].label, 'Ore');
+            const both = await jsonFetch(`${base}/api/universes/${id}/players/apada${stamp}`, {
+                method: 'PATCH',
+                headers: ownerHeaders,
+                body: JSON.stringify({ personIds: [ADA, BEN] }),
+            });
+            assert.equal(both.status, 200, JSON.stringify(both.body));
+            assert.deepEqual(both.body.data.personIds, [ADA, BEN]);
+            const unnamed = await jsonFetch(changes, {
+                method: 'PATCH',
+                headers: adaHeaders,
+                body: JSON.stringify({ appends: [{ id: SHIP, append: { ledger: [line('Which')] } }] }),
+            });
+            assert.equal(unnamed.status, 400, JSON.stringify(unnamed.body));
+            assert.equal(unnamed.body.error.message, 'That request could not be read. Try again.');
+            const named = await jsonFetch(changes, {
+                method: 'PATCH',
+                headers: adaHeaders,
+                body: JSON.stringify({ appends: [{ id: SHIP, personId: BEN, append: { ledger: [line('Ben')] } }] }),
+            });
+            assert.equal(named.status, 200, JSON.stringify(named.body));
+            const crossed = await jsonFetch(changes, {
+                method: 'PATCH',
+                headers: adaHeaders,
+                body: JSON.stringify({ appends: [{ id: SHIP, personId: ADA, append: { ledger: [{ ...line('Cross'), by: BEN }] } }] }),
+            });
+            assert.equal(crossed.status, 403, JSON.stringify(crossed.body));
+            assert.equal(crossed.body.error.message, 'You cannot change that.');
+            const outsiderId = 'cr_00000000-0000-4000-8000-0000000000b9';
+            const other = await jsonFetch(changes, {
+                method: 'PATCH',
+                headers: adaHeaders,
+                body: JSON.stringify({ appends: [{ id: SHIP, personId: outsiderId, append: { ledger: [line('No')] } }] }),
+            });
+            assert.equal(other.status, 403, JSON.stringify(other.body));
+            const after = await jsonFetch(`${base}/api/universes/${id}/campaign`, { headers: { cookie: owner } });
+            const landed = after.body.data.records.find((row) => row.id === SHIP);
+            assert.equal(landed.status.ledger.length, 2);
+            assert.equal(landed.status.ledger[1].by, BEN);
         } finally {
             if (child) stopDev(child.pid);
             if (ownedPersist) rmSync(persistTo, { recursive: true, force: true });

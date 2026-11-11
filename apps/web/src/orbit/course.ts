@@ -194,6 +194,17 @@ export function lastThrust(track: readonly Pick<TrackLeg, 'mode' | 'accelG'>[] |
     return null;
 }
 
+/**
+ * The thrust the console opens on. A thrust already set for this ship this visit stays.
+ * Otherwise a whole G from the sheet (Manoeuvre Drive Output, already a console notch) opens it.
+ * With no whole number, the last flight stands.
+ */
+export function openingThrust(at: { visit: number | null; sheet: number | null; flown: number | null }): number | null {
+    if (at.visit !== null) return at.visit;
+    if (at.sheet !== null) return at.sheet;
+    return at.flown;
+}
+
 /** Whether two ends of a leg are the same place: the same body, or the same point. */
 export function samePlace(a: PlaceEnd | null, b: PlaceEnd | null): boolean {
     if (a === null || b === null) return false;

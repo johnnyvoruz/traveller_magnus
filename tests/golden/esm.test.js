@@ -40,8 +40,10 @@ const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 // those corrections changed reads its corrected fixture here; the legacy fixture is kept unchanged
 // for legacy.test.js, which documents what the old app did.
 // Engine 1.2.0 decides the surface liquid once from final temperatures and keeps a charted
-// mainworld's atm/hydro (findings/liquid_temperature_minimal.md); its fixtures are
-// engine_<version>, read from packages/engines/package.json.
+// mainworld's atm/hydro (findings/liquid_temperature_minimal.md).
+// Engine 1.3.0 follows the audited May 2024 rows in findings/wbh_may24/11_alignment.md.
+// Engine 1.4.0 settles the rows in findings/wbh_may24/12_settled.md.
+// Fixtures are engine_<version>, read from packages/engines/package.json.
 const ENGINE_VERSION = createRequire(import.meta.url)('../../packages/engines/package.json').version;
 const CORRECTED = path.join(FIX, 'engine_' + ENGINE_VERSION);
 

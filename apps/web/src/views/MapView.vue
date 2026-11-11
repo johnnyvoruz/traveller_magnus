@@ -12,6 +12,11 @@ import { sameDay, stardate } from '../workspace/stardate.ts';
 import { JumpRingLayer, jumpNumberOf, jumpRing, type JumpRing, type RingInk } from '../map/jump_ring.ts';
 import { frameFor, NewsLayer, newsHoverWords, nodeAt, type NewsHover, type NewsInk, type Ripple, type RippleMode } from '../map/news_layer.ts';
 import NewsScrubber from '../map/NewsScrubber.vue';
+import DirectionsCorner from '../map/DirectionsCorner.vue';
+import DirectionsPanel from '../map/DirectionsPanel.vue';
+import { DirectionsLayer, stopPoints, type DirectionsInk } from '../map/directions_layer.ts';
+import { jumpForBox, type DirectionsIndex } from '../map/directions.ts';
+import type { RouteEnd } from '../map/route_plan.ts';
 import { onNewsAsk, type NewsAsk } from '../map/news_ask.ts';
 import { newsArrivals } from '../news/arrivals.ts';
 import { buildNewsGraph, type NewsIndex } from '../news/graph.ts';
@@ -219,6 +224,13 @@ const chartHoverEl = ref<InstanceType<typeof ChartHover> | null>(null);
 const ringEl = ref<HTMLCanvasElement | null>(null);
 let ringLayer: JumpRingLayer | null = null;
 let ringInk: RingInk = { line: '', fill: '' };
+// Directions (DN1): the panel, and the route on a layer of its own over the chart. Nothing is saved.
+const directionsEl = ref<HTMLCanvasElement | null>(null);
+let directionsLayer: DirectionsLayer | null = null;
+let directionsInk: DirectionsInk = { line: '', casing: '' };
+let directionsPoints: { x: number; y: number }[] | null = null;
+const directionsOpen = ref(false);
+let unregisterDirections: (() => void) | null = null;
 let chartPanning = false;
 let chartHoverFrame = 0;
 /** The drag under way: the chart moving, or a box. */
@@ -745,6 +757,10 @@ function onEscape(): void {
         stopLocate();
         return;
     }
+    if (directionsOpen.value) {
+        closeDirections();
+        return;
+    }
     // Build: a draft first (it asks before it is lost), then the sheet, a preview, a many-hex selection, each before the panel.
     if (buildReady()) {
         // A sector being moved, then a name being typed, each before anything else of Build's.
@@ -953,6 +969,7 @@ function frame(): void {
         renderer.setPublicOverview(publicOverview());
         const drawn = renderer.draw(cam);
         if (ringLayer) ringLayer.draw(cam, viewport(), shownRing.value, ringInk);
+        if (directionsLayer) directionsLayer.draw(cam, viewport(), directionsPoints, directionsInk);
         if (newsLayer) newsLayer.draw(cam, viewport(), ripple && news.value ? frameFor(ripple, news.value.t) : null, newsInk, newsHoverNow());
         // The camera may have moved under a still mouse: the hover follows, at most once a frame.
         if (pointerAt) queueChartHover();
@@ -1239,6 +1256,7 @@ function onResize(): void {
     renderer.setTitleTop(titleTop());
     if (traffic) traffic.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (ringLayer) ringLayer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
+    if (directionsLayer) directionsLayer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (newsLayer) newsLayer.resize(el.clientWidth, el.clientHeight, devicePixelRatio());
     if (pendingApply) applyRoute();
     markDirty();
@@ -1352,6 +1370,11 @@ onMounted(() => {
         const signal = getComputedStyle(el).getPropertyValue('--signal').trim();
         ringInk = { line: signal, fill: signal };
     }
+    if (directionsEl.value) {
+        directionsLayer = new DirectionsLayer(directionsEl.value);
+        const style = getComputedStyle(el);
+        directionsInk = { line: style.getPropertyValue('--signal').trim(), casing: style.getPropertyValue('--bg-0').trim() };
+    }
     if (newsEl.value) {
         newsLayer = new NewsLayer(newsEl.value);
         const style = getComputedStyle(el);
@@ -1460,6 +1483,12 @@ onMounted(() => {
         name: 'Save image',
         runnable: () => renderer !== null && chart !== null,
         run: () => { openSaveSheet(); },
+    });
+    unregisterDirections = registerCommand({
+        id: 'directions',
+        name: 'Directions',
+        keys: ['d'],
+        run: () => { toggleDirections(); },
     });
     unregisterQuickNote = registerCommand({
         id: 'quick-note',
@@ -1834,6 +1863,57 @@ const shownRing = computed((): JumpRing | null => {
     return jumpRing({ q: global.q, r: global.r }, jump);
 });
 watch(shownRing, () => markDirty());
+
+// ---- Directions (DN1) -------------------------------------------------------------------------------------
+
+/** The sectors the chart has loaded, for the planner: the open universe's rows laid over the chart's. */
+function routeIndexes(): DirectionsIndex[] {
+    if (!chart) return [];
+    const out: DirectionsIndex[] = [];
+    for (const item of chart.sectors) {
+        const index = sectorIndex(item.slug);
+        if (index) out.push(index);
+    }
+    return out;
+}
+
+/** The hex selected on the chart, else the world open in the dossier. */
+function selectedEnd(): RouteEnd | null {
+    if (selected) return { sector: selected.slug, hex: selected.hhhh };
+    const open = dossier.value as { state?: { slug?: unknown; hex?: unknown } } | null;
+    const state = open && open.state ? open.state : null;
+    return state && typeof state.slug === 'string' && typeof state.hex === 'string' ? { sector: state.slug, hex: state.hex } : null;
+}
+
+/** The party's first ship whose sheet gives a jump of 1 to 6, for "Use … 's jump". */
+const directionsShip = computed((): { name: string; jump: number } | null => {
+    void campaign.seq;
+    const party = campaign.settings ? campaign.settings.party : null;
+    for (const id of party ? party.vesselIds : []) {
+        const ship = campaign.records[id];
+        if (!ship || ship.deleted || ship.type !== 'vessel') continue;
+        const jump = jumpForBox(jumpNumberOf(fieldsOf(ship.sheet)));
+        if (jump !== null) return { name: ship.name, jump };
+    }
+    return null;
+});
+
+function showDirections(stops: RouteEnd[] | null): void {
+    directionsPoints = stops ? stopPoints(stops, sectorOf) : null;
+    markDirty();
+}
+
+function closeDirections(): void {
+    directionsOpen.value = false;
+    directionsPoints = null;
+    markDirty();
+}
+
+/** The corner button and the d command open and close the same panel. */
+function toggleDirections(): void {
+    if (directionsOpen.value) closeDirections();
+    else directionsOpen.value = true;
+}
 
 // ---- How fast news travels (spec_xboat_ripples.md §3; streams/D.md XD1) ----------------------------------
 
@@ -3272,6 +3352,7 @@ onBeforeUnmount(() => {
     if (unregisterCampaign) unregisterCampaign();
     if (unregisterLocate) unregisterLocate();
     if (unregisterQuickNote) unregisterQuickNote();
+    if (unregisterDirections) unregisterDirections();
     if (unregisterSave) unregisterSave();
     if (unregisterNews) unregisterNews();
     if (unregisterNewsTo) unregisterNewsTo();
@@ -3327,6 +3408,7 @@ onBeforeUnmount(() => {
       :key-at="placeKeyAt"
     />
     <canvas ref="ringEl" class="jump-ring" aria-hidden="true"></canvas>
+    <canvas ref="directionsEl" class="directions-layer" aria-hidden="true"></canvas>
     <canvas ref="newsEl" class="news-layer" aria-hidden="true"></canvas>
     <canvas ref="trafficEl" class="traffic" aria-hidden="true"></canvas>
     <ChartHover ref="chartHoverEl" />
@@ -3355,6 +3437,15 @@ onBeforeUnmount(() => {
     <BuildMenu v-if="menuRef && buildMenu" :title="buildMenu.title" :items="buildMenu.items" :anchor="menuRef.anchor" @pick="pickBuildMenu" @close="closeBuildMenu" />
     <FirstHint v-if="hintOn && !capture" @dismiss="dismissHint" />
     <QuickCapture v-if="capture" :context="capture" @close="closeCapture" @open="openCaptured" />
+    <DirectionsPanel
+      v-if="directionsOpen"
+      :indexes="routeIndexes"
+      :selected="selectedEnd"
+      :party-jump="directionsShip ? directionsShip.jump : null"
+      :party-ship="directionsShip ? directionsShip.name : ''"
+      @route="showDirections"
+      @close="closeDirections"
+    />
     <NewsScrubber
       v-if="news"
       :reverse="news.mode === 'to'"
@@ -3373,6 +3464,7 @@ onBeforeUnmount(() => {
     />
     <MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" />
     <SaveImageButton v-if="!shipSheet && versionRef" title="Save an image of the chart" @click="openSaveSheet" />
+    <DirectionsCorner v-if="!shipSheet" :open="directionsOpen" @click="toggleDirections" />
     <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
     <!-- The pane paints above this view. The date has to leave it, or a full sheet covers the chip. -->
     <Teleport to=".app">
@@ -3435,6 +3527,27 @@ onBeforeUnmount(() => {
   z-index: 3;
 }
 
+/* On a phone the world sheet covers the lower half. The button sits above it, as the orbit card does. */
+@media (max-width: 599px) {
+  .map > .save-img-btn {
+    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+}
+
+/* Directions (CU47): one step further left, the same gap the help button leaves for Save image. */
+.map > .dir-corner {
+  position: absolute;
+  right: calc(var(--chrome-inset) + 96px);
+  bottom: var(--chrome-inset);
+  z-index: 3;
+}
+
+@media (max-width: 599px) {
+  .map > .dir-corner {
+    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+}
+
 .map > canvas {
   position: absolute;
   top: 0;
@@ -3450,6 +3563,10 @@ onBeforeUnmount(() => {
 }
 /* The jump-range ring (DU2) takes no pointer either: the chart under it is clicked as before. */
 .map > canvas.jump-ring {
+  pointer-events: none;
+}
+/* Nor the Directions route's layer (DN1). */
+.map > canvas.directions-layer {
   pointer-events: none;
 }
 /* Nor the news ripple's layer (XD1). */

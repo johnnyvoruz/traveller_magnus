@@ -38,7 +38,7 @@ function cssOf(rgb: RGB): string {
   <aside class="paint-rail" data-paint-rail aria-label="Paint">
     <div class="paint-head">
       <p class="paint-count" data-paint-count role="status">{{ paintedWords(count) }}</p>
-      <button type="button" class="ui-btn paint-clear-map" data-paint-clear-map :disabled="count === 0 || busy" title="Every hex back to the generated map. Undo is in the message that follows" @click="emit('clear')">Clear map</button>
+      <button type="button" class="ui-btn paint-clear-map" data-paint-clear-map :disabled="count === 0 || busy" title="Puts every hex back on the generated map. Undo is in the message that follows." @click="emit('clear')">Clear map</button>
     </div>
     <p v-if="note" class="paint-note" role="status" data-paint-note>{{ note }}</p>
     <div class="paint-groups">

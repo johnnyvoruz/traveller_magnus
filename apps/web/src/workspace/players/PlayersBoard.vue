@@ -3,11 +3,16 @@
  * The referee's players, as drawn (players_build_plan.md P5): the invite link, then the players in
  * Playing and Archived with Which one, Archive and Bring back. It only draws what it is given and
  * says what was pressed; PlayersSection.vue makes the calls.
+ *
+ * BM2c (Johnny 141): Which one takes several. Each party character is a tick box; ticking or clearing one
+ * sends the member's whole list. Under the handle, one line per character the member plays, with their
+ * crew line; "No character yet" with none. A sentence beside the row says when a character moved from
+ * another player.
  */
 import type { PlayerList } from '@voyage/shared';
 import Icon from '../../design/Icon.vue';
 import { ref } from 'vue';
-import { inviteLine, isFull, memberLine, PLAYERS_FULL, type InviteShown, type MemberRow } from './players_words.ts';
+import { inviteLine, isFull, memberLine, NO_CHARACTER, PLAYERS_FULL, tiedIds, toggledIds, type InviteShown, type MemberRow } from './players_words.ts';
 import { isDefaultName, stillCalledWords } from '../campaign_name.ts';
 import CampaignName from '../CampaignName.vue';
 
@@ -22,8 +27,8 @@ const props = defineProps<{
     listWords: string;
     /** The player a call is running for. */
     busyUser: string | null;
-    /** A refusal to say beside one player. */
-    rowWords: { userId: string; text: string } | null;
+    /** A refusal to say beside one player; `said` is news rather than a refusal (a character moved). */
+    rowWords: { userId: string; text: string; said?: boolean } | null;
     /** Who a player can be: the party's people as players see them. */
     people: { id: string; name: string }[];
     /** A person's crew line ("Captain of Kestrel Dawn"), by person id (DS2). */
@@ -36,12 +41,30 @@ const emit = defineEmits<{
     revoke: [];
     archive: [member: MemberRow];
     back: [member: MemberRow];
-    person: [member: MemberRow, personId: string | null];
+    people: [member: MemberRow, personIds: string[]];
 }>();
 
 /** Rename pressed: the name box in place of the line (DU44). */
 const renaming = ref(false);
 const personName = (id: string | null): string => (id ? props.people.find((item) => item.id === id)?.name ?? '' : '');
+
+/** The member's characters as lines: the name, and the crew line when they crew a party ship. */
+function tiedLines(member: MemberRow): { id: string; text: string }[] {
+    return tiedIds(member).map((id) => {
+        const name = personName(id) || 'Someone no longer in the party';
+        const line = (props.roles ?? {})[id];
+        return { id, text: line ? name + ' · ' + line : name };
+    });
+}
+
+/** Characters the member plays who are no longer in the party: still listed, so they can be cleared. */
+function gone(member: MemberRow): string[] {
+    return tiedIds(member).filter((id) => !personName(id));
+}
+
+function tick(member: MemberRow, personId: string, event: Event): void {
+    emit('people', member, toggledIds(tiedIds(member), personId, (event.target as HTMLInputElement).checked));
+}
 </script>
 
 <template>
@@ -88,18 +111,23 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
           <span class="players-who">
             <b>{{ member.handle }}</b>
             <small>{{ memberLine(member) }}</small>
-            <small v-if="member.personId && (roles ?? {})[member.personId]" class="players-role" :data-players-role="member.userId">{{ (roles ?? {})[member.personId] }}</small>
+            <small v-for="line in tiedLines(member)" :key="line.id" class="players-role" :data-players-role="member.userId">{{ line.text }}</small>
+            <small v-if="!tiedLines(member).length" class="players-role" :data-players-none="member.userId">{{ NO_CHARACTER }}</small>
           </span>
-          <label class="players-which">
-            <span>Which one</span>
-            <select :value="member.personId ?? ''" :disabled="readOnly || busyUser !== null" :aria-label="'Which person ' + member.handle + ' plays'" @change="emit('person', member, ($event.target as HTMLSelectElement).value || null)">
-              <option value="">Not chosen yet</option>
-              <option v-for="person in people" :key="person.id" :value="person.id">{{ person.name }}</option>
-              <option v-if="member.personId && !personName(member.personId)" :value="member.personId">Someone no longer in the party</option>
-            </select>
-          </label>
+          <fieldset class="players-which" :data-players-which="member.userId" :disabled="readOnly || busyUser !== null">
+            <legend>Which one</legend>
+            <span v-if="!people.length && !gone(member).length" class="players-fine">Nobody in the party yet.</span>
+            <label v-for="person in people" :key="person.id" class="players-tick">
+              <input type="checkbox" :checked="tiedIds(member).includes(person.id)" :aria-label="person.name + ', played by ' + member.handle" @change="tick(member, person.id, $event)" />
+              {{ person.name }}
+            </label>
+            <label v-for="id in gone(member)" :key="id" class="players-tick">
+              <input type="checkbox" checked :aria-label="'Someone no longer in the party, played by ' + member.handle" @change="tick(member, id, $event)" />
+              Someone no longer in the party
+            </label>
+          </fieldset>
           <button type="button" class="ui-btn" :disabled="readOnly || busyUser !== null" :data-players-archive="member.userId" @click="emit('archive', member)">Archive</button>
-          <p v-if="rowWords && rowWords.userId === member.userId" class="players-row-words" role="status">{{ rowWords.text }}</p>
+          <p v-if="rowWords && rowWords.userId === member.userId" class="players-row-words" :class="{ 'is-said': rowWords.said }" role="status" :data-players-said="rowWords.said ? member.userId : undefined">{{ rowWords.text }}</p>
         </li>
       </ul>
       <template v-if="list.archived.length">
@@ -205,14 +233,36 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
 
 .players-which {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px 12px;
+  min-width: 0;
+  max-width: 280px;
+  margin: 0;
+  padding: 0;
+  border: 0;
   color: var(--text-muted);
   font: 600 11px/1 var(--font-text);
 }
 
-.players-which select {
-  max-width: 180px;
+.players-which legend {
+  float: left;
+  margin-right: 4px;
+  padding: 0;
+}
+
+.players-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-1);
+  font: 400 12.5px/1.3 var(--font-text);
+  cursor: pointer;
+}
+
+.players-which:disabled .players-tick {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .players-row-words {
@@ -222,14 +272,25 @@ const personName = (id: string | null): string => (id ? props.people.find((item)
   font: 400 12px/1.4 var(--font-text);
 }
 
+.players-row-words.is-said {
+  color: var(--text-1);
+}
+
 @media (max-width: 680px) {
   .players-which {
     flex: 1 0 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    max-width: none;
   }
 
-  .players-which select {
-    flex: 1 1 auto;
-    max-width: none;
+  .players-which legend {
+    float: none;
+    margin: 0 0 2px;
+  }
+
+  .players-tick {
     min-height: 44px;
   }
 }

@@ -108,5 +108,5 @@ export function withEdits(proposal: ProposalValue, values: Readonly<Record<strin
     const where = issue ? issue.path.filter((part) => typeof part === 'string').pop() : undefined;
     if (where === 'name') return { error: 'Enter a name.' };
     if (where === 'set') return { error: 'Nothing is left to change. Drop the proposal instead.' };
-    return { error: "That can't be saved." };
+    return { error: 'That cannot be saved.' };
 }

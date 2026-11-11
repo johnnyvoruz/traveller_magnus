@@ -12,7 +12,7 @@ import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { formatCredits } from '../campaign/money.ts';
 import Icon from '../design/Icon.vue';
 import {
-    KIND_WORDS, canAccept, canVoid, dayBeyondBound, dayPlaceholder, lineDraft, registerRows, type CharacterRegister,
+    KIND_WORDS, TRANSFER_NOT_VOIDED, canAccept, canVoid, isTransferHalf, dayBeyondBound, dayPlaceholder, lineDraft, registerRows, type CharacterRegister,
 } from './credit_register.ts';
 
 const props = defineProps<{
@@ -100,7 +100,7 @@ watch(() => props.register.id, closeLine);
   <div v-if="shown" class="creg" data-credit-register :data-credit-status="register.status">
     <!-- The referee who cannot see the register: a line that waits for the player. -->
     <template v-if="!access">
-      <p class="creg-fine">You can't see this character's register. A line you add waits for the player to accept it.</p>
+      <p class="creg-fine">You cannot see this character's register. A line you add waits for the player to accept it.</p>
       <button v-if="!lineOpen" type="button" class="ui-btn" data-credit-add @click="openLine"><Icon name="plus" :size="12" />Add a line</button>
     </template>
     <template v-else-if="register.status === 'ready'">
@@ -137,7 +137,7 @@ watch(() => props.register.id, closeLine);
       </label>
       <label class="creg-fld creg-wide"><span>For</span><input v-model="line.memo" class="creg-box" maxlength="80" placeholder="Mustering-out pay"></label>
       <label class="creg-fld"><span>Date</span><input v-model="line.date" class="creg-box creg-num" inputmode="numeric" :placeholder="placeholder" :disabled="noDate"></label>
-      <p v-if="noDate" class="creg-fine">The register can't keep this campaign's date yet. The line is kept without one.</p>
+      <p v-if="noDate" class="creg-fine">The register cannot keep this campaign's date yet. The line is kept without one.</p>
       <p v-else-if="!access" class="creg-fine">The line is marked pending until the player accepts it.</p>
       <p v-if="lineError" class="creg-err" role="alert">{{ lineError }}</p>
       <div class="creg-acts">
@@ -182,6 +182,7 @@ watch(() => props.register.id, closeLine);
               <td v-if="canPost" class="creg-acts-cell">
                 <button v-if="canAccept(row.line, you)" type="button" class="ui-btn creg-act" data-credit-accept :disabled="register.busy" @click="accept(row.line.id)">Accept</button>
                 <button v-else-if="canVoid(row.line, register.lines)" type="button" class="ui-btn creg-act" data-credit-void :disabled="register.busy" :title="'Add a line that reverses this one'" @click="voidIt(row.line.id)">Void</button>
+                <small v-else-if="row.line.pending === 0 && isTransferHalf(row.line)" class="creg-transfer" data-credit-transfer>{{ TRANSFER_NOT_VOIDED }}</small>
               </td>
             </tr>
           </tbody>
@@ -401,9 +402,23 @@ watch(() => props.register.id, closeLine);
 }
 
 .creg-memo small {
+  display: inline-block;
   margin-left: 6px;
   color: var(--text-muted);
   font-size: 11px;
+  /* The kind word is one word: it moves to the next line whole, never "Transfe r". */
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* A transfer's line: the sentence in Void's place. */
+.creg-transfer {
+  display: inline-block;
+  width: 13em;
+  color: var(--text-muted);
+  font: 400 11px/1.35 var(--font-text);
+  text-align: right;
+  white-space: normal;
 }
 
 .creg-pending {
@@ -519,6 +534,18 @@ watch(() => props.register.id, closeLine);
 
   .creg-table td.creg-cell.is-run {
     grid-row: 3;
+  }
+
+  /* A transfer's sentence takes no column from the memo: it is its own line under the amounts. */
+  .creg-table td.creg-acts-cell:has(.creg-transfer) {
+    grid-row: 4;
+    grid-column: 1 / span 3;
+    text-align: left;
+  }
+
+  .creg-transfer {
+    width: auto;
+    text-align: left;
   }
 }
 

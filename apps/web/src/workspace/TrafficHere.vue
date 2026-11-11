@@ -12,6 +12,9 @@
  * the pay. Mail (DT6c): after the freight roll (its total DM is the mail table's band, Johnny's ZT0 Q8),
  * whether the ship is chosen to carry mail, with the referee's word on arms, rank and SOC DM; Take puts
  * every container in the hold as one lot, paid on delivery the same way. Nothing here is a rule of its own.
+ * DS4b: a player with the Trade switch takes here too (`who="player"`): each Take is one piece through the
+ * append door (`trade_send.ts`), built by the same functions; passengers post their fares, so they need
+ * the Ledger switch as well.
  */
 import { computed, reactive, ref, watch } from 'vue';
 import { addCargo, capacityTons, tonsUsed } from '../campaign/cargo.ts';
@@ -31,13 +34,36 @@ import { fieldsOf } from './sheet_fields.ts';
 import { citeWords, tradeWorldOf } from './trade_here.ts';
 import { useTradeSet } from './trade_set.ts';
 import { berthBoxes, berthWords, countsOf, effectOf, fitTake, freightLot, freightWords, holdWords, lotWords, mailLot, mailOfferWords, mailWords, needsWords, passengerWords, rangeFor, rankOf, reachable, rollWords, shownLots, stewardOf, takenLines, takenLots, takeOf, tookWords } from './traffic_here.ts';
-import { dayOf, ledgerOf, manifestOf, statusWithTrade, writeTrade } from './vessel_trade.ts';
+import { dayOf, ledgerOf, manifestOf, statusWithTrade } from './vessel_trade.ts';
+import { may } from './crew.ts';
+import { actingPerson } from './players/me.ts';
+import { sendTrade, type Who } from './trade_send.ts';
+import type { Switch } from './trade_write.ts';
+import type { CampaignRecord } from '@voyage/shared';
 
 const props = defineProps<{
     id: string;
     /** Changes cannot be made just now (offline). */
     readOnly: boolean;
+    /** Who presses: the referee (the default), or a player through the append door (DS4b). */
+    who?: Who;
 }>();
+
+const presser = computed((): Who => props.who ?? 'referee');
+
+/** The referee may take everything; a player what the switches of the character pressing open. */
+function can(key: Switch): boolean {
+    if (presser.value !== 'player') return true;
+    const person = actingPerson();
+    return !!person && may(record.value, person, key);
+}
+
+/** A Take the door refused: said at the head of the section. */
+const sendSaid = ref('');
+function push(now: CampaignRecord, change: Parameters<typeof sendTrade>[2]): void {
+    sendSaid.value = '';
+    void sendTrade(presser.value, now, change).then((said) => { sendSaid.value = said; });
+}
 
 const { ownSet, rolled } = useTradeSet();
 const credits = formatCredits;
@@ -256,7 +282,7 @@ function takeMail(): void {
     const now = record.value;
     const offer = mail.value;
     if (!now || !offer || !offer.offered || props.readOnly || mailTaken.value) return;
-    writeTrade(now, { status: statusWithTrade(now, { cargo: addCargo(hold.value, mailLot(offer, worldName.value, freightDest.value)) }) });
+    push(now, { status: statusWithTrade(now, { cargo: addCargo(hold.value, mailLot(offer, worldName.value, freightDest.value)) }) });
     mailTaken.value = true;
 }
 
@@ -288,7 +314,7 @@ function takeLot(at: number): void {
     const pay = payOf(lot.tons);
     if (!pay) { freightError.value = 'The fares table has no freight rate for ' + parsecWords(freightParsecs.value) + '.'; return; }
     const cargo = freightLot(lot, pay.credits, worldName.value, freightDest.value);
-    writeTrade(now, { status: statusWithTrade(now, { cargo: addCargo(hold.value, cargo) }) });
+    push(now, { status: statusWithTrade(now, { cargo: addCargo(hold.value, cargo) }) });
     takenLotAt.value = takenLotAt.value.concat(at);
     freightSaid.value = 'Took the ' + lot.kind + ' lot, ' + lot.tons + ' t, into the hold: ' + credits(pay.credits) + ' on delivery at ' + freightDest.value + '. Deliver is on its cargo row.';
 }
@@ -306,14 +332,15 @@ function takeNow(): void {
         lots.push(...takenLots(take.n, take.kind, take.fareCr));
         for (const line of takenLines(take.n, take.kind, resultParsecs.value, take.fareCr, when)) { ledger = postLedger(ledger, line); fares += 1; }
     }
-    writeTrade(now, { status: statusWithTrade(now, { passengers: lots, ledger }) });
+    push(now, { status: statusWithTrade(now, { passengers: lots, ledger }) });
     said.value = tookWords(takes.value, fares, credits(fareTotal.value));
     for (const take of takes.value) taking[take.kind] = '0';
 }
 </script>
 
 <template>
-  <section v-if="record" class="tf ui-frame" data-traffic-here aria-labelledby="tf-h">
+  <section v-if="record" class="tf ui-frame" data-traffic-here :data-trade-who="presser" aria-labelledby="tf-h">
+    <p v-if="sendSaid" class="tf-err" role="alert" data-trade-refused>{{ sendSaid }}</p>
     <div class="tf-head">
       <h3 id="tf-h" class="ui-frame-label">Find passengers and freight</h3>
       <p class="tf-fine" data-traffic-set>{{ rolled.label }}<template v-if="rolled.words">. {{ rolled.words }}</template></p>
@@ -359,7 +386,7 @@ function takeNow(): void {
             <span class="tf-lot-main"><b>{{ lot.kind }} lot</b> <span class="tf-lot-words" data-traffic-lot-words>{{ freightWords(lot, specOf(lot.kind), payOf(lot.tons)) }}</span></span>
             <span v-if="holdWords(lot.tons, free)" class="tf-lot-hold" data-traffic-lot-hold>{{ holdWords(lot.tons, free) }}</span>
             <span v-if="takenLotAt.includes(at)" class="tf-lot-taken" data-traffic-lot-taken>In the hold</span>
-            <button v-else type="button" class="ui-btn" :disabled="readOnly || !payOf(lot.tons)" data-traffic-take-lot @click="takeLot(at)">Take the lot</button>
+            <button v-else type="button" class="ui-btn" :disabled="readOnly || !payOf(lot.tons) || !can('trade')" data-traffic-take-lot @click="takeLot(at)">Take the lot</button>
           </li>
         </ul>
         <p v-else class="tf-fine">No lots on offer for this jump.</p>
@@ -385,7 +412,7 @@ function takeNow(): void {
               <p v-if="holdWords(mail.tons, free)" class="tf-lot-hold" data-traffic-mail-hold>{{ holdWords(mail.tons, free) }}</p>
               <p v-if="mailTaken" class="tf-said" data-traffic-mail-taken>The mail is in the hold, one lot: Deliver is on its cargo row.</p>
               <div v-else class="tf-acts">
-                <button type="button" class="ui-btn is-primary tf-take-all" :disabled="readOnly" data-traffic-take-mail @click="takeMail">Take the mail: {{ mail.containers }} {{ mail.containers === 1 ? 'container' : 'containers' }}, {{ credits(mail.credits) }} on delivery</button>
+                <button type="button" class="ui-btn is-primary tf-take-all" :disabled="readOnly || !can('trade')" data-traffic-take-mail @click="takeMail">Take the mail: {{ mail.containers }} {{ mail.containers === 1 ? 'container' : 'containers' }}, {{ credits(mail.credits) }} on delivery</button>
               </div>
             </template>
             <p v-if="mail.unread.length" class="tf-err" role="alert">DMs the file names that this screen cannot read, not applied: {{ mail.unread.join(', ') }}.</p>
@@ -413,8 +440,8 @@ function takeNow(): void {
         <p v-if="berths.missing" class="tf-fine" data-traffic-berths-missing>{{ berths.missing }}</p>
         <p v-if="takeError" class="tf-err" role="alert">{{ takeError }}</p>
         <div class="tf-acts">
-          <button type="button" class="ui-btn" :disabled="readOnly || !canFit" :title="canFit ? 'Fill the Take boxes with what the sheet\'s staterooms, low berths and free hold take, the dearest fares first' : 'Write Staterooms and Low Berths on the ship sheet first'" data-traffic-fit @click="fitNow">Fit to the sheet</button>
-          <button type="button" class="ui-btn is-primary tf-take-all" :disabled="readOnly || takeTotal === 0 || takeError !== ''" data-traffic-take-all @click="takeNow">{{ takeLabel }}</button>
+          <button type="button" class="ui-btn" :disabled="readOnly || !canFit" :title="canFit ? 'Fill the Take boxes with what the sheet\'s staterooms, low berths, and free hold take, the dearest fares first' : 'Write Staterooms and Low Berths on the ship sheet first'" data-traffic-fit @click="fitNow">Fit to the sheet</button>
+          <button type="button" class="ui-btn is-primary tf-take-all" :disabled="readOnly || takeTotal === 0 || takeError !== '' || !can('trade') || !can('ledger')" data-traffic-take-all @click="takeNow">{{ takeLabel }}</button>
           <span class="tf-fine">Taken passengers go on the ship's list unnamed, boarded with the fare; name one there or roll a passenger.</span>
         </div>
         <p v-if="said" class="tf-said" role="status" data-traffic-said>{{ said }}</p>

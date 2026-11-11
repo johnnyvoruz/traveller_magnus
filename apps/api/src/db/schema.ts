@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { check, foreignKey, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { user } from './auth-schema';
 
 export { account, accountRelations, passkey, passkeyRelations, session, sessionRelations, user, userRelations, verification } from './auth-schema';
@@ -254,6 +254,22 @@ export const universeMembers = sqliteTable('universe_members', {
     check('universe_members_role_check', sql`${t.role} = 'player'`),
     check('universe_members_status_check', sql`${t.status} in ('active', 'archived')`),
     check('universe_members_archived_by_check', sql`${t.archivedBy} is null or ${t.archivedBy} in ('owner', 'self')`),
+]);
+
+/** 0027. One row per character a member plays, in the referee's order. `universe_members.person_id` stays the first id. */
+export const universeMemberPeople = sqliteTable('universe_member_people', {
+    universeId: text('universe_id').notNull(),
+    userId: text('user_id').notNull(),
+    personId: text('person_id').notNull(),
+    position: integer('position').notNull(),
+    createdAt: text('created_at').notNull(),
+}, (t) => [
+    primaryKey({ columns: [t.universeId, t.userId, t.personId] }),
+    index('universe_member_people_order').on(t.universeId, t.userId, t.position),
+    foreignKey({
+        columns: [t.universeId, t.userId],
+        foreignColumns: [universeMembers.universeId, universeMembers.userId],
+    }),
 ]);
 
 /** 0021. One invite link. `uses` counts claims and never refuses. There is no max_uses column. */

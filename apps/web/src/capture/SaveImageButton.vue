@@ -43,6 +43,14 @@ const emit = defineEmits<{ (e: 'click'): void }>();
   outline-offset: 2px;
 }
 
+/* On a phone the corner control is a 44 px target. Above 599 px it stays 40. */
+@media (max-width: 599px) {
+  .save-img-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .save-img-btn {
     transition: none;

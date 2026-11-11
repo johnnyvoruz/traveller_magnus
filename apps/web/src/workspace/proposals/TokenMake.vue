@@ -57,7 +57,7 @@ async function copy(): Promise<void> {
 
 <template>
   <div v-if="made" class="tok-once" role="region" aria-label="Your new token" data-token-once>
-    <p class="tok-once-h"><b>{{ made.name }}</b>: copy this token now. You won't see it again.</p>
+    <p class="tok-once-h"><b>{{ made.name }}</b>: copy this token now. You will not see it again.</p>
     <code ref="tokenEl" class="tok-text" tabindex="0" data-token-text>{{ made.token }}</code>
     <div class="pk-acts">
       <button type="button" class="ui-btn is-primary" @click="copy">Copy</button>

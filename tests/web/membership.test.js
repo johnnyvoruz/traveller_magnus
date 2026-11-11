@@ -12,7 +12,7 @@ import {
     loadPlaying,
     openPlaying,
     revokeInvite,
-    setPerson,
+    setPeople,
 } from '../../apps/web/src/campaign/membership.ts';
 import { commit, flushCampaign, pending, resetCampaign } from '../../apps/web/src/campaign/commit.ts';
 import { applyPlayersPage, CAMPAIGN_UNIVERSE_KEY, campaign, createCampaign, loadPlayerPages, openCampaign, transport } from '../../apps/web/src/campaign/store.ts';
@@ -325,8 +325,8 @@ test('playing, join, invite, person and leave', async () => {
             });
         }
         if (target === '/api/universes/uni-play/players/me' && method === 'PATCH') {
-            assert.deepEqual(JSON.parse(init.body), { personId: KEPT });
-            return jsonResponse(200, { ok: true, data: { personId: KEPT } });
+            assert.deepEqual(JSON.parse(init.body), { personIds: [KEPT] }, 'BM2c: the whole list');
+            return jsonResponse(200, { ok: true, data: { personId: KEPT, personIds: [KEPT], moved: [] } });
         }
         if (target === '/api/universes/uni-play/players/user-1' && method === 'DELETE') {
             return jsonResponse(200, { ok: true, data: { status: 'archived' } });
@@ -362,8 +362,10 @@ test('playing, join, invite, person and leave', async () => {
     assert.equal(await revokeInvite(), true);
     const members = await listPlayers();
     assert.equal(members.playing.length, 1);
-    const person = await setPerson(KEPT);
+    const person = await setPeople([KEPT]);
     assert.equal(person.personId, KEPT);
+    assert.deepEqual(person.personIds, [KEPT]);
+    assert.deepEqual(person.moved, []);
     assert.equal(await leave(), true);
     assert.equal(campaign.status, 'gone');
     assert.equal(campaign.role, 'player');

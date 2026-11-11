@@ -81,15 +81,26 @@ describe('rendered', { concurrency: 1 }, () => {
             'The journal',
             'The timeline',
             'Build',
+            'Set for the selection',
             'The orbit view',
             'The system page',
             'The party',
             'The crew',
+            'Set up the ship',
+            'Ship&#39;s locker',
+            'Find passengers and freight',
+            'Trade here',
+            'Move credits',
+            'A player&#39;s ship',
+            'Markets nearby',
             'Account',
             'The Marketplace',
             'What&#39;s new',
             'View as players',
             'The map',
+            'Directions',
+            'Save image',
+            'Paint',
         ]) {
             assert.match(html, new RegExp(heading));
         }
@@ -115,6 +126,55 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /The referee alone: the sheet, Set up the ship, the owners and the payment, Players, the course and the clock/);
         assert.match(html, /names their role and ship/);
         assert.match(html, /A player sees the crew names and roles, and not the switches/);
+        assert.match(html, /Set up the ship sits at the top/);
+        assert.match(html, /Jump Drive Output, Manoeuvre Drive Output, Fuel Capacity, Cargo Capacity, Staterooms, Low Berths, Mortgage Cost, Maintenance Cost, Life Support Cost, Salary Cost, and Running Cost/);
+        assert.match(html, /Select Edit to open it again/);
+        assert.match(html, /Ship&#39;s locker sits after Cargo/);
+        assert.match(html, /Select Add to the locker to add a row/);
+        assert.match(html, /Select Move to, then a character/);
+        assert.match(html, /select To the locker on an Equipment row/);
+        assert.match(html, /Select Roll for passengers, type a number in Take, and select Take passengers/);
+        assert.match(html, /Select Roll for freight, then Take the lot/);
+        assert.match(html, /Select Is there mail\?, then Take the mail/);
+        assert.match(html, /Select Fit to the sheet/);
+        assert.match(html, /select Deliver once the ship has arrived, and Delivered late when it was late/);
+        assert.match(html, /Select Disembark to let passengers off/);
+        assert.match(html, /The book says what the rolls mean/);
+        assert.match(html, /Trade here works when the ship is at a world/);
+        assert.match(html, /Find a supplier or buyer, Find a black market supplier, or Find a supplier online/);
+        assert.match(html, /Select See the goods on offer/);
+        assert.match(html, /Under Sell from the hold, select Roll the sale price, then Sell/);
+        assert.match(html, /Select Hire a local broker, or Hire a local broker or fixer/);
+        assert.match(html, /Log it writes the sale into the journal/);
+        assert.match(html, /Markets nearby lists the worlds within 2, 4, or 6 parsecs/);
+        assert.match(html, /the same list is titled Markets/);
+        assert.match(html, /Select 2 pc, 4 pc, or 6 pc/);
+        assert.match(html, /Set for the selection is on the Build pane/);
+        assert.match(html, /The boxes are Allegiance and Region/);
+        assert.match(html, /One system reads Set for 1 hex/);
+        assert.match(html, /3 of 5 hexes hold a system\. The others are left alone/);
+        assert.match(html, /1 of 5 hexes holds a system/);
+        assert.match(html, /To take it back, set the old value again/);
+        assert.match(html, /under Ledger, select Move credits/);
+        assert.match(html, /Choose To the ship or From the ship/);
+        assert.match(html, /move the credits back/);
+        assert.match(html, /Attach a Character to their sheet first/);
+        assert.match(html, /You trade; the referee keeps time/);
+        assert.match(html, /Nothing you do here moves the ship or the clock/);
+        assert.match(html, /Acting as chooses who presses/);
+        assert.match(html, /You cannot select Remove this lot, Remove this line, Roll a passenger, or Board/);
+        assert.match(html, /You cannot type Fuel aboard or set Base fuel/);
+        assert.match(html, /Select Locate to mark it on the chart/);
+        assert.match(html, /you cannot make or use a token/);
+        assert.match(html, /you cannot change anything while you look/);
+        assert.match(html, /select Paint, or press P/);
+        assert.match(html, /The rail lists Terrain, Accents, and Features/);
+        assert.match(html, /Shift-click paints a line from the last hex/);
+        assert.match(html, /Clear map puts every painted hex back/);
+        assert.match(html, /Select Keep to save the painted map for everyone in this universe/);
+        assert.match(html, /Select Save image on the chart, the system map, or the world map/);
+        assert.match(html, /A4, Letter, A3, or Tabloid/);
+        assert.match(html, /On paper is ink on white\. Full colour is colour on white/);
         assert.match(html, /Get the invite link/);
         assert.match(html, /Select Copy, and send the address/);
         assert.match(html, /selects Join/);
@@ -186,6 +246,31 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /Stop viewing as players/);
         assert.match(html, /<h3>The map<\/h3>/);
         assert.match(html, /How to use the map/);
+        assert.match(html, /<h3>Directions<\/h3>/);
+        assert.match(html, /beside Save image and How to use the map/);
+        assert.match(html, /Press d, or open the command palette and select Directions/);
+        assert.match(html, /Regina, or Spinward Marches 1910/);
+        assert.match(html, /Use selected under From or under To/);
+        assert.match(html, /Select a system on the chart first/);
+        assert.match(html, /Swap From and To/);
+        assert.match(html, /Jump-1 through Jump-6/);
+        assert.match(html, /it starts on Jump-2/);
+        assert.match(html, /Fuel starts on Any fuel, and it also lists Starport only and Refined only/);
+        assert.match(html, /Fuel scoops, Fuel processors, or Allow Red zones/);
+        assert.match(html, /Use Kestrel Dawn&#39;s jump \(Jump-2\)/);
+        assert.match(html, /with that ship&#39;s name and its jump/);
+        assert.match(html, /searches only the sectors loaded on the chart/);
+        assert.match(html, /type more of the name/);
+        assert.match(html, /Select Get directions/);
+        assert.match(html, /one line for each leg/);
+        assert.match(html, /Select Clear to drop the route/);
+        assert.match(html, /Nothing is saved; closing Directions clears the route/);
+        assert.match(html, /Which one is you\?/);
+        assert.match(html, /The characters you play/);
+        assert.match(html, /They can tick more than one/);
+        assert.match(html, /Continue stays off until one is ticked/);
+        assert.match(html, /Not yet to play none/);
+        assert.match(html, /Which one lists a tick box for each character in the party/);
         assert.equal(html.toLowerCase().includes('snapshot'), false);
         assert.match(html, /Lower DM and Raise DM/);
         assert.match(html, /Boon keeps the best two of three dice/);

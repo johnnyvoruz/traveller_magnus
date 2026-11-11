@@ -159,3 +159,13 @@ export function lotMeta(lot: Pick<CargoLot, 'value' | 'origin' | 'destination' |
     if (lot.note) parts.push(lot.note);
     return parts.join(' · ');
 }
+
+/**
+ * Remove this line (DT3c), as the referee's Ledger does it: the line goes. A transfer's line is refused
+ * (DS5; Johnny 140, "there is no Remove on a transfer, you just transfer it back"): null, and the row says
+ * to move the credits back.
+ */
+export function removeLedgerLine(lines: readonly LedgerLine[], line: LedgerLine): LedgerLine[] | null {
+    if (typeof line.linkId === 'string' && line.linkId !== '') return null;
+    return lines.filter((one) => one !== line);
+}

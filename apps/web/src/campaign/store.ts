@@ -289,12 +289,14 @@ async function postCampaign(name: string): Promise<UniverseRow | null> {
     return universe;
 }
 
-async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'owner'): Promise<void> {
+async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'owner', fresh = true): Promise<void> {
     const shared = loadSchemas();
-    clearRows();
-    campaign.role = role;
-    campaign.universeId = universe.id;
-    campaign.status = 'loading';
+    if (fresh) {
+        clearRows();
+        campaign.role = role;
+        campaign.universeId = universe.id;
+        campaign.status = 'loading';
+    }
     const records: Record<string, CampaignRecord> = {};
     const links: Record<string, CampaignLink> = {};
     const journal: Record<string, CampaignEntryRow> = {};
@@ -373,6 +375,14 @@ async function loadPages(universe: { id: string }, role: 'owner' | 'player' = 'o
 /** Opens a campaign the account is playing in. The read is the players page. */
 export async function loadPlayerPages(id: string): Promise<void> {
     await loadPages({ id }, 'player');
+}
+
+/**
+ * Reads the open player campaign again and replaces its rows (DF39).
+ * The status stays ready, so the ship page does not unmount and a press keeps its sentence.
+ */
+export async function rereadPlayerPages(id: string): Promise<void> {
+    await loadPages({ id }, 'player', false);
 }
 
 /**

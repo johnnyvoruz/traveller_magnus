@@ -12,14 +12,24 @@
       "C": { "fuel": null, "for": "corsair ships", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1294-1296" },
       "W": { "fuel": null, "for": "scout ships", "crPerTon": null, "source": "assets/2eWorldCreation.txt:1324-1326" }
     },
-    "basesNote": "Johnny 2026-10-17: base fuel serves only the ships the text names, offered only on a ship the players are attached to that the referee marks naval or scout. crPerTon null: the referee decides. fuel null: not offered (a corsair base's grade is unstated; a Way Station names no fuel)."
+    "basesNote": "Johnny 2026-10-17: base fuel serves only the ships the text names, offered only on a ship the players are attached to that the referee marks naval or scout. crPerTon null: the referee decides. fuel null: not offered (a corsair base's grade is unstated; a Way Station names no fuel).",
+    "wilderness": {
+      "needs": "fuel scoops",
+      "grade": "unrefined",
+      "refinedWith": "fuel processors",
+      "gasGiant": { "check": { "skill": "Pilot", "target": 10, "characteristic": "DEX" }, "scoopHours": { "base": 0, "dice": 1 }, "travelDays": { "base": 0, "dice": 1 }, "source": "assets/mgt2e_core_fuel_and_jump.txt:16-20; travelDays assets/2eWorldCreation.txt:75-77" },
+      "water": { "method": "hoses", "worldRule": { "hydrographicsMin": 1, "atmosphereExcluded": ["A", "B", "C"] }, "source": "assets/mgt2e_core_fuel_and_jump.txt:16-17" },
+      "note": "Johnny 2026-11-06: water counts on a world with Hydrographics 1 or more whose atmosphere is not corrosive, insidious or exotic (A, B, C), since there the liquid may not be water (rules/mgt2e_uwp_codes.json hydrographics note). The text names no world rule; this one is Johnny's."
+    }
   },
   "jump": {
     "fuelHullFractionPerParsec": 0.1,
     "parsecsPerJumpNumber": 1,
     "minimumParsecsCounted": 1,
     "durationHours": { "base": 148, "dice": 6 },
-    "limitDiameters": 100
+    "limitDiameters": 100,
+    "unrefinedFuelDM": -2,
+    "unrefinedFuelDMSource": "assets/mgt2e_core_fuel_and_jump.txt:62-67 (Engineer (j-drive) check to jump)"
   },
   "travel": {
     "metresPerSecond2PerG": 10,

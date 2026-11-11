@@ -7,7 +7,7 @@ import {
     JoinPreview,
     PlayerInvite,
     PlayerList,
-    PlayerPerson,
+    PlayerPeople,
     PlayingList,
 } from '@voyage/shared';
 import { session } from '../account/session.ts';
@@ -145,15 +145,15 @@ export async function leave(): Promise<boolean> {
     return true;
 }
 
-/** Which person this player is, or null when they have not chosen. */
-export async function setPerson(personId: string | null): Promise<PlayerPerson | null> {
+/** The characters this player plays, in order; empty when they have not chosen (BM2c). */
+export async function setPeople(personIds: readonly string[]): Promise<PlayerPeople | null> {
     const path = universePath('/players/me');
     if (!path) return null;
     const res = await apiFetch(transport.fetch, path, {
         method: 'PATCH',
-        body: JSON.stringify({ personId }),
+        body: JSON.stringify({ personIds }),
     });
     const data = await readOk(res);
     if (data === null) return null;
-    return parseRead(PlayerPerson, data);
+    return parseRead(PlayerPeople, data);
 }

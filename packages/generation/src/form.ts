@@ -1283,9 +1283,10 @@ function messagesFromTrace(lines: string[]): FormMessage[] {
 
 /**
  * DH6 (findings/hex_editor_plan.md §3.2 item 9, §4 DH6): the engine's auditor read over the mainworld as the
- * card shows it. Its lines come back as messages that never hold a Keep (Rule Zero): the trade-code line at
- * the Trade codes box, a base line at its switch, a size line at the Size cell, the rest at the Profile
- * digits place (`rule.R1`). Only the mainworld's lines; the subordinate worlds are the engine's own, and
+ * card shows it. Its lines come back as messages that never hold a Keep (Rule Zero): a base line at its
+ * switch, a size line at the Size cell, the rest at the Profile digits place (`rule.R1`). The trade-code line
+ * is not a message (DF38): the editor's "From the digits: … · Use these" under the Trade codes box says the
+ * same and carries the press. Only the mainworld's lines; the subordinate worlds are the engine's own, and
  * their lines stay in the engine's audit backlog.
  */
 const AUDITOR_SAYS = 'The auditor says: ';
@@ -1322,12 +1323,9 @@ function auditedMainworld(body: Row, edition: 'MgT2E' | 'AoW'): Row {
     };
 }
 
-/** One auditor line as a message at the field it names; the orbit and the section label come off the words. */
-function auditMessage(raw: string): FormMessage {
-    const trade = TRADE_LINE.exec(raw);
-    if (trade) {
-        return { id: 'chart.trade', text: `${AUDITOR_SAYS}Trade codes from the digits are ${trade[2].trim() || 'none'}; the world has ${trade[1].trim() || 'none'}.`, holds: false };
-    }
+/** One auditor line as a message at the field it names; the orbit and the section label come off the words. The trade-code line is none (DF38). */
+function auditMessage(raw: string): FormMessage | null {
+    if (TRADE_LINE.test(raw)) return null;
     const plain = raw.replace(ORBIT_TAIL, '').replace(SECTION_LABEL, '').trim();
     const line = plain.endsWith('.') ? plain : plain + '.';
     const id = plain.startsWith('Naval Base') ? 'chart.base.naval' : plain.startsWith('Scout Base') ? 'chart.base.scout' : plain.startsWith('Size 0 world') ? 'profile.s' : 'rule.R1';
@@ -1363,7 +1361,7 @@ function auditLines(body: Row, edition: 'MgT2E' | 'AoW'): FormMessage[] {
         if (!error || typeof error.message !== 'string') continue;
         if ((error.orbitId ?? null) !== orbit) continue;
         const message = auditMessage(error.message);
-        if (!out.some((item) => item.id === message.id && item.text === message.text)) out.push(message);
+        if (message && !out.some((item) => item.id === message.id && item.text === message.text)) out.push(message);
     }
     return out;
 }

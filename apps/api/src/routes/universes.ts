@@ -16,7 +16,7 @@ import { mountCampaignExport } from './campaign_export';
 import { mountObjectRoutes } from './objects';
 import { mountAgentRoutes } from './agent';
 import { mountPlayerRoutes } from './players';
-import { detectPlayers } from '../auth/players_schema';
+import { detectMemberPeople, detectPlayers } from '../auth/players_schema';
 import { courseReady, detectPublicCards, detectPublicGames, publicCardsReady, publicGamesReady, readPublicGames } from '../auth/public_schema';
 import { deletePublicMark } from '../universe/public_mark';
 import { refreshAfterCampaign, setPublicGames } from './public_games';
@@ -327,6 +327,18 @@ function checkedPage(url: URL): { after: number; limit: number } | null {
     return { after, limit: Math.min(1000, limit) };
 }
 
+universesRoute.get('/:id/campaign/live', async (c) => {
+    const access = await memberUniverse(c);
+    if (access instanceof Response) return privateNoStore(access);
+    if (access.role === 'archived') return privateNoStore(fail(c, 403, 'not_a_member', 'You are not in this campaign.'));
+    if (access.role === 'none') return privateNoStore(fail(c, 404, 'not_found', 'No such universe.'));
+    const url = new URL(c.req.url);
+    url.pathname = '/campaign/live';
+    const response = await access.forward(new Request(url, c.req.raw), { 'x-voyage-role': access.role });
+    if (response.status === 101) return response;
+    return privateNoStore(response);
+});
+
 universesRoute.get('/:id/campaign', async (c) => {
     if (/^Bearer\s+\S/i.test(c.req.header('authorization') ?? '')) {
         const actor = await requireAgent(c, 'campaign:read');
@@ -385,16 +397,28 @@ universesRoute.patch('/:id/campaign/changes', async (c) => {
         }
         const handles = await loadHandles(c.env.DB, access.row.id, access.row.ownerId);
         let personId = '';
+        let people: string[] = [];
         if (await detectPlayers(c.env.DB)) {
-            const member = await c.env.DB.prepare(
-                `SELECT person_id AS personId FROM universe_members WHERE universe_id = ? AND user_id = ?`,
-            ).bind(access.row.id, access.actor.id).first<{ personId: string | null }>();
-            personId = member?.personId ?? '';
+            if (await detectMemberPeople(c.env.DB)) {
+                const listed = await c.env.DB.prepare(
+                    `SELECT person_id AS personId FROM universe_member_people
+                     WHERE universe_id = ? AND user_id = ? ORDER BY position, person_id`,
+                ).bind(access.row.id, access.actor.id).all<{ personId: string }>();
+                people = (listed.results ?? []).map((row) => row.personId);
+                personId = people[0] ?? '';
+            } else {
+                const member = await c.env.DB.prepare(
+                    `SELECT person_id AS personId FROM universe_members WHERE universe_id = ? AND user_id = ?`,
+                ).bind(access.row.id, access.actor.id).first<{ personId: string | null }>();
+                personId = member?.personId ?? '';
+                people = personId ? [personId] : [];
+            }
         }
         const forwarded = await access.forward(new Request(url, c.req.raw), {
             'x-voyage-member': access.actor.id,
             'x-voyage-handles': JSON.stringify(handles),
             'x-voyage-person': personId,
+            'x-voyage-people': JSON.stringify(people),
         });
         const taken = await splitSummary(forwarded);
         if (taken.response.ok) {

@@ -17,20 +17,39 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.10',
+        date: '2026-11-10',
+        title: 'Directions',
+        picture: '/changes/1.3.10.png',
+        story: [
+            'Select Directions in the chart\'s corner, or press d. Type From and To, choose Jump-1 through Jump-6 and a fuel, then select Get directions to draw the route and list each leg.',
+            'On a ship\'s page you trade when Trade or The Ledger is on, you can play more than one character, and you move credits between the ship and a character. Set for the selection sets Allegiance or Region on the systems you selected.',
+        ],
+        items: [
+            'Directions sits in the chart\'s corner beside Save image and How to use the map. Press d, or open the command palette and select Directions. Type a system in From and in To. A name works, or a sector and a hex. Select a system on the chart, then select Use selected. Select Swap From and To to exchange the two. Jump lists Jump-1 through Jump-6, and it starts on Jump-2. Fuel lists Any fuel, Starport only, and Refined only. Turn on Fuel scoops, Fuel processors, or Allow Red zones when you want them. When the party ship has a jump, the button reads Use Kestrel Dawn\'s jump (Jump-2), with that ship\'s name and its jump. Select Get directions. The chart draws the route. The panel lists one line for each leg, then the jumps, the parsecs, and about how long the jumps take. It searches only the sectors loaded on the chart. Select Clear to drop the route. Nothing is saved, and closing Directions clears the route.',
+            'Open your ship\'s page. When your character crews that ship and Trade or The Ledger is on, the page says: You trade; the referee keeps time. Nothing you do here moves the ship or the clock. The switches are Trade, The Ledger, and The locker, on the Crew list under Permissions. With Trade on, you can select Add a lot. With The Ledger on, you can select Add a line and Move credits. With The locker on, you can add a row and select Move to. You cannot select Remove this lot, Remove this line, or Board, and you cannot change the crew, the owners, or the payment.',
+            'A player can play more than one character. After Join, the page is titled Which one is you? Under The characters you play, tick each character, then select Continue. Continue stays off until one is ticked. Select Not yet to play none. On the Players list, Which one is a tick box for each character in the party. When you have more than one character, Acting as on the ship\'s page chooses who presses.',
+            'On a ship\'s page, under Ledger, select Move credits. A player needs The Ledger on. Choose To the ship or From the ship. Type Amount (Cr). Select Move the credits. One line goes on the ship\'s Ledger and one on that character\'s credit register, linked. To take it back, move the credits back.',
+            'Turn Build on. Turn on Select hexes, and select more than one hex. Set for the selection is on the Build pane. The boxes are Allegiance and Region. Type a value and select Set for 3 hexes. The number is how many systems the selection holds. One system reads Set for 1 hex. To take it back, set the old value again.',
+            'Smaller: on a phone, Directions starts past the rail and ends above the world sheet, and the list scrolls inside the panel. Acting as is tall enough to tap. Help has Directions, Set for the selection, Move credits, and A player\'s ship. Invite your players covers Which one for several characters.',
+        ],
+    },
+    {
         version: '1.3.9',
         date: '2026-11-03',
         title: 'The World card',
+        picture: '/changes/1.3.9.png',
         story: [
-            'Edit this system opens with the World card: the profile digits with the rules text\'s words beside each, lists for Starport, Size and Atmosphere, and the UWP string as you change it.',
-            'Trade codes are offered from the digits, the auditor\'s lines show as messages, and a ship has a locker whose items move to and from a character\'s sheet one at a time.',
+            'Edit this system opens on World: System Name, then Starport, Size, Atmosphere, Hydrographics, Population, Government, Law Level, and Tech Level, with the text\'s words under each cell and the UWP string under the row.',
+            'From the digits sits under Trade Codes (Space Separated), beside Use these. Messages show at the field they concern, and Ship\'s locker moves one item at a time.',
         ],
         items: [
-            'The World card: Edit this system starts with the name, the eight profile cells in the legacy order, the UWP string rebuilt as the cells change, and the chart fields after them. Starport, Size and Atmosphere are lists from the rules text, and the words beside every cell are the text\'s own.',
-            'Trade codes: under the Trade codes box, the codes the digits earn and Use these. Nothing is written without the press.',
-            'The auditor: its lines for the mainworld show as messages at the box, the switch or the cell they concern. Keep is never refused by one.',
-            'The Ship\'s locker: after Cargo on a ship\'s page, a table of Type, TL, KG and Notes with the kg in the locker. Move to puts an item on a character\'s Equipment table, and To the locker on a sheet\'s Equipment row brings one back. One item per press.',
+            'World, at the top of Edit this system: System Name, then Starport, Size, Atmosphere, Hydrographics, Population, Government, Law Level, and Tech Level. Starport, Size, and Atmosphere are lists. Each option shows the code and the text\'s words for it, and the words under every cell are the text\'s own. The UWP string under the row changes as the cells change, and the chart fields follow.',
+            'Under Trade Codes (Space Separated), the line says From the digits, and Use these puts those codes in the box in place of what it holds. Nothing is written until you select Use these.',
+            'Messages for the mainworld show at the box, the switch, or the cell they concern. Keep is never refused by one of these messages.',
+            'Ship\'s locker sits after Cargo on a ship\'s page. The columns are Type, TL, KG, and Notes, and the line beside the title says how many kg are in the locker. Select Move to, then a character, to put one item on that character\'s Equipment table. On the sheet, select To the locker to bring one back. One item per press.',
             'Help has The crew. A crew role with no Permissions row may act on the server as on the page.',
-            'Smaller: the 1.3.8 entry reads back with its picture; the account panel fits a phone.',
+            'Smaller: What\'s new shows the 1.3.8 entry with its picture. Account fits a phone.',
         ],
     },
     {

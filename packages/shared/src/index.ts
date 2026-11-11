@@ -80,6 +80,8 @@ export {
     locate,
     linkAllowed,
 } from './schemas/campaign.ts';
+export { passengerSeen, paymentSeen } from './ship_door.ts';
+export type { PassengerSeen, PaymentSeen } from './ship_door.ts';
 export type { CampaignRecordType, CampaignEntryKind, CampaignLinkKind, SystemAnchor, LocateAt } from './schemas/campaign.ts';
 export { copyRecords } from './campaign_copy.ts';
 export { PUBLIC_DEFAULT_DAYS, fitPublicCard, publicCardJournal, publicCourseLegs, publicFinishedLegs, publicFirstHex, publicMarkId, publicShips } from './public_hex.ts';
@@ -88,7 +90,9 @@ export {
     PlayersPage,
     PlayerInvite,
     PlayerList,
+    PlayerPeople,
     PlayerPerson,
+    PlayerSelf,
     PlayerStatus,
     JoinBody,
     JoinClaim,

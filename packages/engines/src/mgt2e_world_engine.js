@@ -13,7 +13,7 @@
  * - Comprehensive trace logging (tSection, tRoll2D, tDM, tResult, tSkip)
  */
 import { rng, roll1D, roll2D, roll3D, toEHex, fromEHex, isolateRng } from './core/rng.js';
-import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tRoll1D, tRoll2D, tRoll3D, tRoll4D } from './core/trace.js';
+import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tRoll1D, tRoll1D3, tRoll2D, tRoll3D, tRoll4D } from './core/trace.js';
 import { isManual } from './core/manual.js';
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
 import { MGT2E_SURFACE_DISTS, MGT2E_PLATE_INTERACTIONS } from './core/constants.js';
@@ -78,11 +78,6 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                 compDM -= penalty;
                 tDM(`Further than HZCO (-${penalty})`, -penalty);
             }
-        }
-
-        if (sys && sys.age > 10) {
-            compDM -= 1;
-            tDM('System Age > 10 Gyr', -1);
         }
 
         let compModRoll = compRoll + compDM;
@@ -267,15 +262,13 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
 
                 tSection(`${label || body.type} Orbit ${body.orbitId !== undefined ? body.orbitId.toFixed(2) : 'Moon'} Sizing`);
                 if (body.type === 'Gas Giant') {
-                    const ggCatDM = (primary.sClass === 'VI' || (primary.sType === 'M' && primary.sClass === 'V') || primary.sType === 'BD') ? -1 : 0;
-                    tResult('Gas Giant Category DM', ggCatDM, 'MgT2E: Class VI / M-V / BD → -1');
                     let gType;
                     if (body.ggType) {
                         gType = body.ggType;
                         tResult('Gas Giant Category (Preserved)', gType, 'Seed already has ggType — skipping re-roll');
                     } else {
-                        let catRoll = tRoll1D('Gas Giant Category') + ggCatDM;
-                        tResult('Gas Giant Category (after DM)', catRoll, 'MgT2E: ≤2=GS, 3-4=GM, ≥5=GL');
+                        let catRoll = tRoll1D('Gas Giant Category');
+                        tResult('Gas Giant Category', catRoll, 'WBH p.56: ≤2=GS, 3-4=GM, ≥5=GL');
                         gType = (catRoll <= 2) ? 'GS' : (catRoll <= 4 ? 'GM' : 'GL');
                     }
                     sizeGasGiantBody(body, gType);
@@ -316,6 +309,11 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                     body.size = 0;
                     body.eccentricity = 0;
                     tResult('Belt Eccentricity', 0, 'Belts have no orbital eccentricity');
+                    if (Number.isFinite(sys.spread)) {
+                        const spanRoll = tRoll2D('Belt Span (2D)');
+                        body.beltSpan = sys.spread * spanRoll;
+                        tResult('Belt Span', body.beltSpan.toFixed(3), 'WBH p.73: Spread × 2D');
+                    }
                     body.gravity = null;
                     body.mass = null;
                     body.density = null;
@@ -327,6 +325,7 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                     let beltDM = 0;
                     let hzco = body.worldHzco || (sys ? (sys.ptypeHzco || sys.hzco) : 0);
 
+                    // Page 74 composition row. Page 75's orbit modifiers count significant bodies.
                     if (hzco > 0 && body.orbitId !== undefined) {
                         if (body.orbitId < hzco) {
                             tDM('Inner Zone (Orbit < HZCO)', -4);
@@ -340,15 +339,62 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                     }
 
                     let totalRoll = Math.max(0, Math.min(12, beltRoll + beltDM));
-                    const compTable = MgT2EData.belts.compositionTable;
-                    let compData = compTable[totalRoll] || compTable[0];
+                    const formula = MgT2EData.belts.compositionFormulas[totalRoll] || MgT2EData.belts.compositionFormulas[0];
+                    const beltPart = (term, part) => {
+                        const base = term.base || 0;
+                        if (term.die === '1d') return base + tRoll1D(`Belt ${part}`) * (term.mult || 1);
+                        if (term.die === 'd3') return base + tRoll1D3(`Belt ${part}`) * (term.mult || 1);
+                        return base;
+                    };
+                    let beltM = beltPart(formula.m, 'm-type');
+                    let beltS = beltPart(formula.s, 's-type');
+                    let beltC = beltPart(formula.c, 'c-type');
+                    let excess = beltM + beltS + beltC - 100;
+                    if (excess > 0) {
+                        const fromM = Math.min(beltM, excess);
+                        beltM -= fromM;
+                        excess -= fromM;
+                        if (excess > 0) beltS = Math.max(0, beltS - excess);
+                    }
+                    const beltOther = Math.max(0, 100 - (beltM + beltS + beltC));
 
-                    body.beltM = compData.m;
-                    body.beltS = compData.s;
-                    body.beltC = compData.c;
-                    body.composition = `M:${compData.m}%, S:${compData.s}%, C:${compData.c}%`;
+                    body.beltM = beltM;
+                    body.beltS = beltS;
+                    body.beltC = beltC;
+                    body.beltOther = beltOther;
+                    body.composition = `M:${beltM}%, S:${beltS}%, C:${beltC}%, other:${beltOther}%`;
+                    tResult('Belt Composition', body.composition, 'WBH p.74');
 
-                    tResult('Belt Composition', body.composition, 'MgT2E 4.2: Belt Morphology');
+                    let bulk = tRoll2D('Belt Bulk');
+                    const ageDM = -Math.floor((Number(sys.age) || 0) / 2);
+                    const compDM = Math.floor(beltC / 10);
+                    if (ageDM !== 0) tDM('System Age', ageDM);
+                    if (compDM !== 0) tDM('c-type', compDM);
+                    bulk = Math.max(1, bulk + ageDM + compDM);
+                    body.beltBulk = bulk;
+                    tResult('Belt Bulk', bulk, 'WBH p.74');
+
+                    const beltHz = body.worldHzco || (sys ? (sys.ptypeHzco || sys.hzco) : 0) || 0;
+                    const beltOrbit = body.orbitId;
+                    let size1DM = 0;
+                    if (Number.isFinite(beltOrbit) && beltHz > 0 && beltOrbit > beltHz + 3) size1DM += 2;
+                    if (Number.isFinite(body.beltSpan) && body.beltSpan < 0.1) size1DM -= 4;
+                    let size1 = tRoll2D('Belt Size 1') - 12 + bulk;
+                    if (size1DM !== 0) { tDM('Size 1', size1DM); size1 += size1DM; }
+                    body.beltSize1 = Math.max(0, size1);
+                    tResult('Belt Size 1', body.beltSize1, 'WBH p.75');
+
+                    let sizeSDM = 0;
+                    if (Number.isFinite(beltOrbit) && beltHz > 0 && beltOrbit >= beltHz + 2 && beltOrbit <= beltHz + 3) sizeSDM += 1;
+                    if (Number.isFinite(beltOrbit) && beltHz > 0 && beltOrbit > beltHz + 3) sizeSDM += 3;
+                    if (Number.isFinite(body.beltSpan) && body.beltSpan > 1) sizeSDM += 1;
+                    let sizeS = tRoll2D('Belt Size S') - 10;
+                    if (sizeSDM !== 0) tDM('Size S', sizeSDM);
+                    sizeS += (sizeSDM + 1) * (bulk + 1);
+                    if (sizeS < 0) sizeS = 0;
+                    if (Number.isFinite(body.beltSpan) && body.beltSpan < 0.1 && sizeS > 0) sizeS = Math.ceil(sizeS / 2);
+                    body.beltSizeS = sizeS;
+                    tResult('Belt Size S', body.beltSizeS, 'WBH p.75');
                 }
 
                 // Precision Orbit Recalculation
@@ -1488,8 +1534,12 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
             }
         };
 
-        for (let i = 0; i < sys.worlds.length; i++) {
-            let w = sys.worlds[i];
+        // The caller names the bodies (targetWorlds). Bottom-up runs this once
+        // for the mainworld candidates and once for whoever is left. Walking
+        // every world both times rolled a new hydrography after the liquid
+        // had already been decided from the first pass.
+        for (let i = 0; i < targetWorlds.length; i++) {
+            let w = targetWorlds[i];
 
             // Physics Guards
             if (w.size === 0 || w.size === 'R' || w.type === 'Empty') {
@@ -1799,8 +1849,8 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
             let ex = roll1D();
             if (ex <= 2) tilt = 10 + roll1D() * 10;
             else if (ex === 3) tilt = 30 + roll1D() * 10;
-            else if (ex === 4) tilt = 90 + roll1D();
-            else if (ex === 5) tilt = 180 - roll1D();
+            else if (ex === 4) tilt = 90 + roll1D() * roll1D();
+            else if (ex === 5) tilt = 180 - roll1D() * roll1D();
             else tilt = 120 + roll1D() * 10;
         }
         return tilt;
@@ -2141,7 +2191,7 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
 
         if (sumRoll <= 5) {
             base = -0.001;
-            fraction = tRoll1D('Ecc Jitter (Result <= 5)') / 10000;
+            fraction = tRoll1D('Ecc Jitter (Result <= 5)') / 1000;
         }
         else if (sumRoll <= 7) {
             base = 0.000;
@@ -2407,7 +2457,23 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                 return;
             }
 
-            if (w.type === 'Planetoid Belt' || w.size === 0) {
+            if (w.type === 'Planetoid Belt') {
+                w.habitability = 0;
+                w.lifeProfile = "0000";
+                w.biomass = 0;
+                w.biocomplexity = 0;
+                w.biodiversity = 0;
+                w.compatibility = 0;
+                tSection('Resources (Belt)');
+                const bulk = Number.isFinite(w.beltBulk) ? w.beltBulk : 1;
+                const open = tRoll2D('Belt Resource') - 7 + bulk + Math.floor((w.beltM || 0) / 10) - Math.floor((w.beltC || 0) / 10);
+                w.beltResourceOpen = open;
+                w.resourceRating = Math.max(2, Math.min(12, open));
+                tResult('Resource Rating (Belt)', w.resourceRating, 'WBH p.74');
+                return;
+            }
+
+            if (w.size === 0) {
                 w.habitability = 0;
                 w.lifeProfile = "0000";
                 w.biomass = 0;
@@ -2613,7 +2679,7 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
             if (w.biodiversity >= 8 && w.biodiversity <= 10) { tDM('Biodiv 8-10', 1); rDm += 1; }
             else if (w.biodiversity >= 11) { tDM('High Biodiv', 2); rDm += 2; }
 
-            if (w.compatibility >= 0 && w.compatibility <= 3) { tDM('Low Comp', -1); rDm -= 1; }
+            if (w.biomass >= 1 && w.compatibility >= 0 && w.compatibility <= 3) { tDM('Low Comp', -1); rDm -= 1; }
             else if (w.compatibility >= 8) { tDM('High Comp', 2); rDm += 2; }
 
             if (!isManual(w, 'resourceRating')) w.resourceRating = Math.max(2, Math.min(12, tRoll2D('Resource Roll') - 7 + wSize + rDm));
@@ -2716,6 +2782,27 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
 
 
 
+function finalizeBeltResources(sys) {
+    const main = sys.mainworld || (sys.worlds || []).find((body) => body && body.type === 'Mainworld');
+    const industrial = !!(main && main.pop > 0 && (main.tl || 0) >= 8 && (main.tradeCodes || []).includes('In'));
+    const walk = (list) => {
+        for (const body of list || []) {
+            if (body && body.type === 'Planetoid Belt' && body.beltResourceOpen != null) {
+                let rating = body.beltResourceOpen;
+                if (industrial) rating -= tRoll1D('Belt Industrial Depletion');
+                body.resourceRating = Math.max(2, Math.min(12, rating));
+                const span = Number.isFinite(body.beltSpan) ? body.beltSpan.toFixed(3) : '0';
+                const parts = [body.beltM, body.beltS, body.beltC, body.beltOther].map((n) => String(n ?? 0)).join('.');
+                body.beltProfile = `${span}-${parts}-${body.beltBulk}-${body.resourceRating}-${body.beltSize1}-${body.beltSizeS}`;
+                tResult('Belt Profile', body.beltProfile, 'WBH p.75');
+            }
+            if (body && body.moons) walk(body.moons);
+        }
+    };
+    walk(sys.worlds);
+}
+
+export { finalizeBeltResources };
 export { generatePhysicals };
 export { generateAtmospherics };
 export { generateRotationalDynamics };

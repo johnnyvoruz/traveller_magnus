@@ -5,6 +5,8 @@
  * used). The players in two groups, Playing and Archived: each with their handle, which person in
  * the party they are ("Which one"), and Archive or Bring back. Shown to the referee only. The live
  * link is read once when the section opens (DU33), so a reload shows it as it did when it was made.
+ * BM2c: a player can play several characters; the list is sent whole, and a character moved from
+ * another player is said in one sentence beside the row.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { PlayerList } from '@voyage/shared';
@@ -14,9 +16,9 @@ import { campaign, transport } from '../../campaign/store.ts';
 import { apiFetch } from '../../platform/http.ts';
 import { parseRead } from '../../campaign/read.ts';
 import { showToast } from '../../shell/toast.ts';
-import { archiveMember, bringBack, failWords, setMemberPerson } from './referee_calls.ts';
+import { archiveMember, bringBack, failWords, setMemberPeople } from './referee_calls.ts';
 import PlayersBoard from './PlayersBoard.vue';
-import { partyPeople, type InviteShown, type MemberRow } from './players_words.ts';
+import { movedSentence, partyPeople, type InviteShown, type MemberRow } from './players_words.ts';
 import { crewLine, partyShips } from '../crew.ts';
 import { openCampaignName } from '../campaign_name.ts';
 
@@ -32,7 +34,7 @@ const listState = ref<'loading' | 'ready' | 'failed'>('loading');
 const listWords = ref('');
 /** The player a call is running for, and a refusal to say beside them. */
 const busyUser = ref<string | null>(null);
-const rowWords = ref<{ userId: string; text: string } | null>(null);
+const rowWords = ref<{ userId: string; text: string; said?: boolean } | null>(null);
 
 const people = computed(() => partyPeople({
     records: Object.values(campaign.records),
@@ -131,13 +133,14 @@ async function revoke(): Promise<void> {
     showToast('Link revoked. Nobody new can join with it.');
 }
 
-async function run(userId: string, work: () => Promise<{ ok: boolean; message?: string }>): Promise<void> {
+async function run(userId: string, work: () => Promise<{ ok: boolean; message?: string; said?: string }>): Promise<void> {
     if (props.readOnly || busyUser.value) return;
     busyUser.value = userId;
     rowWords.value = null;
     const result = await work();
     busyUser.value = null;
     if (!result.ok) rowWords.value = { userId, text: result.message ?? 'That did not work. Try again.' };
+    else if (result.said) rowWords.value = { userId, text: result.said, said: true };
     await loadList();
 }
 
@@ -155,10 +158,21 @@ function restore(member: MemberRow): void {
     });
 }
 
-function choosePerson(member: MemberRow, personId: string | null): void {
+/** A member's handle on the list as it stood before the call, for the moved sentence. */
+function handleOf(userId: string): string {
+    const rows = list.value ? [...list.value.playing, ...list.value.archived] : [];
+    return rows.find((row) => row.userId === userId)?.handle ?? '';
+}
+
+function nameOf(personId: string): string {
+    return people.value.find((person) => person.id === personId)?.name ?? '';
+}
+
+function choosePeople(member: MemberRow, personIds: string[]): void {
     void run(member.userId, async () => {
-        const result = await setMemberPerson(member.userId, personId);
-        return result.ok ? { ok: true } : { ok: false, message: result.message };
+        const result = await setMemberPeople(member.userId, personIds);
+        if (!result.ok) return { ok: false, message: result.message };
+        return { ok: true, said: result.data ? movedSentence(result.data.moved, nameOf, handleOf) : '' };
     });
 }
 
@@ -192,6 +206,6 @@ watch(() => campaign.universeId, () => {
     @revoke="revoke"
     @archive="archive"
     @back="restore"
-    @person="choosePerson"
+    @people="choosePeople"
   />
 </template>

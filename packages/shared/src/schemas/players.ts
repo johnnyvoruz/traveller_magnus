@@ -66,6 +66,7 @@ const PlayerMember = z.object({
     userId: z.string(),
     handle: z.string(),
     personId: z.string().nullable(),
+    personIds: z.array(z.string()).default([]),
     joined: z.string(),
     status: z.enum(['active', 'archived']),
     archivedAt: z.string().nullable(),
@@ -78,10 +79,32 @@ export const PlayerList = z.object({
 }).strict();
 export type PlayerList = z.infer<typeof PlayerList>;
 
-export const PlayerPerson = z.object({
+const PlayerPersonOne = z.object({
     personId: z.string().nullable(),
 }).strict();
+const PlayerPersonMany = z.object({
+    personIds: z.array(z.string()),
+}).strict();
+/** `{ personId }` is one character or none. `{ personIds }` replaces the list. Both keys at once is refused. */
+export const PlayerPerson = z.union([PlayerPersonOne, PlayerPersonMany]);
 export type PlayerPerson = z.infer<typeof PlayerPerson>;
+
+export const PlayerPeople = z.object({
+    personId: z.string().nullable(),
+    personIds: z.array(z.string()),
+    moved: z.array(z.object({
+        personId: z.string(),
+        fromUserId: z.string(),
+    }).strict()),
+}).strict();
+export type PlayerPeople = z.infer<typeof PlayerPeople>;
+
+/** A playing member's own tie. Until the character list, `personIds` is `[personId]` or `[]`. */
+export const PlayerSelf = z.object({
+    personId: z.string().nullable(),
+    personIds: z.array(z.string()),
+}).strict();
+export type PlayerSelf = z.infer<typeof PlayerSelf>;
 
 export const PlayerStatus = z.object({
     status: z.literal('active'),

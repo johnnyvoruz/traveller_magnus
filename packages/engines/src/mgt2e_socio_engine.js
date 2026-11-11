@@ -14,7 +14,7 @@
  * - Comprehensive trace logging (tSection, tRoll2D, tDM, tResult, tSkip)
  */
 import { rng, roll1D, toEHex, fromEHex, clampUWP } from './core/rng.js';
-import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tTrade, tRoll1D, tRoll2D, tRoll2D3, tClamp, tOverride, pendingRoll } from './core/trace.js';
+import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tTrade, tRoll1D, tRoll1D3, tRoll2D, tRoll2D3, tClamp, tOverride, pendingRoll } from './core/trace.js';
 import { getNextSystemName } from './core/names.js';
 import { settings, genState } from './core/settings.js';
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
@@ -592,22 +592,11 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             // Check for uppercase PBG as well
             pValue = parseInt(base.PBG[0], 16);
             tResult('P-Value (Inherited from PBG String)', pValue);
-        } else if (base.pop >= 10) {
-
-            pValue = 1;
-            tResult('Initial P-Value', 1);
-            while (pValue < 9) {
-                let r = tRoll1D(`P-Value Increment Check (Target 5+, Current: ${pValue})`);
-                if (r >= 5) {
-                    pValue++;
-                } else {
-                    break;
-                }
-            }
-            tResult('Final P-Value', pValue);
         } else if (base.pop > 0) {
-            pValue = Math.floor(rng() * 9) + 1;
-            tResult('P-Value (Random 1-9)', pValue);
+            const first = tRoll1D3('P-Value first D3');
+            const second = tRoll1D3('P-Value second D3');
+            pValue = (first - 1) * 3 + second;
+            tResult('P-Value', pValue, 'WBH p.149');
         } else {
             pValue = 0;
             tResult('P-Value (Population 0)', 0);
@@ -1384,6 +1373,8 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             tResult('Militancy Score', culM);
     
             culturalProfile = `${toEHex(culD)}${toEHex(culX)}${toEHex(culU)}${toEHex(culS)}-${toEHex(culC)}${toEHex(culP)}${toEHex(culE)}${toEHex(culM)}`;
+            base.xenophilia = culX;
+            base.militancy = culM;
             tResult('Final Cultural Profile', culturalProfile);
 
             // Narrative Cultural Quirks (D66)
@@ -2486,7 +2477,8 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
                 if (pop >= 1 && pop <= 5) tDM('Population 1-5', 1);
                 else if (pop === 8) tDM('Population 8', 1);
                 else if (pop === 9) tDM('Population 9', 2);
-                else if (pop === 10) tDM('Population A', 4); // reference table has no DM for Pop B+
+                else if (pop === 10) tDM('Population A', 4);
+                else if (pop === 11 || pop === 12) tDM('Population B-C', 4);
 
                 // Government DMs
                 if (gov === 0 || gov === 5) tDM('Government 0 or 5', 1);
@@ -2622,27 +2614,19 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
         });
 
         // ── Travel Zone ───────────────────────────────────────────────
+        // A charted zone is kept. A fresh zone waits until temperature, pressure,
+        // seismic stress, and culture exist. Page 209. Starport X is not a red zone.
         tSection('Travel Zone');
         let travelZone = "Green";
+        let travelZonePending = false;
         if (hasSocials && existingWorld && existingWorld.travelZone) {
-            // Inherit the existing travel zone when we're in social-inherit mode.
-            // This preserves both rules-computed and manually-overridden zones
-            // through System Editor preview passes.
             travelZone = existingWorld.travelZone;
             tResult('Travel Zone', `${travelZone} (Inherited)`);
+        } else if (settings.generationNoTravelZones) {
+            tResult('Travel Zone', 'Green (No Travel Zones setting active)');
         } else {
-            const isAmber = (atm >= 10) && ([0, 7, 10].includes(gov)) && (law === 0 || law >= 9);
-            if (settings.generationNoTravelZones) {
-                tResult('Travel Zone', 'Green (No Travel Zones setting active)');
-            } else if (isAmber) {
-                travelZone = "Amber";
-                tResult('Travel Zone', 'Amber (Environmental/Social hazard)');
-            } else if (starport === 'X') {
-                travelZone = "Red";
-                tResult('Travel Zone', 'Red (Starport X)');
-            } else {
-                tResult('Travel Zone', 'Green');
-            }
+            travelZonePending = true;
+            tResult('Travel Zone', 'Pending (WBH p.209)');
         }
 
         tSection('System Name');
@@ -2664,6 +2648,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
             existingWorld.uwp = uwp;
             existingWorld.uwpSecondary = uwp;
             existingWorld.travelZone = travelZone;
+            existingWorld.travelZonePending = travelZonePending;
             existingWorld.tradeCodes = tradeCodes;
             existingWorld.starport = starport;
             existingWorld.size = size;
@@ -2694,7 +2679,7 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
         return { 
             type: 'Mainworld', 
-            hexId, name, uwp, uwpSecondary: uwp, travelZone, tradeCodes, starport, 
+            hexId, name, uwp, uwpSecondary: uwp, travelZone, travelZonePending, tradeCodes, starport, 
             size, atm, atmCode: atm, hydro, hydroCode: hydro, 
             pop, popCode: pop, gov, govCode: gov, law, lawCode: law, tl, tlCode: tl,
             navalBase, scoutBase, militaryBase, corsairBase, bases, gasGiant,
@@ -2711,6 +2696,71 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
 
 
 
+function addZone(label, amount, total) {
+    if (!amount) return total;
+    tDM(label, amount);
+    return total + amount;
+}
+
+function assignTravelZone(sys) {
+    const world = sys.mainworld || (sys.worlds || []).find((body) => body && body.type === 'Mainworld');
+    if (!world || !world.travelZonePending) return;
+    if (settings.generationNoTravelZones) {
+        world.travelZone = 'Green';
+        delete world.travelZonePending;
+        return;
+    }
+    tSection('Travel Zone');
+    const atm = world.atmCode ?? world.atm ?? 0;
+    const gov = world.gov ?? 0;
+    const law = world.law ?? 0;
+    const temp = world.meanTempK;
+    const pressure = world.pressureBar ?? world.totalPressureBar ?? 0;
+    const seismic = world.seismicStress ?? 0;
+    const xeno = world.xenophilia;
+    const mil = world.militancy;
+    let amber = 0;
+    let red = 0;
+    const amberRoll = tRoll2D('Amber Zone');
+    if (atm === 11 || atm === 12 || atm >= 15) amber = addZone('Atmosphere B, C, F+', 2, amber);
+    if (temp > 373) amber = addZone('Mean temperature above 373K', 2, amber);
+    if (pressure > 50) amber = addZone('Pressure above 50 bar', 2, amber);
+    if (seismic >= 100) amber = addZone('Seismic stress 100+', 2, amber);
+    if (gov === 0) amber = addZone('Government 0', 4, amber);
+    if (gov === 7) amber = addZone('Government 7', 2, amber);
+    if (law === 0) amber = addZone('Law 0', 2, amber);
+    if (gov + law > 20) amber = addZone('Government + Law', gov + law - 16, amber);
+    if (typeof xeno === 'number' && xeno >= 0 && xeno <= 5) amber = addZone('Xenophilia', 6 - xeno, amber);
+    if (typeof mil === 'number' && mil >= 9) amber = addZone('Militancy', mil - 8, amber);
+    const redRoll = tRoll2D('Red Zone');
+    if (seismic >= 200) red = addZone('Seismic stress 200+', 2, red);
+    if (world.nativeSophont === true && (world.tl ?? 0) <= 3) red = addZone('Native sophonts TL 0-3', 4, red);
+    if (typeof xeno === 'number' && xeno >= 1 && xeno <= 2) red = addZone('Xenophilia', 6 - xeno, red);
+    if (typeof mil === 'number' && mil >= 12) red = addZone('Militancy', mil - 8, red);
+    if (redRoll + red >= 12) world.travelZone = 'Red';
+    else if (amberRoll + amber >= 12) world.travelZone = 'Amber';
+    else world.travelZone = 'Green';
+    delete world.travelZonePending;
+    tResult('Travel Zone', world.travelZone, 'WBH p.209');
+}
+
+function applyGovernmentNames(sys) {
+    const names = MgT2EData.governmentTypes || [];
+    const walk = (list) => {
+        for (const body of list || []) {
+            if (!body) continue;
+            if (body.gov != null && names[body.gov]) body.govType = names[body.gov];
+            if (body.moons) walk(body.moons);
+        }
+    };
+    walk(sys.worlds);
+    if (sys.mainworld && sys.mainworld.gov != null && names[sys.mainworld.gov]) {
+        sys.mainworld.govType = names[sys.mainworld.gov];
+    }
+}
+
+export { assignTravelZone };
+export { applyGovernmentNames };
 export { generateCoreSocial };
 export { generateExtendedSocioeconomics };
 export { finalizeSubordinateSocial };

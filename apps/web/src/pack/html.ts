@@ -144,6 +144,8 @@ export function renderPack(plan: PackPlan, paint: PackPaint): string {
         + block('Fuel', row.fuel)
         + block('Ledger', row.ledger)
         + block('Sheet', row.sheet)
+        + block('Crew', row.crew)
+        + block('Ship\'s locker', row.locker)
         + block('Status', row.status)
         + '<h3>Connections</h3>'
         + connectionList(plan, row.id)

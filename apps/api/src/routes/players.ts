@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { detectPlayers } from '../auth/players_schema';
+import { detectMemberPeople, detectPlayers } from '../auth/players_schema';
 import { requireUser, ulid, type AppContext } from '../auth/session';
 import type { AppEnv } from '../env';
 import { fail, ok } from '../http';
@@ -191,11 +191,29 @@ export function mountPlayerRoutes(route: Hono<AppEnv>): void {
             archivedAt: string | null;
             archivedBy: 'owner' | 'self' | null;
         }>();
-        const rows = listed.results ?? [];
+        const tableReady = await detectMemberPeople(c.env.DB);
+        const lists = await peopleLists(c.env.DB, owned.row.id, tableReady);
+        const rows = (listed.results ?? []).map((row) => {
+            const tie = tieOf(row.personId, row.userId, lists);
+            return { ...row, personId: tie.personId, personIds: tie.personIds };
+        });
         return held(c, {
             playing: rows.filter((row) => row.status === 'active'),
             archived: rows.filter((row) => row.status !== 'active'),
         });
+    });
+
+    route.get('/:id/players/me', async (c) => {
+        const access = await memberUniverse(c);
+        if (access instanceof Response) return privateNoStore(access);
+        if (access.role === 'archived') return privateNoStore(fail(c, 403, 'not_a_member', ARCHIVED));
+        if (access.role !== 'member') return privateNoStore(fail(c, 404, 'not_found', NOT_UNIVERSE));
+        if (!await detectPlayers(c.env.DB)) return unavailable(c);
+        const row = await memberRow(c.env.DB, access.row.id, access.actor.id);
+        const tableReady = await detectMemberPeople(c.env.DB);
+        const lists = await peopleLists(c.env.DB, access.row.id, tableReady);
+        const tie = tieOf(row?.personId ?? null, access.actor.id, lists);
+        return held(c, { personId: tie.personId, personIds: tie.personIds });
     });
 
     route.patch('/:id/players/me', async (c) => {
@@ -206,15 +224,7 @@ export function mountPlayerRoutes(route: Hono<AppEnv>): void {
         const blocked = originBlocked(c);
         if (blocked) return blocked;
         if (!await detectPlayers(c.env.DB)) return unavailable(c);
-        const parsed = PlayerPerson.safeParse(await readBody(c));
-        if (!parsed.success) return fail(c, 400, 'validation', INVALID);
-        if (parsed.data.personId !== null && !await personInParty(c, access, access.actor.id, parsed.data.personId)) {
-            return fail(c, 400, 'validation', INVALID);
-        }
-        await c.env.DB.prepare(
-            `UPDATE universe_members SET person_id = ? WHERE universe_id = ? AND user_id = ?`,
-        ).bind(parsed.data.personId, access.row.id, access.actor.id).run();
-        return held(c, { personId: parsed.data.personId });
+        return savePeople(c, access, access.actor.id, await readBody(c));
     });
 
     route.patch('/:id/players/:userId', async (c) => {
@@ -235,19 +245,13 @@ export function mountPlayerRoutes(route: Hono<AppEnv>): void {
             ).bind(owned.row.id, userId).run();
             return held(c, { status: 'active' as const });
         }
-        if (person.data.personId !== null) {
-            const access: MemberUniverse = {
-                row: owned.row,
-                actor: owned.actor,
-                role: 'owner',
-                forward: owned.forward,
-            };
-            if (!await personInParty(c, access, userId, person.data.personId)) return fail(c, 400, 'validation', INVALID);
-        }
-        await c.env.DB.prepare(
-            `UPDATE universe_members SET person_id = ? WHERE universe_id = ? AND user_id = ?`,
-        ).bind(person.data.personId, owned.row.id, userId).run();
-        return held(c, { personId: person.data.personId });
+        const access: MemberUniverse = {
+            row: owned.row,
+            actor: owned.actor,
+            role: 'owner',
+            forward: owned.forward,
+        };
+        return savePeople(c, access, userId, body);
     });
 
     route.delete('/:id/players/:userId', async (c) => {
@@ -279,9 +283,117 @@ async function readBody(c: AppContext): Promise<unknown> {
     }
 }
 
-async function personInParty(c: AppContext, access: MemberUniverse, memberId: string, personId: string): Promise<boolean> {
-    const ids = await partyIds(c, access, memberId);
-    return ids.has(personId);
+type PersonBody = { personId: string | null } | { personIds: string[] };
+type MovedPerson = { personId: string; fromUserId: string };
+
+function idsFromPerson(data: PersonBody): string[] | null {
+    if ('personIds' in data) {
+        if (new Set(data.personIds).size !== data.personIds.length) return null;
+        return data.personIds;
+    }
+    return data.personId ? [data.personId] : [];
+}
+
+async function peopleLists(db: D1Database, universeId: string, tableReady: boolean): Promise<Map<string, string[]> | null> {
+    if (!tableReady) return null;
+    const listed = await db.prepare(
+        `SELECT user_id AS userId, person_id AS personId
+         FROM universe_member_people WHERE universe_id = ? ORDER BY position, person_id`,
+    ).bind(universeId).all<{ userId: string; personId: string }>();
+    const lists = new Map<string, string[]>();
+    for (const row of listed.results ?? []) {
+        const list = lists.get(row.userId) ?? [];
+        list.push(row.personId);
+        lists.set(row.userId, list);
+    }
+    return lists;
+}
+
+function tieOf(columnId: string | null, userId: string, lists: Map<string, string[]> | null): { personId: string | null; personIds: string[] } {
+    const personIds = lists ? (lists.get(userId) ?? []) : (columnId ? [columnId] : []);
+    return { personId: personIds[0] ?? null, personIds };
+}
+
+async function assignPeople(db: D1Database, universeId: string, userId: string, ids: string[]): Promise<{ personId: string | null; personIds: string[]; moved: MovedPerson[] }> {
+    const personId = ids[0] ?? null;
+    if (!await detectMemberPeople(db)) {
+        await db.prepare(
+            `UPDATE universe_members SET person_id = ? WHERE universe_id = ? AND user_id = ?`,
+        ).bind(personId, universeId, userId).run();
+        return { personId, personIds: ids, moved: [] };
+    }
+    const moved: MovedPerson[] = [];
+    const affected = new Set<string>();
+    if (ids.length > 0) {
+        const marks = ids.map(() => '?').join(', ');
+        const holders = await db.prepare(
+            `SELECT user_id AS userId, person_id AS personId FROM universe_member_people
+             WHERE universe_id = ? AND user_id != ? AND person_id IN (${marks})`,
+        ).bind(universeId, userId, ...ids).all<{ userId: string; personId: string }>();
+        for (const row of holders.results ?? []) {
+            moved.push({ personId: row.personId, fromUserId: row.userId });
+            affected.add(row.userId);
+        }
+        const columns = await db.prepare(
+            `SELECT user_id AS userId, person_id AS personId FROM universe_members
+             WHERE universe_id = ? AND user_id != ? AND person_id IN (${marks})`,
+        ).bind(universeId, userId, ...ids).all<{ userId: string; personId: string }>();
+        for (const row of columns.results ?? []) {
+            if (!row.personId) continue;
+            if (!moved.some((item) => item.personId === row.personId && item.fromUserId === row.userId)) {
+                moved.push({ personId: row.personId, fromUserId: row.userId });
+            }
+            affected.add(row.userId);
+        }
+    }
+    const now = new Date().toISOString();
+    const writes = [
+        db.prepare(`DELETE FROM universe_member_people WHERE universe_id = ? AND user_id = ?`).bind(universeId, userId),
+    ];
+    if (ids.length > 0) {
+        const marks = ids.map(() => '?').join(', ');
+        writes.unshift(db.prepare(
+            `DELETE FROM universe_member_people WHERE universe_id = ? AND user_id != ? AND person_id IN (${marks})`,
+        ).bind(universeId, userId, ...ids));
+    }
+    for (let position = 0; position < ids.length; position += 1) {
+        writes.push(db.prepare(
+            `INSERT INTO universe_member_people (universe_id, user_id, person_id, position, created_at)
+             VALUES (?, ?, ?, ?, ?)`,
+        ).bind(universeId, userId, ids[position], position, now));
+    }
+    writes.push(db.prepare(
+        `UPDATE universe_members SET person_id = ? WHERE universe_id = ? AND user_id = ?`,
+    ).bind(personId, universeId, userId));
+    await db.batch(writes);
+    for (const other of affected) {
+        const left = await db.prepare(
+            `SELECT person_id AS personId FROM universe_member_people
+             WHERE universe_id = ? AND user_id = ? ORDER BY position, person_id`,
+        ).bind(universeId, other).all<{ personId: string }>();
+        const rest = (left.results ?? []).map((row) => row.personId);
+        const fix = rest.map((id, position) => db.prepare(
+            `UPDATE universe_member_people SET position = ? WHERE universe_id = ? AND user_id = ? AND person_id = ?`,
+        ).bind(position, universeId, other, id));
+        fix.push(db.prepare(
+            `UPDATE universe_members SET person_id = ? WHERE universe_id = ? AND user_id = ?`,
+        ).bind(rest[0] ?? null, universeId, other));
+        await db.batch(fix);
+    }
+    return { personId, personIds: ids, moved };
+}
+
+async function savePeople(c: AppContext, access: MemberUniverse, userId: string, body: unknown): Promise<Response> {
+    const parsed = PlayerPerson.safeParse(body);
+    if (!parsed.success) return fail(c, 400, 'validation', INVALID);
+    const ids = idsFromPerson(parsed.data);
+    if (!ids) return fail(c, 400, 'validation', INVALID);
+    if (ids.length > 1 && !await detectMemberPeople(c.env.DB)) return fail(c, 400, 'validation', INVALID);
+    if (ids.length > 0) {
+        const party = await partyIds(c, access, userId);
+        if (ids.some((id) => !party.has(id))) return fail(c, 400, 'validation', INVALID);
+    }
+    return held(c, await assignPeople(c.env.DB, access.row.id, userId, ids));
 }
 
 export function mountAccountPlayerRoutes(app: Hono<AppEnv>): void {

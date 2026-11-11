@@ -139,13 +139,13 @@ describe('cold load render', { concurrency: 1 }, () => {
 
     test('/join/:token renders the join page', async () => {
         const html = await render('/src/characters/screens/JoinPage.vue', '/join/share-token');
-        assert.match(html, /You&#39;re invited/);
+        assert.match(html, /You are invited/);
         assert.match(html, /Checking your session/);
     });
 
     test('/join renders the same join page', async () => {
         const html = await render('/src/characters/screens/JoinPage.vue', '/join');
-        assert.match(html, /You&#39;re invited/);
+        assert.match(html, /You are invited/);
         assert.match(html, /Checking your session/);
     });
 

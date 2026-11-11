@@ -210,6 +210,29 @@ test('a member read projects the live set and keeps visible when seq moves', () 
     assert.equal(climbed.seq > page.seq, true);
 });
 
+test('a member read keeps the crew switches and drops the base fuel mark', () => {
+    const { sql } = open();
+    const ship = 'cr_00000000-0000-4000-8000-000000000030';
+    applyCampaignChanges(sql, {
+        records: [record(ship, {
+            type: 'vessel',
+            visibility: 'players',
+            name: 'Kestrel',
+            status: {
+                fuelTons: 12,
+                fuelMark: 'naval',
+                roles: [{ name: 'Captain', ledger: false, trade: true, locker: true }],
+            },
+        })],
+    }, NOW);
+    const page = readPlayersCampaign(sql, 0, 1000, { userId: MEMBER, handles: {} });
+    const seen = page.records.find((row) => row.id === ship);
+    assert.equal(seen.status.fuelTons, 12);
+    assert.equal(Object.hasOwn(seen.status, 'fuelMark'), false);
+    assert.deepEqual(seen.status.roles, [{ name: 'Captain', ledger: false, trade: true, locker: true }]);
+    assert.equal(JSON.stringify(page).includes('naval'), false);
+});
+
 test('a member read drops a referee block, closed or unclosed, and so does the demo read', () => {
     const { sql } = open();
     const outside = 'The port is open.';

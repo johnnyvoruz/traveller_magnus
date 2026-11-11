@@ -7,7 +7,7 @@
  */
 import type { StatusAppend } from '@voyage/shared';
 import { apiFetch } from '../platform/http.ts';
-import { campaign, loadPlayerPages, transport } from './store.ts';
+import { campaign, rereadPlayerPages, transport } from './store.ts';
 
 export type AppendResult = { ok: true } | { ok: false; sentence: string };
 
@@ -23,14 +23,18 @@ async function sentenceOf(res: Response): Promise<string> {
     }
 }
 
-/** Sends one piece for one ship. On success the player's pages are read again. */
-export async function appendStatus(id: string, append: StatusAppend['append']): Promise<AppendResult> {
+/**
+ * Sends one piece for one ship. On success the player's pages are read again in place (DF39), so the
+ * page stays mounted. `personId` names which of the member's characters presses (DS4b); left out, the
+ * server takes the member's one character.
+ */
+export async function appendStatus(id: string, append: StatusAppend['append'], personId?: string): Promise<AppendResult> {
     if (!campaign.universeId) return { ok: false, sentence: APPEND_OFFLINE };
     let res: Response;
     try {
         res = await apiFetch(transport.fetch, `/api/universes/${encodeURIComponent(campaign.universeId)}/campaign/changes`, {
             method: 'PATCH',
-            body: JSON.stringify({ appends: [{ id, append }] }),
+            body: JSON.stringify({ appends: [{ id, ...(personId ? { personId } : {}), append }] }),
         });
     } catch {
         return { ok: false, sentence: APPEND_OFFLINE };
@@ -45,6 +49,6 @@ export async function appendStatus(id: string, append: StatusAppend['append']): 
     } catch {
         // The write landed; the read below shows it.
     }
-    await loadPlayerPages(campaign.universeId);
+    await rereadPlayerPages(campaign.universeId);
     return { ok: true };
 }

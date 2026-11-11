@@ -151,10 +151,10 @@ test('the lot keeps its fare through the schema and a sheet edit', () => {
 
 test('the vessel page boards a passenger and the ship sheet shows the fare under the Passage box', () => {
     const page = src('workspace/VesselTrade.vue');
-    assert.match(page, /<select class="vt-box vt-class" :value="item\.class" :disabled="readOnly"[^>]*data-passage @change="setClass\(i, \$event\)">/);
+    assert.match(page, /<select v-else class="vt-box vt-class" :value="item\.class" :disabled="readOnly"[^>]*data-passage @change="setClass\(i, \$event\)">/);
     assert.match(page, /<option v-for="one in classes" :key="one\.key" :value="one\.name">\{\{ one\.name \}\}<\/option>/, 'the classes from the file');
     assert.match(page, /<span v-if="isBoarded\(item\)" class="vt-fare" data-fare>/);
-    assert.match(page, /<button v-else-if="boarding !== i" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard\(i\)">Board<\/button>/);
+    assert.match(page, /<button v-else-if="boarding !== i && !player" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard\(i\)">Board<\/button>/);
     assert.match(page, /passengers: boarded\(passengers\.value, i, lot\.class, found\.credits\), ledger: postLedger\(ledger\.value, line\)/, 'one commit: the lot and the ledger line');
     assert.match(page, /const line = fareLine\(passengerName\(lot\), lot\.class, parsecs, found\.credits, today\.value\);/);
     const sheet = src('workspace/ShipSheet.vue');
@@ -173,8 +173,8 @@ test('a removed fare line unboards the lot it boarded; any other line leaves the
     assert.deepEqual(unboarded(lots, { memo: 'Berthing fees', amount: -200, kind: 'expense' }, nameOf), lots);
     assert.deepEqual(unboarded(lots, { memo: 'Fare: Cy, Low passage, 1 parsec', amount: 700, kind: 'income' }, nameOf), lots, 'a lot with no fare kept is not touched');
     const page = src('workspace/VesselTrade.vue');
-    assert.match(page, /<button type="button" class="ui-btn vt-drop" :disabled="readOnly" aria-label="Remove this line" title="Remove this line" data-drop-line @click="dropLine\(item\)">/);
-    assert.match(page, /ledger: ledger\.value\.filter\(\(one\) => one !== line\), passengers: unboarded\(passengers\.value, line, passengerName\)/, 'one commit: the line and the lot');
+    assert.match(page, /<button v-else-if="!player" type="button" class="ui-btn vt-drop" :disabled="readOnly" aria-label="Remove this line" title="Remove this line" data-drop-line @click="dropLine\(item\)">/);
+    assert.match(page, /const kept = removeLedgerLine\(ledger\.value, line\);\n\s+if \(!kept\) return;\n\s+push\(now, \{ status: statusWithTrade\(now, \{ ledger: kept, passengers: unboarded\(passengers\.value, line, passengerName\)/, 'one commit: the line and the lot');
 });
 
 test('the next jump on the track gives the Board form its jump (DT3d); no jump ahead, no hexes, or off the grid gives none', () => {

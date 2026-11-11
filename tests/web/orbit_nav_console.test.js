@@ -4,9 +4,11 @@
  * reading, and the thrust offered when a ship is taken in hand.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { HOUR } from '../../apps/web/src/orbit/clock.ts';
-import { appendedTail, editedTail, lastThrust, movedWaypoint, onwardLegs, routeFixed, routePreview, samePlace, storedRoute } from '../../apps/web/src/orbit/course.ts';
+import { appendedTail, editedTail, lastThrust, movedWaypoint, onwardLegs, openingThrust, routeFixed, routePreview, samePlace, storedRoute } from '../../apps/web/src/orbit/course.ts';
+import { thrustOf } from '../../apps/web/src/workspace/jump_from_here.ts';
 import { layingContinues, pressMeans, sameHover } from '../../apps/web/src/orbit/ship_marks.ts';
 import { shipAt } from '../../apps/web/src/orbit/ships.ts';
 
@@ -80,6 +82,17 @@ test('the thrust offered is the last flight leg flown; a ship that never flew on
     assert.equal(lastThrust([{ mode: 'flight', accelG: 2 }, { mode: 'flight', accelG: 4 }, { mode: 'jump' }]), 4);
     // A flight leg written without a thrust (the hours were the referee's) offers nothing of its own.
     assert.equal(lastThrust([{ mode: 'flight', accelG: 3 }, { mode: 'flight' }]), 3);
+});
+
+test('the console opens on the sheet\'s whole G; a thrust set this visit stays; no whole number leaves the last flight', () => {
+    const sheet = (text) => thrustOf({ 'Manoeuvre Drive Output': text });
+    assert.equal(openingThrust({ visit: null, sheet: sheet('2'), flown: 4 }), 2);
+    assert.equal(openingThrust({ visit: 5, sheet: sheet('2'), flown: 4 }), 5);
+    assert.equal(openingThrust({ visit: null, sheet: sheet(''), flown: 4 }), 4);
+    assert.equal(openingThrust({ visit: null, sheet: sheet('2.5'), flown: null }), null);
+    assert.equal(openingThrust({ visit: null, sheet: sheet('2'), flown: null }), 2);
+    const view = readFileSync(new URL('../../apps/web/src/views/OrbitView.vue', import.meta.url), 'utf8');
+    assert.match(view, /openingThrust\(\{[\s\S]*thrustOf\(fieldsOf\(record\.sheet\)\)/);
 });
 
 // ---- The stored route (section 0c) ----

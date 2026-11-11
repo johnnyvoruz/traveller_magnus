@@ -391,7 +391,7 @@ test('Regina and Zeycude: the released systems, at the fitted view', { timeout: 
     }
     const regina = batches.Regina;
     // The mainworld is a moon marked tidallyLocked: it turns with its own 24-hour sidereal day
-    // and keeps its 0.4° tilt, where legacy would face it to the star with none.
+    // and keeps the tilt the engine stored, where legacy would face it to the star with none.
     const main = disc(regina.batch, 'w4m1');
     assert.equal(main.body.name, 'Regina');
     assert.equal(main.body.tidallyLocked, true);
@@ -400,14 +400,16 @@ test('Regina and Zeycude: the released systems, at the fitted view', { timeout: 
     const parent = regina.at.get('w4');
     const moon = regina.at.get('w4m1');
     close(main.casters[0][2], parent.r / moon.r);
-    // Regina A-VII and C-I turn backwards: the tilt says so, the spin stays forward.
-    assert.equal(disc(regina.batch, 'w8').tiltDeg, 174);
+    // Regina A-VII and C-I. A-VII's tilt moved when engine 1.4.0 drew extreme tilt as 1D×1D.
+    assert.equal(disc(regina.batch, 'w8').tiltDeg, 25);
     assert.equal(disc(regina.batch, 'w1').tiltDeg, 178.8);
     // Its three ringed worlds wear rings; the others do not.
     assert.deepEqual(regina.batch.discs.filter((item) => item.ring).map((item) => item.key).sort(), ['w5', 'w6', 'w9']);
     const zeycude = batches.Zeycude;
-    assert.deepEqual(zeycude.batch.discs.filter((item) => item.ring).map((item) => item.key), ['w6']);
-    assert.equal(disc(zeycude.batch, 'w7').tiltDeg, 96);
+    // Engine 1.4.0 belt bulk, significant-body counts, and extreme tilt share the stream,
+    // so Zeycude's ring, A-V's tilt, and A-IV's shading moons moved again.
+    assert.deepEqual(zeycude.batch.discs.filter((item) => item.ring).map((item) => item.key), ['w5']);
+    assert.equal(disc(zeycude.batch, 'w7').tiltDeg, 0.1);
     assert.equal(disc(zeycude.batch, 'w0').body.name, 'Zeycude');
-    assert.ok(disc(zeycude.batch, 'w6').casters.length >= 3);
+    assert.equal(disc(zeycude.batch, 'w6').casters.length, 0);
 });

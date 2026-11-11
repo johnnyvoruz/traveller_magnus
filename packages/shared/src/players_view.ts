@@ -337,7 +337,8 @@ function projectStatus(
             out.owners = owners;
             continue;
         }
-        if (key === 'fuelMark' || key === 'roles') continue;
+        // The base mark stays off the players' read (AF2). The crew switches stay on (a name and three booleans).
+        if (key === 'fuelMark') continue;
         out[key] = redactValue(value, records, hiddenIds);
     }
     return out as CampaignRecord['status'];

@@ -198,9 +198,9 @@ describe('the proposals screens', { concurrency: 1 }, () => {
     });
 });
 
-test('the one-time token: shown once with Copy, "You won\'t see it again", and the leak sentence', () => {
+test('the one-time token: shown once with Copy, "You will not see it again", and the leak sentence', () => {
     const make = read('workspace/proposals/TokenMake.vue');
-    assert.match(make, /copy this token now\. You won't see it again\./);
+    assert.match(make, /copy this token now\. You will not see it again\./);
     assert.match(make, /If this token leaks, revoke it here/);
     assert.match(make, /made\.value = \{ token: answer\.token, name: answer\.row\.name \};/);
     assert.match(make, /@click="made = null; emit\('done'\)"/, 'Done forgets it');

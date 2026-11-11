@@ -3,12 +3,13 @@
  * The page an invite link opens. The token is read once, then taken out of the address bar.
  * Signed out, sign-in returns here and the token stays in this browser.
  * Signed in, Join enters the campaign, then you choose who you are, or Not yet.
+ * BM2c (Johnny 141): you can tick more than one character, then Continue. Not yet still means none.
  */
 import { JoinClaim, JoinPreview, type CampaignRead } from '@voyage/shared';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { loadSession, session, signIn } from '../../account/session.ts';
-import { loadPlaying, setPerson } from '../../campaign/membership.ts';
+import { loadPlaying, setPeople } from '../../campaign/membership.ts';
 import { campaign, loadPlayerPages, pinTruthVersion, transport } from '../../campaign/store.ts';
 import { pagePath, replaceUrl, sessionGet, sessionRemove, sessionSet } from '../../platform/browser.ts';
 import { apiFetch } from '../../platform/http.ts';
@@ -28,6 +29,8 @@ const refusal = ref('');
 const trouble = ref('');
 const held = ref('');
 const people = ref<{ id: string; name: string }[]>([]);
+/** The characters ticked, in the order ticked. */
+const ticked = ref<string[]>([]);
 let stopCommands: (() => void) | null = null;
 
 const signedIn = computed(() => session.user !== null);
@@ -164,13 +167,19 @@ async function enter(): Promise<void> {
     }
 }
 
-async function pick(personId: string | null): Promise<void> {
+function tick(personId: string, event: Event): void {
+    const on = (event.target as HTMLInputElement).checked;
+    ticked.value = on ? [...ticked.value.filter((id) => id !== personId), personId] : ticked.value.filter((id) => id !== personId);
+}
+
+/** Saves the characters ticked (none for Not yet), then opens the campaign. */
+async function pick(personIds: string[]): Promise<void> {
     if (busy.value) return;
     busy.value = true;
     trouble.value = '';
     try {
-        const saved = await setPerson(personId);
-        if (personId !== null && !saved) {
+        const saved = await setPeople(personIds);
+        if (personIds.length && !saved) {
             trouble.value = 'This page could not save that choice.';
             return;
         }
@@ -193,7 +202,7 @@ function bindCommands(): void {
         stopCommands = registerCommand({ id: 'join-campaign', name: 'Join this campaign', run: () => { void enter(); } });
         return;
     }
-    stopCommands = registerCommand({ id: 'join-not-yet', name: 'Not yet', run: () => { void pick(null); } });
+    stopCommands = registerCommand({ id: 'join-not-yet', name: 'Not yet', run: () => { void pick([]); } });
 }
 
 watch([checked, signedIn, refused, chosen], bindCommands);
@@ -244,18 +253,31 @@ onBeforeUnmount(() => {
         @click="enter"
       >{{ busy ? 'Joining…' : 'Join' }}</button>
       <template v-else-if="checked && face.state === 'choose'">
-        <ul v-if="people.length" class="join-people">
-          <li v-for="person in people" :key="person.id">
-            <button type="button" class="ui-btn" :disabled="busy" @click="pick(person.id)">{{ person.name }}</button>
-          </li>
-        </ul>
-        <button
-          type="button"
-          class="ui-btn is-primary"
-          data-command="join-not-yet"
-          :disabled="busy"
-          @click="pick(null)"
-        >Not yet</button>
+        <fieldset v-if="people.length" class="join-people" data-join-people>
+          <legend class="join-legend">The characters you play</legend>
+          <label v-for="person in people" :key="person.id" class="join-person">
+            <input type="checkbox" :checked="ticked.includes(person.id)" :disabled="busy" @change="tick(person.id, $event)" />
+            {{ person.name }}
+          </label>
+        </fieldset>
+        <div class="join-acts">
+          <button
+            v-if="people.length"
+            type="button"
+            class="ui-btn is-primary"
+            data-join-continue
+            :disabled="busy || !ticked.length"
+            @click="pick(ticked)"
+          >Continue</button>
+          <button
+            type="button"
+            class="ui-btn"
+            :class="{ 'is-primary': !people.length }"
+            data-command="join-not-yet"
+            :disabled="busy"
+            @click="pick([])"
+          >Not yet</button>
+        </div>
       </template>
       <a v-else-if="checked && face.state === 'refused'" class="ui-btn" href="/">Back to the map</a>
     </section>
@@ -305,17 +327,53 @@ onBeforeUnmount(() => {
 .join-people {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   margin: 0 0 16px;
   padding: 0;
-  list-style: none;
+  border: 0;
 }
 
-.join-people .ui-btn {
-  width: 100%;
+.join-legend {
+  margin: 0 0 6px;
+  padding: 0;
+  color: var(--text-muted);
+  font: 600 12px/1.4 var(--font-text);
+}
+
+.join-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  color: var(--text-0);
+  font: 400 14px/1.3 var(--font-text);
+  cursor: pointer;
+}
+
+.join-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .join-trouble {
   color: var(--danger);
+}
+
+/* On a phone the join controls meet 44 px. A long name wraps inside the card. */
+@media (max-width: 599px) {
+  .join-person {
+    min-height: 44px;
+  }
+
+  .join-card .ui-btn {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+  }
 }
 </style>

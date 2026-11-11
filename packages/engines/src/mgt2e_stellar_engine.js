@@ -7,7 +7,7 @@
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
 import { MgT2EMath } from './mgt2e_math.js';
 import { rng, reseedForHex, roll2D, rollD3, toEHex } from './core/rng.js';
-import { trace, writeLogLine, startTrace, tSection, tResult, tDM, tRoll1D, tRoll2D, endTrace } from './core/trace.js';
+import { trace, writeLogLine, startTrace, tSection, tResult, tDM, tRoll1D, tRoll2D, tRoll3D, endTrace } from './core/trace.js';
 import { settings } from './core/settings.js';
     // =========================================================================
     // INTERNAL HELPERS (Mapped from Legacy Logic)
@@ -149,13 +149,13 @@ import { settings } from './core/settings.js';
     function applyWhiteDwarfPhysics(star, sysAge) {
         tSection('White Dwarf Physics');
 
-        // Mass: 2D roll + D10 fractional
+        // Mass: (2D−1)/10 + d10/100. Page 228.
         let d2Roll  = tRoll2D('WD Mass Roll (2D)');
         let d10Roll = Math.floor(rng() * 10) + 1;
         star.mass = ((d2Roll - 1) / 10) + (d10Roll / 100);
-        tResult('WD Mass (Sol)', star.mass.toFixed(3), 'MgT2E 1.1: Stellar Life Cycles');
+        tResult('WD Mass (Sol)', star.mass.toFixed(3), 'WBH p.228');
 
-        // Diameter from mass (inverse relationship)
+        // Diameter is (1/mass)×0.01. The aging table's 0.017 is the mass-0.6 row only.
         star.diam = (1 / star.mass) * 0.01;
 
         // Dead age: random fraction of system age
@@ -432,6 +432,58 @@ function convertAuToOrbit(au) {
         return generateStarObject(sType, subType, sClass, label);
     }
 
+    function fmtProfile(n) {
+        const x = Number(n);
+        if (!Number.isFinite(x)) return '0.000';
+        return x.toFixed(3);
+    }
+
+    function starToken(star) {
+        const sub = star.subType == null ? '' : String(star.subType);
+        return `${star.sType}${sub} ${star.sClass}`;
+    }
+
+    function assignDesignations(sys) {
+        const stars = sys.stars || [];
+        const comps = new Map();
+        stars.forEach((star, i) => {
+            if (star.separation === 'Companion') {
+                const parent = star.parentStarIdx ?? 0;
+                if (!comps.has(parent)) comps.set(parent, []);
+                comps.get(parent).push(i);
+            }
+        });
+        let letter = 0;
+        stars.forEach((star, i) => {
+            if (star.separation === 'Companion') return;
+            const mark = String.fromCharCode(65 + letter);
+            letter += 1;
+            const kids = comps.get(i) || [];
+            if (kids.length === 0) {
+                star.designation = mark;
+            } else {
+                star.designation = mark + 'a';
+                kids.forEach((ci, k) => {
+                    stars[ci].designation = mark + String.fromCharCode(98 + k);
+                });
+            }
+        });
+    }
+
+    function writeStarProfile(sys) {
+        const primary = sys.stars[0];
+        if (!primary) return;
+        assignDesignations(sys);
+        const count = sys.stars.length > 1 ? `${sys.stars.length}-` : '';
+        const head = `${count}${starToken(primary)}-${fmtProfile(primary.mass)}-${fmtProfile(primary.diam)}-${fmtProfile(primary.lum)}-${fmtProfile(sys.age)}`;
+        const rest = sys.stars.slice(1).map((star) => {
+            const des = star.designation || star.separation || star.role || 'S';
+            return `${des}-${fmtProfile(star.orbitId)}-${fmtProfile(star.eccentricity || 0)}-${starToken(star)}-${fmtProfile(star.mass)}-${fmtProfile(star.diam)}-${fmtProfile(star.lum)}`;
+        });
+        sys.starProfile = [head, ...rest].join(':');
+        tResult('Star System Profile', sys.starProfile, 'WBH p.32');
+    }
+
     /**
      * Helper to roll a MgT2E Star type and class.
      * tableKey selects which primary type table to use (primaryType or bottomUpPrimaryType).
@@ -609,7 +661,7 @@ function convertAuToOrbit(au) {
 
         let sumRoll = roll + dm;
         let base = 0, fraction = 0;
-        if (sumRoll <= 5) { base = -0.001; fraction = tRoll1D('Jitter') / 10000; }
+        if (sumRoll <= 5) { base = -0.001; fraction = tRoll1D('Jitter') / 1000; }
         else if (sumRoll <= 7) { base = 0.000; fraction = tRoll1D('Jitter') / 200; }
         else if (sumRoll <= 9) { base = 0.030; fraction = tRoll1D('Jitter') / 100; }
         else if (sumRoll === 10) { base = 0.050; fraction = tRoll1D('Jitter') / 20; }
@@ -799,7 +851,7 @@ function convertAuToOrbit(au) {
                 if (['Ia', 'Ib', 'II', 'III', 'IV'].includes(star.sClass)) dm += 1;
                 if (['V', 'VI'].includes(star.sClass) && ['O', 'B', 'A', 'F'].includes(star.sType)) dm += 1;
                 if (['V', 'VI'].includes(star.sClass) && star.sType === 'M') dm -= 1;
-                if (star.sClass === 'D' || ['L', 'T', 'Y'].includes(star.sType)) dm -= 1;
+                if (star.sClass === 'D' || star.sType === 'BD' || ['L', 'T', 'Y'].includes(star.sType)) dm -= 1;
                 return dm;
             };
 
@@ -866,6 +918,7 @@ function convertAuToOrbit(au) {
             }
         }
 
+        writeStarProfile(sys);
         return sys;
     }
 
@@ -913,14 +966,12 @@ function convertAuToOrbit(au) {
         }
         if (ggExists) {
             let ggQ = tRoll2D('GG Quantity');
-            const ggDMs = MgT2EData.systemInventory.gasGiantDMs;
+            const ggDMs = MgT2EData.systemInventory.wbhGasGiantDMs;
             const primary = sys.stars[0];
-            if (sys.stars.length === 1 && primary.sClass === 'V') { tDM('Single V', ggDMs.singleClassV); ggQ += ggDMs.singleClassV; }
-            if (['BD', 'L', 'T', 'Y'].includes(primary.sType)) { tDM('Primary Brown Dwarf', ggDMs.primaryBrownDwarf); ggQ += ggDMs.primaryBrownDwarf; }
             if (primary.sType === 'D') { tDM('Primary Post-Stellar', ggDMs.primaryPostStellar); ggQ += ggDMs.primaryPostStellar; }
             const postStellarCount = sys.stars.filter(s => s.sType === 'D').length;
-            if (postStellarCount > 0) { tDM('Post-Stellar Stars', ggDMs.perPostStellar * postStellarCount); ggQ += ggDMs.perPostStellar * postStellarCount; }
-            if (sys.stars.length >= 4) { tDM('4+ Stars', ggDMs.fourOrMoreStars); ggQ += ggDMs.fourOrMoreStars; }
+            if (postStellarCount > 0) { tDM('Each Post-Stellar', ggDMs.perPostStellar * postStellarCount); ggQ += ggDMs.perPostStellar * postStellarCount; }
+            if (sys.stars.length >= 2) { tDM('Two or More Stars', ggDMs.multiStar); ggQ += ggDMs.multiStar; }
 
             for (let entry of MgT2EData.systemInventory.gasGiants) {
                 if (ggQ <= entry.maxRoll) {
@@ -938,8 +989,15 @@ function convertAuToOrbit(au) {
         let pbExists = pbRoll >= 8 || (mainworldBase && mainworldBase.size === 0);
         if (pbExists) {
             let pbQ = tRoll2D('PB Quantity');
-            if (sys.gasGiants > 0) { tDM('GG Present', 1); pbQ += 1; }
-            if (sys.stars.length > 1) { tDM('Multi-star', 1); pbQ += 1; }
+            const pbDMs = MgT2EData.systemInventory.wbhPlanetoidBeltDMs;
+            const primary = sys.stars[0];
+            const beltPostStellar = sys.stars.filter(s => s.sType === 'D').length;
+            if (sys.gasGiants > 0) { tDM('GG Present', pbDMs.gasGiantsPresent); pbQ += pbDMs.gasGiantsPresent; }
+            if (sys.stars.length === 1 && primary.sClass === 'V') { tDM('Single V', pbDMs.singleClassV); pbQ += pbDMs.singleClassV; }
+            if (['BD', 'L', 'T', 'Y'].includes(primary.sType)) { tDM('Primary Brown Dwarf', pbDMs.primaryBrownDwarf); pbQ += pbDMs.primaryBrownDwarf; }
+            if (primary.sType === 'D') { tDM('Primary Post-Stellar', pbDMs.primaryPostStellar); pbQ += pbDMs.primaryPostStellar; }
+            if (beltPostStellar > 0) { tDM('Each Post-Stellar', pbDMs.perPostStellar * beltPostStellar); pbQ += pbDMs.perPostStellar * beltPostStellar; }
+            if (sys.stars.length >= 4) { tDM('4+ Stars', pbDMs.fourOrMoreStars); pbQ += pbDMs.fourOrMoreStars; }
 
             for (let entry of MgT2EData.systemInventory.planetoidBelts) {
                 if (pbQ <= entry.maxRoll) {
@@ -956,6 +1014,12 @@ function convertAuToOrbit(au) {
         let tpRoll = tRoll2D('Terrestrial Quantity');
         tDM('Fixed', -2);
         let tpCount = tpRoll - 2;
+        const tpPostStellar = sys.stars.filter(s => s.sType === 'D').length;
+        if (tpPostStellar > 0) {
+            const tpDM = MgT2EData.systemInventory.terrestrialPlanets.dms.perPostStellar * tpPostStellar;
+            tDM('Post-Stellar', tpDM);
+            tpCount += tpDM;
+        }
         if (tpCount < 3) {
             writeLogLine(`  Base count: ${tpCount} (< 3, result is too low — applying D3+2 floor)`);
             const d3Raw = rollD3();
@@ -1325,6 +1389,7 @@ function convertAuToOrbit(au) {
             systemSpread = capRoll / 8;
             writeLogLine(`Max Spread Cap Triggered: 2D6=${capRoll} / 8 = ${systemSpread.toFixed(4)}`);
         }
+        sys.spread = systemSpread;
 
         // Steps 4 & 5: Per-star spread assignment and slot placement
 
@@ -1616,6 +1681,7 @@ function convertAuToOrbit(au) {
                     uwpSecondary: mainworldBase.uwpSecondary,
                     starport: mainworldBase.starport,
                     travelZone: mainworldBase.travelZone,
+                    travelZonePending: mainworldBase.travelZonePending,
                     tradeCodes: mainworldBase.tradeCodes ? [...mainworldBase.tradeCodes] : ['Sa'],
                     size: mainworldBase.size !== undefined ? mainworldBase.size : 7,
                     atm: mainworldBase.atm,
@@ -1729,6 +1795,7 @@ function convertAuToOrbit(au) {
                                 uwpSecondary: mainworldBase.uwpSecondary,
                                 starport: mainworldBase.starport,
                                 travelZone: mainworldBase.travelZone,
+                                travelZonePending: mainworldBase.travelZonePending,
                                 tradeCodes: mainworldBase.tradeCodes,
                                 size: (mainworldBase.size !== undefined) ? mainworldBase.size : 7,
                                 atm: mainworldBase.atm,
@@ -1838,6 +1905,7 @@ function convertAuToOrbit(au) {
                         world.uwpSecondary = mainworldBase.uwpSecondary;
                         world.starport = mainworldBase.starport;
                         world.travelZone = mainworldBase.travelZone;
+                        world.travelZonePending = mainworldBase.travelZonePending;
                         world.tradeCodes = mainworldBase.tradeCodes;
                         world.pop = mainworldBase.pop;
                         world.gov = mainworldBase.gov;
@@ -1912,6 +1980,11 @@ function convertAuToOrbit(au) {
         }
 
         sys.worlds.sort((a, b) => a.orbitId - b.orbitId);
+
+        const profileN = (sys.baselineNumber == null || sys.baselineNumber < 0) ? 0 : sys.baselineNumber;
+        const profileS = Number.isFinite(sys.spread) ? sys.spread : 0;
+        sys.planetaryProfile = `${sys.gasGiants}-${sys.planetoidBelts}-${sys.terrestrialPlanets}-${profileN}-${fmtProfile(profileS)}`;
+        tResult('Planetary Profile', sys.planetaryProfile, 'WBH pp.59-60');
 
         if (trace.enabled) endTrace();
         return sys;
@@ -2003,6 +2076,46 @@ function convertAuToOrbit(au) {
     }
 
 
+function inclinationDegrees(label) {
+    let roll = tRoll2D(label);
+    let retrograde = false;
+    while (roll === 12) {
+        retrograde = true;
+        roll = tRoll2D(label + ' (retrograde reroll)');
+    }
+    let degrees;
+    if (roll <= 6) degrees = tRoll1D(label + ' very low') / 2;
+    else if (roll === 7) degrees = tRoll1D(label + ' low');
+    else if (roll === 8) degrees = tRoll2D(label + ' moderate');
+    else if (roll === 9) degrees = tRoll2D(label + ' high') * 3 + tRoll1D(label + ' high extra');
+    else if (roll === 10) degrees = (tRoll1D(label + ' very high') + 1) * 5 + tRoll1D(label + ' very high extra');
+    else degrees = tRoll3D(label + ' extreme') * 5 - tRoll1D(label + ' extreme less');
+    if (retrograde) degrees = 180 - degrees;
+    return degrees;
+}
+
+function assignInclinations(sys) {
+    tSection('Inclination');
+    for (const star of sys.stars || []) {
+        if (star && !Number.isFinite(star.inclination)) {
+            star.inclination = inclinationDegrees('Star inclination');
+            tResult('Star Inclination', star.inclination + '°', 'WBH p.29');
+        }
+    }
+    const walk = (list) => {
+        for (const body of list || []) {
+            if (!body || body.type === 'Empty') continue;
+            if (!Number.isFinite(body.inclination)) {
+                body.inclination = inclinationDegrees('Orbit inclination');
+                tResult('Orbit Inclination', body.inclination + '°', 'WBH p.29');
+            }
+            if (body.moons) walk(body.moons);
+        }
+    };
+    walk(sys.worlds);
+}
+
+export { assignInclinations };
 export { generateStellarSystem };
 export { generateSystemInventory };
 export { allocateOrbits };

@@ -5,8 +5,14 @@
  * referee-only mark (no Add, Deliver, Board, Disembark, Refuel, base fuel, Post this month's upkeep,
  * Remove). Read from the store, which for a player holds the projection (`playersView`) and nothing
  * else. The Ledger and the Passengers list fold after ten as the referee's do (DU38); Show all unfolds.
+ *
+ * DS4b: a member whose character crews this ship with a Trade or Ledger switch on acts here. The page
+ * then shows the referee's own sections and Find passengers and freight as that character
+ * (`who="player"`: each press one piece through the append door), under the one sentence of the
+ * timeline rule. Without a switch, or with no character, it reads as before. A member with several
+ * characters picks who presses; the first is the default.
  */
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { capacityTons, tonsUsed } from '../../campaign/cargo.ts';
 import { ledgerBalance, ledgerByPeriod } from '../../campaign/ledger.ts';
 import { formatCredits } from '../../campaign/money.ts';
@@ -15,8 +21,13 @@ import { campaign } from '../../campaign/store.ts';
 import { isBoarded } from '../passenger_fare.ts';
 import { fieldsOf } from '../sheet_fields.ts';
 import { periodsShown, shownRows } from '../traffic_here.ts';
-import { crewOf } from '../crew.ts';
+import { crewOf, may } from '../crew.ts';
 import ShipLocker from '../ShipLocker.vue';
+import TrafficHere from '../TrafficHere.vue';
+import VesselTrade from '../VesselTrade.vue';
+import { PLAYERS_TRADE } from '../trade_write.ts';
+import { actingPerson, loadMe, me, pickPerson, playsNone } from './me.ts';
+import { PLAYER_NO_CHARACTER } from './players_words.ts';
 import { dayWords, ledgerOf, lotMeta, manifestOf } from '../vessel_trade.ts';
 import { fuelWords, holdWords, LEDGER_KIND_WORDS, tonsWords } from './player_ship.ts';
 
@@ -51,6 +62,25 @@ const passengersShown = computed(() => shownRows(passengers.value.length, allPas
 
 const credits = (n: number): string => formatCredits(n);
 
+// ---- DS4b: who presses, and what their switches open ----------------------------------------------------
+
+onMounted(() => { void loadMe(campaign.universeId ?? ''); });
+watch(() => campaign.universeId, (id) => { if (id) void loadMe(id); });
+
+/** The member's characters, by name, for the picker. */
+const mine = computed(() => me.personIds.map((id) => ({ id, name: personOf(id)?.name ?? 'A character' })));
+const acting = computed(() => actingPerson());
+const canTrade = computed(() => !!acting.value && may(record.value, acting.value, 'trade'));
+const canLedger = computed(() => !!acting.value && may(record.value, acting.value, 'ledger'));
+/** The page acts: the character pressing crews this ship with a Trade or Ledger switch on. */
+const acts = computed(() => canTrade.value || canLedger.value);
+/** BM2c (Johnny 141): the member plays no character here, as the server said; the page has no ship actions and says so. */
+const none = computed(() => playsNone(campaign.universeId));
+
+function pick(event: Event): void {
+    pickPerson((event.target as HTMLSelectElement).value);
+}
+
 /** The passenger's record when the projection kept it (a players person), to open; else the label alone. */
 function personOf(id: string | undefined): { id: string; name: string } | null {
     if (!id) return null;
@@ -60,7 +90,23 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
 </script>
 
 <template>
-  <div v-if="record" class="pship" data-player-ship>
+  <div v-if="record" class="pship" data-player-ship :data-player-acts="acts ? 'yes' : 'no'">
+    <label v-if="mine.length > 1" class="pship-who" data-acting-as>
+      <span>Acting as</span>
+      <select class="pship-who-box" :value="acting" @change="pick">
+        <option v-for="one in mine" :key="one.id" :value="one.id">{{ one.name }}</option>
+      </select>
+    </label>
+
+    <p v-if="none" class="pship-rule" role="note" data-player-none>{{ PLAYER_NO_CHARACTER }}</p>
+
+    <template v-if="acts">
+      <p class="pship-rule" role="note" data-players-trade>{{ PLAYERS_TRADE }}</p>
+      <VesselTrade :id="id" :read-only="false" who="player" />
+      <TrafficHere v-if="canTrade" :id="id" :read-only="false" who="player" />
+    </template>
+
+    <template v-else>
     <section class="pship-sec ui-frame" data-player-cargo aria-labelledby="pship-cargo-h">
       <h3 id="pship-cargo-h" class="ui-frame-label">Cargo <span v-if="cargo.length" class="ui-frame-count">{{ cargo.length }}</span></h3>
       <div class="pship-gauge" :class="{ 'is-over': over }">
@@ -95,18 +141,6 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
       <button v-if="passengersShown.more" type="button" class="pship-more" data-passengers-more @click="allPassengers = true">Show all {{ passengers.length }} passengers</button>
     </section>
 
-    <section v-if="crew.length" class="pship-sec ui-frame" data-player-crew aria-labelledby="pship-crew-h">
-      <h3 id="pship-crew-h" class="ui-frame-label">Crew <span class="ui-frame-count">{{ crew.length }}</span></h3>
-      <ul class="pship-rows">
-        <li v-for="row in crew" :key="row.personId" class="pship-row" data-crew-row>
-          <span class="pship-main">
-            <button v-if="personOf(row.personId)" type="button" class="pship-link" @click="emit('open', personOf(row.personId)!.id)">{{ personOf(row.personId)!.name }}</button>
-            <b v-else>Someone aboard</b>
-          </span>
-          <span class="pship-class">{{ row.role || 'Crew' }}</span>
-        </li>
-      </ul>
-    </section>
 
     <section class="pship-sec ui-frame" data-player-fuel aria-labelledby="pship-fuel-h">
       <h3 id="pship-fuel-h" class="ui-frame-label">Fuel</h3>
@@ -131,6 +165,20 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
         <button v-if="linesShown.more" type="button" class="pship-more" data-ledger-more @click="allLines = true">Show all {{ ledger.length }} lines</button>
       </div>
       <p v-else class="pship-none">Nothing on the ledger yet.</p>
+    </section>
+    </template>
+
+    <section v-if="crew.length" class="pship-sec ui-frame" data-player-crew aria-labelledby="pship-crew-h">
+      <h3 id="pship-crew-h" class="ui-frame-label">Crew <span class="ui-frame-count">{{ crew.length }}</span></h3>
+      <ul class="pship-rows">
+        <li v-for="row in crew" :key="row.personId" class="pship-row" data-crew-row>
+          <span class="pship-main">
+            <button v-if="personOf(row.personId)" type="button" class="pship-link" @click="emit('open', personOf(row.personId)!.id)">{{ personOf(row.personId)!.name }}</button>
+            <b v-else>Someone aboard</b>
+          </span>
+          <span class="pship-class">{{ row.role || 'Crew' }}</span>
+        </li>
+      </ul>
     </section>
   </div>
 </template>
@@ -280,6 +328,42 @@ function personOf(id: string | undefined): { id: string; name: string } | null {
 .pship-none {
   margin: 0;
   color: var(--text-muted);
+}
+
+/* DS4b: which character presses, and the timeline rule's one sentence. */
+.pship-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font: 500 12px/1.3 var(--font-text);
+}
+
+.pship-who-box {
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: 400 13px/1.2 var(--font-text);
+}
+
+/* DF41: below 600 px Acting as meets 44 px, as the other controls on a phone. */
+@media (max-width: 599px) {
+  .pship-who-box {
+    height: 44px;
+  }
+}
+
+.pship-rule {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--signal);
+  background: var(--bg-2);
+  color: var(--text-0);
+  font: 400 13.5px/1.5 var(--font-text);
 }
 
 .pship-more {

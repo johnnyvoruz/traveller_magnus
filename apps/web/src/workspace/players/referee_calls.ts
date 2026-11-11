@@ -4,7 +4,7 @@
  * (campaign/membership.ts). Each answer keeps the server's own message, so a refusal ("This campaign
  * has 255 players, the most it can have.") is said as the server said it.
  */
-import { PlayerPerson, PlayerStatus } from '@voyage/shared';
+import { PlayerPeople, PlayerStatus } from '@voyage/shared';
 import { parseRead } from '../../campaign/read.ts';
 import { campaign, noteUnauthorized, transport } from '../../campaign/store.ts';
 import { apiFetch } from '../../platform/http.ts';
@@ -56,7 +56,10 @@ export function bringBack(userId: string): Promise<CallResult<PlayerStatus | nul
     return call(member(userId), { method: 'PATCH', body: JSON.stringify({ status: 'active' }) }, PlayerStatus);
 }
 
-/** Which person in the party this player is; null for none yet. */
-export function setMemberPerson(userId: string, personId: string | null): Promise<CallResult<PlayerPerson | null>> {
-    return call(member(userId), { method: 'PATCH', body: JSON.stringify({ personId }) }, PlayerPerson);
+/**
+ * Which characters in the party this player plays, in order; empty for none (BM2c). The answer names
+ * any character that moved from another player (`moved`), for the one sentence on the list.
+ */
+export function setMemberPeople(userId: string, personIds: readonly string[]): Promise<CallResult<PlayerPeople | null>> {
+    return call(member(userId), { method: 'PATCH', body: JSON.stringify({ personIds }) }, PlayerPeople);
 }

@@ -232,5 +232,16 @@ function toggleLocate(): void {
   max-width: 100%;
 }
 
+/* On a phone the world sheet's actions are 44 px. Above 599 px they stay as they are. */
+@media (max-width: 599px) {
+  .doss-callout-actions .ui-btn,
+  .doss-actions .ui-btn {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+  }
+}
+
 
 </style>

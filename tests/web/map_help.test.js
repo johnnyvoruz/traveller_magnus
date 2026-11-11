@@ -53,4 +53,6 @@ test('the map view shows the "?" and remembers the help was seen', () => {
     const help = read('workspace/MapHelp.vue');
     assert.match(help, /aria-label="How to use the map"/);
     assert.match(help, /@media \(pointer: coarse\)/);
+    assert.match(help, /@media \(max-width: 599px\) \{[\s\S]*\.map-help \{[\s\S]*--sheet-cover/);
+    assert.match(help, /@media \(max-width: 599px\) \{[\s\S]*\.map-help \.ui-btn\.is-icon\.map-help-x \{[\s\S]*width: 44px;/);
 });

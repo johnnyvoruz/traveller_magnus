@@ -230,6 +230,23 @@ watch(() => props.auto, (due) => { if (due && !open.value) show(false); }, { imm
   }
 }
 
+/* A phone, fine pointer included: the ask and its close are 44, and the stack sits above the world sheet. */
+@media (max-width: 599px) {
+  .map-help {
+    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+
+  .map-help-ask,
+  .map-help .ui-btn.is-icon.map-help-x {
+    width: 44px;
+    height: 44px;
+  }
+
+  .map-help-card {
+    max-height: calc(100dvh - var(--sheet-cover, 0px) - var(--chrome-top) - var(--chrome-height) - 88px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .map-help-ask {
     transition: none;

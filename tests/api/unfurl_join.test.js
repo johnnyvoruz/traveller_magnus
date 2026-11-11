@@ -111,8 +111,8 @@ VALUES ('${CLASS_MARK}', 'uni-unf', '${version}', 'Spinward_Marches', '1910', '$
             const livePage = await fetch(`${base}/join/${live}`, { headers: html });
             const liveText = await livePage.text();
             assert.equal(livePage.status, 200);
-            assert.match(liveText, new RegExp(`<title>You're invited to ${CAMPAIGN}</title>`));
-            assert.match(liveText, new RegExp(`og:title" content="You're invited to ${CAMPAIGN}"`));
+            assert.match(liveText, new RegExp(`<title>You are invited to ${CAMPAIGN}</title>`));
+            assert.match(liveText, new RegExp(`og:title" content="You are invited to ${CAMPAIGN}"`));
             assert.match(liveText, /property="og:image" content="https:\/\/traveller.voyage\/og.png"/);
             assert.equal(liveText.includes(MEMBER), false);
             assert.equal(liveText.includes(live), false);

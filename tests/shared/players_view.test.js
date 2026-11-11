@@ -382,7 +382,7 @@ test('an owner anchor to a hidden person is dropped', () => {
     assert.equal(shown.status.fuelTons, 31);
     assert.equal(shown.status.payment.amountCr, 4800);
     assert.equal(Object.hasOwn(shown.status, 'fuelMark'), false);
-    assert.equal(Object.hasOwn(shown.status, 'roles'), false);
+    assert.deepEqual(shown.status.roles, [{ name: 'Captain', ledger: true, trade: true, locker: true }]);
     assert.equal(JSON.stringify(shown.status).includes('naval'), false);
     assert.equal(JSON.stringify(shown.status).includes(hid), false);
 });
