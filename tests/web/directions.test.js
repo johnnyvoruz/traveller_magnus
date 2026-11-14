@@ -78,7 +78,7 @@ test('the words: fuel by source, plural parsecs, the time in jump from the rules
 test('no route says A\'s reason; the same system says so; the party ship\'s jump is 1 to 6', () => {
     const far = sector('Far', 'Far', 0, 0, [{ hex: '0101', name: 'Lonely', uwp: 'A555555-8' }, { hex: '0901', name: 'Distant', uwp: 'A555555-8' }]);
     const none = directions([far], { ...blankForm(), from: 'Lonely', to: 'Distant', jump: 2 });
-    assert.deepEqual(none, { ok: false, message: 'No route with Jump-2 between these systems in the loaded sectors.' });
+    assert.deepEqual(none, { ok: false, message: 'No route with Jump-2 between these systems.' });
     assert.deepEqual(directions([far], { ...blankForm(), from: 'Lonely', to: 'Lonely' }), { ok: false, message: 'From and To are the same system.' });
     assert.deepEqual(directions([far], { ...blankForm(), from: 'Nowhere', to: 'Lonely' }), { ok: false, message: 'No system called “Nowhere” in the loaded sectors.' });
     assert.deepEqual([null, 0, 1, 6, 7].map(jumpForBox), [null, null, 1, 6, null]);
@@ -110,8 +110,7 @@ test('pins: MapView mounts the panel and its layer, the command, Escape, the sty
     const panel = fs.readFileSync(path.join(webRoot, 'src/map/DirectionsPanel.vue'), 'utf8');
     const phone = panel.slice(panel.indexOf('@media (max-width: 599px)'));
     assert.match(phone, /left: calc\(var\(--rail-width\) \+ var\(--chrome-inset\)\);/, 'DF42: past the rail on a phone');
-    assert.match(phone, /bottom: calc\(var\(--chrome-inset\) \+ max\(var\(--sheet-cover, 0px\), env\(safe-area-inset-bottom, 0px\)\) \+ 52px\);/, 'DF42: above the corner buttons and the world sheet');
-    assert.match(panel, /\.ui-frame\.dir \{[^}]*right: 16px;[^}]*width: min\(380px, calc\(100% - 32px\)\);/, '600 px and up unchanged');
+    assert.match(phone, /max-height: calc\(100% - var\(--chrome-top\) - 2 \* \(var\(--chrome-height\) \+ 8px\) - var\(--chrome-inset\) - max\(var\(--sheet-cover, 0px\), env\(safe-area-inset-bottom, 0px\)\)\);/, 'DF42, DN2: above the world sheet (the corner buttons went to the top bar, CU49)');
 });
 
 describe('the panel renders', { concurrency: 1 }, () => {
@@ -133,13 +132,17 @@ describe('the panel renders', { concurrency: 1 }, () => {
         const view = (await server.ssrLoadModule('/src/map/DirectionsPanel.vue')).default;
         const { createSSRApp } = await import('vue');
         const { renderToString } = await import('vue/server-renderer');
-        const props = { indexes: () => [west, east], selected: () => null, ...over };
-        return (await renderToString(createSSRApp(view, props))).replace(/<!--[\s\S]*?-->/g, '');
+        const { createMemoryHistory, createRouter } = await import('vue-router');
+        const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: { render: () => null } }] });
+        await router.push('/');
+        await router.isReady();
+        const props = { indexes: () => [west, east], ...over };
+        return (await renderToString(createSSRApp(view, props).use(router))).replace(/<!--[\s\S]*?-->/g, '');
     }
 
     test('the boxes, the choices, Any fuel first; the party ship\'s button only with a jump', async () => {
         const html = await render({});
-        for (const sel of ['data-directions-from', 'data-directions-to', 'data-directions-from-selected', 'data-directions-to-selected', 'data-directions-swap', 'data-directions-scoops', 'data-directions-processors', 'data-directions-red', 'data-directions-go']) {
+        for (const sel of ['data-directions-from', 'data-directions-to', 'data-directions-swap', 'data-directions-scoops', 'data-directions-processors', 'data-directions-red', 'data-directions-go']) {
             assert.match(html, new RegExp(sel), sel);
         }
         assert.match(html, />Jump-1<\/option>[\s\S]*>Jump-6<\/option>/);

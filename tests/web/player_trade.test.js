@@ -14,6 +14,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { allowedFor, appendOf, NOT_FROM_PLAYERS, PLAYERS_TRADE, postedBy, switchesOf } from '../../apps/web/src/workspace/trade_write.ts';
+import { passengerSeen, paymentSeen } from '../../packages/shared/src/ship_door.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const webRoot = path.join(root, 'apps', 'web');
@@ -79,6 +80,41 @@ describe('appendOf: the referee\'s before and after as one piece', () => {
     });
 });
 
+describe('DT9: Board and Pay now as the pieces of BT2', () => {
+    const waiting = { label: 'Ysa Quen', class: 'Middle', note: 'to Jenghe' };
+    const owed = { amountCr: 12000, everyDays: 30, nextDueDay: { year: 1105, day: 20 }, payee: 'The bank' };
+
+    test('Board: the board item with the jump and the digest of the row; the fare line is the object one, not sent', () => {
+        const before = { passengers: [fare, waiting], ledger: [line('Berthing', -100)] };
+        const boardedRow = { ...waiting, class: 'Middle', fareCr: 8000 };
+        const after = { passengers: [fare, boardedRow], ledger: [...before.ledger, line('Fare: Ysa Quen, Middle passage, 2 parsecs', 8000)] };
+        assert.deepEqual(appendOf(before, after, { board: { index: 1, parsecs: 2 } }), {
+            passengers: { board: [{ index: 1, class: 'Middle', fareCr: 8000, parsecs: 2, seen: passengerSeen(waiting) }] },
+        });
+        assert.equal(passengerSeen(waiting), ['', 'Ysa Quen', 'Middle', 'to Jenghe', ''].join('\u001f'));
+        assert.equal(appendOf(before, after), null, 'without the press: still refused');
+        assert.equal(appendOf(before, after, { board: { index: 0, parsecs: 2 } }), null, 'a row already boarded');
+        assert.equal(appendOf(before, { ...after, ledger: before.ledger }, { board: { index: 1, parsecs: 2 } }), null, 'no fare line');
+        assert.equal(appendOf(before, { ...after, passengers: [fare, { ...boardedRow, note: 'changed' }] }, { board: { index: 1, parsecs: 2 } }), null, 'the row changed beyond its class and fare');
+        assert.equal(appendOf(before, { ...after, cargo: [ore] }, { board: { index: 1, parsecs: 2 } }), null, 'nothing else rides with it');
+        assert.equal(appendOf(before, after, { board: { index: 1, parsecs: 0 } }), null);
+    });
+
+    test('Pay now: payNow and the digest of the stored payment; the line and the due day are the object ones', () => {
+        const before = { payment: owed, ledger: [] };
+        const after = { payment: { ...owed, nextDueDay: { year: 1105, day: 50 } }, ledger: [line('Ship payment to The bank', -12000)] };
+        assert.deepEqual(appendOf(before, after, { payNow: true }), { payNow: true, paymentSeen: paymentSeen(owed) });
+        assert.equal(appendOf(before, after), null, 'without the press: still refused');
+        assert.equal(appendOf({ ledger: [] }, after, { payNow: true }), null, 'no stored payment');
+        assert.equal(appendOf(before, { ...after, ledger: [line('Ship payment', -5)] }, { payNow: true }), null, 'a line not the stored amount');
+    });
+
+    test('both need the Trade and Ledger switches, as the server reads them', () => {
+        assert.deepEqual(switchesOf({ passengers: { board: [{ index: 0, class: 'Middle', fareCr: 1, parsecs: 1, seen: 'x' }] } }), ['ledger', 'trade']);
+        assert.deepEqual(switchesOf({ payNow: true, paymentSeen: 'x' }), ['ledger', 'trade']);
+    });
+});
+
 test('the switches a piece needs, as the server reads them', () => {
     assert.deepEqual(switchesOf({ ledger: [line('x', 1)] }), ['ledger']);
     assert.deepEqual(switchesOf({ cargo: { remove: [0] }, ledger: [line('x', 1)] }), ['ledger', 'trade']);
@@ -103,13 +139,15 @@ test('the words', () => {
 test('pins: one write path, the player\'s through the door, the page mounts the referee\'s sections as the player', () => {
     const trade = read('workspace/VesselTrade.vue');
     assert.doesNotMatch(trade, /writeTrade\(/, 'every write goes through push');
-    assert.match(trade, /void sendTrade\(who\.value, now, change\)/);
+    assert.match(trade, /return sendTrade\(who\.value, now, change, undefined, press\)/);
+    assert.match(trade, /\{ board: \{ index: i, parsecs \} \}\);/, 'DT9: Board names the row and the jump');
+    assert.match(trade, /\{ payNow: true \}\)\.then/, 'DT9: Pay now');
     const traffic = read('workspace/TrafficHere.vue');
     assert.doesNotMatch(traffic, /writeTrade\(/);
     assert.match(traffic, /void sendTrade\(presser\.value, now, change\)/);
     const send = read('workspace/trade_send.ts');
     assert.match(send, /writeTrade\(record, change, journal\);/, 'the referee\'s write is the record save');
-    assert.match(send, /const append = appendOf\(record\.status as Status \| null, change\.status\);\n\s+if \(!append\) return NOT_FROM_PLAYERS;/);
+    assert.match(send, /const append = appendOf\(record\.status as Status \| null, change\.status, press\);\n\s+if \(!append\) return NOT_FROM_PLAYERS;/);
     assert.match(send, /await appendStatus\(record\.id, append, myPersonIds\(\)\.length > 1 \? person : undefined\);/);
     const page = read('workspace/players/PlayerShip.vue');
     assert.match(page, /<VesselTrade :id="id" :read-only="false" who="player" \/>/);
@@ -264,6 +302,38 @@ describe('the member\'s characters, the send, and the page', { concurrency: 1 },
         const ledger = await page();
         assert.match(ledger, /data-add-line/);
         assert.doesNotMatch(ledger, /data-add-lot|data-deliver|data-traffic-here|data-disembark/);
+    });
+
+    test('DT9: Board and Pay now for a player with Trade and Ledger; neither with one switch off', async () => {
+        const waiting = { label: 'Ysa Quen', class: 'Middle' };
+        const owed = { amountCr: 12000, everyDays: 30, nextDueDay: { year: 1105, day: 20 } };
+        me.setMyPersonIds([rid(2)]);
+        hold([stocked({ passengers: [fare, waiting], payment: owed }), tam(), ana()]);
+        const both = await page();
+        assert.match(both, /data-passenger-row[\s\S]*?data-board[^>]*>Board<\/button>/);
+        assert.match(both, /data-player-payment[\s\S]*?data-pay-now[^>]*>Pay now: [^<]*12,000<\/button>/);
+        assert.doesNotMatch(both, /data-set-payment|data-vessel-owners/, 'setting the payment stays with the referee');
+        for (const roles of [[{ name: 'Captain', ledger: false, trade: true, locker: true }], [{ name: 'Captain', ledger: true, trade: false, locker: true }]]) {
+            hold([stocked({ passengers: [fare, waiting], payment: owed, roles }), tam(), ana()]);
+            const one = await page();
+            assert.doesNotMatch(one, /data-board|data-pay-now|data-player-payment/, JSON.stringify(roles[0]));
+        }
+    });
+
+    test('DT9: the send carries the board item and payNow through the door', async () => {
+        const send = await server.ssrLoadModule('/src/workspace/trade_send.ts');
+        const waiting = { label: 'Ysa Quen', class: 'Middle' };
+        const owed = { amountCr: 12000, everyDays: 30, nextDueDay: { year: 1105, day: 20 } };
+        hold([stocked({ passengers: [waiting], payment: owed, ledger: [] }), tam(), ana()]);
+        const now = store.campaign.records[rid(1)];
+        me.setMyPersonIds([rid(2)]);
+        sent = [];
+        const boardedRow = { ...waiting, fareCr: 8000 };
+        assert.equal(await send.sendTrade('player', now, { status: { ...now.status, passengers: [boardedRow], ledger: [line('Fare: Ysa Quen, Middle passage, 2 parsecs', 8000)] } }, undefined, { board: { index: 0, parsecs: 2 } }), '');
+        assert.deepEqual(sent.find((one) => one.method === 'PATCH').body, { appends: [{ id: rid(1), append: { passengers: { board: [{ index: 0, class: 'Middle', fareCr: 8000, parsecs: 2, seen: passengerSeen(waiting) }] } } }] });
+        sent = [];
+        assert.equal(await send.sendTrade('player', now, { status: { ...now.status, payment: { ...owed, nextDueDay: { year: 1105, day: 50 } }, ledger: [line('Ship payment', -12000)] } }, undefined, { payNow: true }), '');
+        assert.deepEqual(sent.find((one) => one.method === 'PATCH').body, { appends: [{ id: rid(1), append: { payNow: true, paymentSeen: paymentSeen(owed) } }] });
     });
 
     test('several characters: Acting as, and the picked one\'s switches rule', async () => {

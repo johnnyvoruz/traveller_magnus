@@ -190,7 +190,9 @@ test('the button, the sheet, the command and the menu entry', () => {
     assert.match(button, /<Icon name="file-export" :size="16" \/>/);
     assert.match(button, /@media \(max-width: 599px\) \{[\s\S]*\.save-img-btn \{[\s\S]*width: 44px;/);
     assert.match(button, /@media \(prefers-reduced-motion: reduce\)/);
-    assert.match(view, /@media \(max-width: 599px\) \{[\s\S]*\.map > \.save-img-btn \{[\s\S]*--sheet-cover/);
+    assert.match(view, /\.map-chrome \.save-img-btn,[\s\S]*height: var\(--chrome-height\);/);
+    assert.match(view, /@media \(max-width: 599px\) \{[\s\S]*\.map-chrome \.save-img-btn,[\s\S]*width: 44px;/);
+    assert.doesNotMatch(view, /\.map > \.save-img-btn/);
 });
 
 test('DF20: a capture with an area draws only its own worlds; the screen and a capture without an area draw them all', async () => {

@@ -172,7 +172,8 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /Shift-click paints a line from the last hex/);
         assert.match(html, /Clear map puts every painted hex back/);
         assert.match(html, /Select Keep to save the painted map for everyone in this universe/);
-        assert.match(html, /Select Save image on the chart, the system map, or the world map/);
+        assert.match(html, /select Save image at the top, right of the date/);
+        assert.match(html, /On the system map or the world map, select Save image there/);
         assert.match(html, /A4, Letter, A3, or Tabloid/);
         assert.match(html, /On paper is ink on white\. Full colour is colour on white/);
         assert.match(html, /Get the invite link/);
@@ -247,11 +248,13 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /<h3>The map<\/h3>/);
         assert.match(html, /How to use the map/);
         assert.match(html, /<h3>Directions<\/h3>/);
-        assert.match(html, /beside Save image and How to use the map/);
+        assert.match(html, /at the top, right of the date, beside Save image and How to use the map/);
         assert.match(html, /Press d, or open the command palette and select Directions/);
+        assert.match(html, /Directions from here or Directions to here/);
+        assert.match(html, /From here and To here/);
         assert.match(html, /Regina, or Spinward Marches 1910/);
-        assert.match(html, /Use selected under From or under To/);
-        assert.match(html, /Select a system on the chart first/);
+        assert.match(html, /Use Regina/);
+        assert.equal(html.includes('Use selected'), false);
         assert.match(html, /Swap From and To/);
         assert.match(html, /Jump-1 through Jump-6/);
         assert.match(html, /it starts on Jump-2/);
@@ -259,7 +262,8 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /Fuel scoops, Fuel processors, or Allow Red zones/);
         assert.match(html, /Use Kestrel Dawn&#39;s jump \(Jump-2\)/);
         assert.match(html, /with that ship&#39;s name and its jump/);
-        assert.match(html, /searches only the sectors loaded on the chart/);
+        assert.match(html, /Only the 16 sectors nearest the route were searched/);
+        assert.match(html, /How to use the map sits at the top, right of the date/);
         assert.match(html, /type more of the name/);
         assert.match(html, /Select Get directions/);
         assert.match(html, /one line for each leg/);

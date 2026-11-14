@@ -6,7 +6,7 @@
 import type { CampaignRecord, EntryChange } from '@voyage/shared';
 import { appendStatus } from '../campaign/append.ts';
 import { actingPerson, myPersonIds } from './players/me.ts';
-import { appendOf, NOT_FROM_PLAYERS, type Status } from './trade_write.ts';
+import { appendOf, NOT_FROM_PLAYERS, type DoorPress, type Status } from './trade_write.ts';
 import { writeTrade } from './vessel_trade.ts';
 
 export type Who = 'referee' | 'player';
@@ -16,6 +16,8 @@ export async function sendTrade(
     record: CampaignRecord,
     change: { sheet?: Record<string, unknown>; status: Status },
     journal?: EntryChange[],
+    /** DT9: a player's Board or Pay now, which the door carries as B's pieces (BT2). The referee's save ignores it. */
+    press?: DoorPress,
 ): Promise<string> {
     if (who === 'referee') {
         writeTrade(record, change, journal);
@@ -23,7 +25,7 @@ export async function sendTrade(
     }
     // The door carries no sheet and no journal: a player's press touches the status alone.
     if (change.sheet) return NOT_FROM_PLAYERS;
-    const append = appendOf(record.status as Status | null, change.status);
+    const append = appendOf(record.status as Status | null, change.status, press);
     if (!append) return NOT_FROM_PLAYERS;
     const person = actingPerson();
     if (!person) return NOT_FROM_PLAYERS;

@@ -66,7 +66,7 @@ test('a gap of two only a gas giant can cross, and only with scoops', () => {
         { hex: '0605', uwp: 'E200000-0', pbg: '001' },
         { hex: '0705', uwp: 'A200000-0' },
     ])];
-    assert.equal(refused(indexes, ask()), 'No route with Jump-1 between these systems in the loaded sectors.');
+    assert.equal(refused(indexes, ask()), 'No route with Jump-1 between these systems.');
     const route = legs(indexes, ask({ scoops: true }));
     assert.equal(route[0].to.hex, '0605');
     assert.equal(route[0].source, 'gas-giant');
@@ -186,7 +186,7 @@ test('no route, a missing system, and the same system', () => {
         { hex: '0505', uwp: 'A200000-0' },
         { hex: '0705', uwp: 'A200000-0' },
     ])];
-    assert.equal(refused(apart, ask()), 'No route with Jump-1 between these systems in the loaded sectors.');
+    assert.equal(refused(apart, ask()), 'No route with Jump-1 between these systems.');
     assert.match(refused(apart, ask({ from: { sector: 'core', hex: '9999' } })), /Jump-1/);
     const home = planRoute(chain, ask({ to: { sector: 'core', hex: '0505' } }));
     assert.deepEqual(home, { ok: true, legs: [] });

@@ -17,6 +17,24 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.11',
+        date: '2026-11-12',
+        title: 'From here',
+        picture: '/changes/1.3.11.png',
+        story: [
+            'Open a system and select Directions, then Directions from here or Directions to here. When both ends are filled, the route draws itself and stays while you open other systems.',
+            'Directions, Save image, and How to use the map sit at the top, right of the date. Markets nearby names its trade codes, and on a ship you can board a passenger and pay the ship.',
+        ],
+        items: [
+            'Open a system and select Directions, then Directions from here or Directions to here. While Directions is open, that system shows From here and To here. Type in From or To, and the box lists systems. Select one to fill it. The empty box offers Use Regina, with that system\'s name in place of the example. When both ends are filled, the route is drawn, and it stays while you open other systems. The route can reach a sector that is not on the chart yet. When the search stops at 16, the panel says: Only the 16 sectors nearest the route were searched. Select Get directions to draw it again. On a phone, with a system open, Directions shows the ends and the total. Select Show all of Directions for the rest. Select Clear to drop the route.',
+            'Directions, Save image, and How to use the map sit at the top, right of the date, in that order. On a phone they stay with the date, and each one is tall enough to tap. On the system map or the world map, select Save image there.',
+            'Open Markets nearby. A row names the world, then Starport, Trade number, and Pop. A trade code shows its name, such as Agricultural or Garden. A code with no name shows the code. An owner reads Owned by Answerin (0431), with that world\'s name and hex. The distance and Locate sit level with the name.',
+            'On a ship\'s page, with Trade and The Ledger on, select Board beside a passenger, then Board, post the fare. The fare posts to the Ledger as income. Under Payment, select Pay now. The payment posts as an expense, and the next due day moves on. Set a payment, Change, and the owners stay with the referee.',
+            'Open Campaign. A record shows in the list as soon as it is saved, and a deleted record leaves as soon as it is deleted.',
+            'Help says Directions, Save image, and How to use the map sit at the top, right of the date. It names Directions from here, Directions to here, From here, and To here.',
+        ],
+    },
+    {
         version: '1.3.10',
         date: '2026-11-10',
         title: 'Directions',

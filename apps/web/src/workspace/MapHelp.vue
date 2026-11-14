@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * The map's own help, in place (streams/D.md DU36): a "?" at the map's bottom right that lays the
- * map's gestures over the map, beside it. The map view says when it opens by itself (map_help.ts
+ * The map's own help, in place (streams/D.md DU36): a "?" in the date's row that lays the
+ * map's gestures over the map, opening down from the button. The map view says when it opens by itself (map_help.ts
  * helpDue: once, then never again) and remembers that it was seen. Touch screens read the touch
  * lines, the rest the mouse and keys; Build's lines only for someone who can turn Build on.
  */
@@ -51,6 +51,17 @@ watch(() => props.auto, (due) => { if (due && !open.value) show(false); }, { imm
 
 <template>
   <div class="map-help" @keydown="onKey">
+    <button
+      ref="askBtn"
+      type="button"
+      class="map-help-ask"
+      :aria-expanded="open ? 'true' : 'false'"
+      aria-controls="map-help-card"
+      aria-label="How to use the map"
+      title="How to use the map"
+      data-map-help-ask
+      @click="toggle"
+    >?</button>
     <section v-if="open" id="map-help-card" class="map-help-card ui-frame" role="dialog" aria-modal="false" aria-labelledby="map-help-h" data-map-help>
       <div class="map-help-head">
         <h2 id="map-help-h" class="ui-kicker">Using the map</h2>
@@ -82,32 +93,16 @@ watch(() => props.auto, (due) => { if (due && !open.value) show(false); }, { imm
       </div>
       <p class="map-help-more">The rest is in <RouterLink to="/help">Help</RouterLink>.</p>
     </section>
-    <button
-      ref="askBtn"
-      type="button"
-      class="map-help-ask"
-      :aria-expanded="open ? 'true' : 'false'"
-      aria-controls="map-help-card"
-      aria-label="How to use the map"
-      title="How to use the map"
-      data-map-help-ask
-      @click="toggle"
-    >?</button>
   </div>
 </template>
 
 <style>
-/* At the map's bottom right, on the search field's glass: the corner nothing else uses. */
+/* In the date's row. The card opens down from the button and does not stretch the row. */
 .map-help {
-  position: absolute;
-  right: var(--chrome-inset);
-  bottom: var(--chrome-inset);
-  z-index: 3;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
-  max-width: calc(100% - var(--rail-width) - 2 * var(--chrome-inset));
 }
 
 .map-help-ask {
@@ -138,11 +133,17 @@ watch(() => props.auto, (due) => { if (due && !open.value) show(false); }, { imm
   outline-offset: 2px;
 }
 
-.map-help-card {
+/* Beats .ui-frame's position, which would keep the card in the row and centre it upward. */
+.map-help > .map-help-card.ui-frame {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  bottom: auto;
+  left: auto;
   box-sizing: border-box;
   width: 360px;
-  max-width: 100%;
-  max-height: calc(100vh - 2 * (var(--chrome-top) + var(--chrome-height)) - 60px);
+  max-width: calc(100vw - var(--rail-width) - 2 * var(--chrome-inset));
+  max-height: calc(100dvh - var(--chrome-top) - var(--chrome-height) - 24px);
   overflow-y: auto;
   background: var(--chrome-glass);
   box-shadow: var(--shadow-chrome), 0 0 24px var(--frame-glow);
@@ -230,20 +231,15 @@ watch(() => props.auto, (due) => { if (due && !open.value) show(false); }, { imm
   }
 }
 
-/* A phone, fine pointer included: the ask and its close are 44, and the stack sits above the world sheet. */
+/* A phone, fine pointer included: the close is 44. The row sets the ask's size. */
 @media (max-width: 599px) {
-  .map-help {
-    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
-  }
-
-  .map-help-ask,
   .map-help .ui-btn.is-icon.map-help-x {
     width: 44px;
     height: 44px;
   }
 
-  .map-help-card {
-    max-height: calc(100dvh - var(--sheet-cover, 0px) - var(--chrome-top) - var(--chrome-height) - 88px);
+  .map-help > .map-help-card.ui-frame {
+    max-height: calc(100dvh - var(--sheet-cover, 0px) - var(--chrome-top) - 2 * var(--chrome-height) - 32px);
   }
 }
 

@@ -1,5 +1,6 @@
 /**
- * CU47: Directions sits in the chart's corner and opens the same panel as the d command.
+ * CU47: Directions opens the same panel as the d command.
+ * CU49: it sits in the date's row, before Save image and How to use the map.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,14 +10,17 @@ function read(path) {
     return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('the chart corner mounts Directions beside Save image, 40 above 599 px and 44 below', () => {
+test('Directions sits in the date row, before Save image and the map help, and still opens on d', () => {
     const view = read('../../apps/web/src/views/MapView.vue');
     const button = read('../../apps/web/src/map/DirectionsCorner.vue');
-    assert.match(view, /<DirectionsCorner v-if="!shipSheet" :open="directionsOpen" @click="toggleDirections" \/>/);
-    assert.match(view, /function toggleDirections\(\): void \{[\s\S]*if \(directionsOpen\.value\) closeDirections\(\);[\s\S]*else directionsOpen\.value = true;/);
+    assert.match(view, /<div class="map-chrome">\s*<StardateChip @open="openDateEditor" \/>\s*<DirectionsCorner v-if="!shipSheet" :open="directionsOpen" @click="toggleDirections" \/>\s*<SaveImageButton v-if="!shipSheet && versionRef" title="Save an image of the chart" @click="openSaveSheet" \/>\s*<MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" \/>/);
+    assert.match(view, /function toggleDirections\(\): void \{[\s\S]*if \(directionsOpen\.value\) closeDirections\(\);[\s\S]*else openDirections\(\);/);
     assert.match(view, /id: 'directions'[\s\S]*run: \(\) => \{ toggleDirections\(\); \}/);
-    assert.match(view, /\.map > \.dir-corner \{[\s\S]*right: calc\(var\(--chrome-inset\) \+ 96px\)/);
-    assert.match(view, /@media \(max-width: 599px\) \{[\s\S]*\.map > \.dir-corner \{[\s\S]*--sheet-cover/);
+    assert.match(view, /\.map-chrome \{[\s\S]*gap: 8px;[\s\S]*height: var\(--chrome-height\);/);
+    assert.match(view, /\.map-chrome \.dir-corner,[\s\S]*height: var\(--chrome-height\);/);
+    assert.match(view, /@media \(max-width: 599px\) \{[\s\S]*\.map-chrome \.dir-corner,[\s\S]*width: 44px;[\s\S]*height: 44px;/);
+    assert.doesNotMatch(view, /\.map > \.dir-corner/);
+    assert.doesNotMatch(view, /\.map > \.save-img-btn/);
     assert.match(button, /aria-label="Directions"/);
     assert.match(button, /title="Directions"/);
     assert.match(button, /name="route"/);

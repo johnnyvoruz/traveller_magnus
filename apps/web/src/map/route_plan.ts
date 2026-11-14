@@ -110,7 +110,7 @@ type Arrival = {
 };
 
 function noRoute(jump: number): RoutePlan {
-    return { ok: false, reason: 'No route with Jump-' + jump + ' between these systems in the loaded sectors.' };
+    return { ok: false, reason: 'No route with Jump-' + jump + ' between these systems.' };
 }
 
 function ehex(ch: string): number | null {

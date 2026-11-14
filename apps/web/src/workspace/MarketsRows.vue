@@ -11,8 +11,9 @@ import Icon from '../design/Icon.vue';
 import { dossierPath } from '../orbit/bodies.ts';
 import { atPane } from '../shell/pane.ts';
 import { locating, startLocate, stopLocate, systemSubject } from './locate.ts';
-import { marketsAround, marketsChart, startMarkets } from './markets_near.ts';
-import { parseHexKey } from './places.ts';
+import { codeWords, factsLine } from './market_words.ts';
+import { entryAt, marketsAround, marketsChart, startMarkets } from './markets_near.ts';
+import { hexKeyOf, parseHexKey } from './places.ts';
 import { vWorldCard } from './world_card.ts';
 
 const props = defineProps<{
@@ -40,14 +41,18 @@ function parsecWords(parsecs: number): string {
     return parsecs === 0 ? 'Here' : parsecs + ' pc';
 }
 
-/** "Starport A · Ri Pa Ph · WTN 5 · Pop 8": what the index and the tree say, nothing guessed. */
-function facts(row: MarketRow): string {
-    const parts = ['Starport ' + (row.starport || '?')];
-    if (row.tradeCodes.length) parts.push(row.tradeCodes.join(' '));
-    if (row.wtn !== null) parts.push('WTN ' + row.wtn);
-    if (row.population) parts.push('Pop ' + row.population);
-    return parts.join(' · ');
+/** DT10: the trade codes as pills with their names, an owner code as its sentence (the world named from the index). */
+function codesOf(row: MarketRow): ReturnType<typeof codeWords> {
+    const place = parseHexKey(row.hexKey);
+    const nameAt = (hex: string): string | null => {
+        if (!place) return null;
+        const entry = entryAt(hexKeyOf(place.slug, hex));
+        return entry && entry.name ? entry.name : null;
+    };
+    return codeWords(row.tradeCodes, nameAt);
 }
+
+const codes = computed(() => new Map(rows.value.map((row) => [row.hexKey, codesOf(row)])));
 
 function openWorld(row: MarketRow): void {
     const place = parseHexKey(row.hexKey);
@@ -85,11 +90,15 @@ function locate(row: MarketRow): void {
       <ul ref="listEl" class="mkt-rows">
         <li v-for="row in rows" :key="row.hexKey" :class="{ 'has-locate': onMap }" :data-market="row.hexKey">
           <button v-world-card="row.hexKey" type="button" class="mkt-row" @click="openWorld(row)">
-            <span class="mkt-row-top">
+            <span class="mkt-main">
               <b class="mkt-name">{{ row.name || row.hexKey }}</b>
-              <span class="mkt-pc">{{ parsecWords(row.parsecs) }}</span>
+              <span class="mkt-facts" data-market-facts>{{ factsLine(row) }}</span>
+              <span v-if="codes.get(row.hexKey)?.pills.length" class="mkt-codes">
+                <span v-for="pill in codes.get(row.hexKey)?.pills" :key="pill.code" class="ui-chip mkt-code" :title="pill.code" data-market-code>{{ pill.label }}</span>
+              </span>
+              <span v-for="owner in codes.get(row.hexKey)?.owners" :key="owner" class="mkt-owner" data-market-owner>{{ owner }}</span>
             </span>
-            <span class="mkt-facts">{{ facts(row) }}</span>
+            <span class="mkt-pc">{{ parsecWords(row.parsecs) }}</span>
           </button>
           <button
             v-if="onMap"
@@ -139,9 +148,11 @@ function locate(row: MarketRow): void {
 }
 
 .mkt-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /* DT10: the name block and the distance centre on one another; the Locate button centres on the row. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
   width: 100%;
   margin: 0;
   padding: 7px 10px;
@@ -162,11 +173,10 @@ function locate(row: MarketRow): void {
   outline-offset: -2px;
 }
 
-.mkt-row-top {
+.mkt-main {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -186,11 +196,25 @@ function locate(row: MarketRow): void {
   font-variant-numeric: var(--tabular);
 }
 
-.mkt-facts {
+.mkt-facts,
+.mkt-owner {
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: var(--tabular);
   overflow-wrap: anywhere;
+}
+
+/* The trade codes: the house pill, wrapping under the starport line. */
+.mkt-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.mkt-code {
+  padding: 1px 7px 2px;
+  font-size: 11px;
 }
 
 .mkt-locate {

@@ -5,6 +5,7 @@ import { ribbonCellWords, uwpWords } from './code_words.ts';
 import type { OverviewModel } from './model.ts';
 import Icon from '../design/Icon.vue';
 import JourneyTimes from './JourneyTimes.vue';
+import DirectionsHere from '../map/DirectionsHere.vue';
 import SocioBlock from './SocioBlock.vue';
 import StatRows from './StatRows.vue';
 import StellarLines from './StellarLines.vue';
@@ -95,6 +96,7 @@ function toggleLocate(): void {
         <button v-if="news && hexKey" type="button" class="ui-btn" title="How fast news travels from this system" data-command="news-from-here" @click="$emit('news')">
           <Icon name="radar" :size="13" />News
         </button>
+        <DirectionsHere v-if="hexKey" :hex-key="hexKey" />
       </div>
       <button
         v-if="model.ribbon && model.mainworldKey"
@@ -144,6 +146,7 @@ function toggleLocate(): void {
           <button v-if="news && hexKey" type="button" class="ui-btn" title="How fast news travels from this system" data-command="news-from-here" @click="$emit('news')">
             <Icon name="radar" :size="13" />News
           </button>
+          <DirectionsHere v-if="orbitLink && hexKey" :hex-key="hexKey" />
         </div>
       </div>
       <StatRows :rows="model.rows" />

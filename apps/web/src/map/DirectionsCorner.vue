@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Directions in the chart's corner, beside Save image and How to use the map (CU47).
- * The same look as those two. The word is the label; the glyph is the route.
+ * Directions, in the date's row with Save image and How to use the map (CU49).
+ * The word is the label; the glyph is the route. The chart's row sets the height.
  */
 import Icon from '../design/Icon.vue';
 

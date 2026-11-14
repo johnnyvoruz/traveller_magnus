@@ -10,7 +10,7 @@
  * back would overwrite the stored row with the projected one. `appendOf` refuses that shape, and any
  * change to a key the door does not carry. Pure; the send is handed in.
  */
-import type { StatusAppend } from '@voyage/shared';
+import { passengerSeen, paymentSeen, type PassengerSeen, type PaymentSeen, type StatusAppend } from '@voyage/shared';
 
 export type Status = { [key: string]: unknown };
 export type Append = StatusAppend['append'];
@@ -42,11 +42,73 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 /**
+ * DT9: the two presses that rewrite in place, which the door now carries as B's pieces (BT2): Board names
+ * the passenger's row and the jump the fare is for; Pay now the stored payment. The object posts the line.
+ */
+export type DoorPress = { board?: { index: number; parsecs: number }; payNow?: true };
+
+function isRow(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * The Board press read back from the referee's before and after: the row at `index` gained its class and
+ * fare and nothing else, and one income line of that fare was posted. The board item (`passengerSeen` of the
+ * row as shown) and the before and after with both taken out, or null for any other shape.
+ */
+function boardOf(from: Status, after: Status, press: NonNullable<DoorPress['board']>): { item: NonNullable<NonNullable<Append['passengers']>['board']>[number]; before: Status; after: Status } | null {
+    const was = list(from, 'passengers');
+    const now = list(after, 'passengers');
+    const lot = was[press.index];
+    const next = now[press.index];
+    if (was.length !== now.length || !isRow(lot) || !isRow(next) || typeof lot.fareCr === 'number') return null;
+    if (typeof next.fareCr !== 'number' || typeof next.class !== 'string' || !Number.isInteger(press.parsecs) || press.parsecs <= 0) return null;
+    if (!same({ ...lot, class: next.class, fareCr: next.fareCr }, next)) return null;
+    const lines = listDiff(list(from, 'ledger'), list(after, 'ledger'));
+    const fare = lines.add.length === 1 && isRow(lines.add[0]) ? lines.add[0] : null;
+    if (lines.remove.length || !fare || fare.kind !== 'income' || fare.amount !== next.fareCr) return null;
+    const item = { index: press.index, class: next.class, fareCr: next.fareCr, parsecs: press.parsecs, seen: passengerSeen(lot as PassengerSeen) };
+    return { item, before: from, after: { ...after, passengers: was, ledger: list(from, 'ledger') } };
+}
+
+/** The Pay now press read back: the payment moved on and one expense line of its amount; null otherwise. */
+function payOf(from: Status, after: Status): { seen: string; after: Status } | null {
+    const owed = from.payment;
+    if (!isRow(owed) || !isRow(owed.nextDueDay) || typeof owed.amountCr !== 'number' || typeof owed.everyDays !== 'number') return null;
+    if (same(owed, after.payment)) return null;
+    const lines = listDiff(list(from, 'ledger'), list(after, 'ledger'));
+    const paid = lines.add.length === 1 && isRow(lines.add[0]) ? lines.add[0] : null;
+    if (lines.remove.length || !paid || paid.kind !== 'expense' || paid.amount !== -owed.amountCr) return null;
+    return { seen: paymentSeen(owed as unknown as PaymentSeen), after: { ...after, payment: owed, ledger: list(from, 'ledger') } };
+}
+
+/**
  * The piece that takes `before` to `after`, or null when nothing changed or the change is not one the
  * door carries: a ledger line taken away, a row of any list changed in place (taken away and added in
- * one press), or any other key of the status touched.
+ * one press), or any other key of the status touched. With `press`, Board and Pay now become B's pieces.
  */
-export function appendOf(before: Status | null | undefined, after: Status): Append | null {
+export function appendOf(before: Status | null | undefined, after: Status, press?: DoorPress): Append | null {
+    if (press && (press.board || press.payNow)) {
+        const from: Status = before ?? {};
+        let to = after;
+        const extra: Append = {};
+        if (press.board) {
+            const board = boardOf(from, to, press.board);
+            if (!board) return null;
+            to = board.after;
+            extra.passengers = { board: [board.item] };
+        }
+        if (press.payNow) {
+            const pay = payOf(from, to);
+            if (!pay) return null;
+            to = pay.after;
+            extra.payNow = true;
+            extra.paymentSeen = pay.seen;
+        }
+        // Nothing else may ride with the press.
+        for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) if (!same(from[key], to[key])) return null;
+        return extra;
+    }
     const from = before ?? {};
     for (const key of new Set([...Object.keys(from), ...Object.keys(after)])) {
         if ((LISTS as readonly string[]).includes(key) || key === 'fuelTons') continue;
@@ -79,8 +141,10 @@ export function appendOf(before: Status | null | undefined, after: Status): Appe
 /** The switches a piece needs, as the server reads them. */
 export function switchesOf(append: Append): Switch[] {
     const out: Switch[] = [];
-    if (append.ledger?.length) out.push('ledger');
-    if (append.cargo || append.passengers || append.fuelTons !== undefined) out.push('trade');
+    // Board and Pay now post a line, so they need the Ledger switch too (the server's `appendSwitches`).
+    const boarding = (append.passengers?.board?.length ?? 0) > 0;
+    if (append.ledger?.length || boarding || append.payNow) out.push('ledger');
+    if (append.cargo || append.passengers || append.fuelTons !== undefined || append.payNow) out.push('trade');
     if (append.locker) out.push('locker');
     return out;
 }

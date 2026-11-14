@@ -154,7 +154,7 @@ test('the vessel page boards a passenger and the ship sheet shows the fare under
     assert.match(page, /<select v-else class="vt-box vt-class" :value="item\.class" :disabled="readOnly"[^>]*data-passage @change="setClass\(i, \$event\)">/);
     assert.match(page, /<option v-for="one in classes" :key="one\.key" :value="one\.name">\{\{ one\.name \}\}<\/option>/, 'the classes from the file');
     assert.match(page, /<span v-if="isBoarded\(item\)" class="vt-fare" data-fare>/);
-    assert.match(page, /<button v-else-if="boarding !== i && !player" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard\(i\)">Board<\/button>/);
+    assert.match(page, /<button v-else-if="boarding !== i && \(!player \|\| canPost\)" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard\(i\)">Board<\/button>/);
     assert.match(page, /passengers: boarded\(passengers\.value, i, lot\.class, found\.credits\), ledger: postLedger\(ledger\.value, line\)/, 'one commit: the lot and the ledger line');
     assert.match(page, /const line = fareLine\(passengerName\(lot\), lot\.class, parsecs, found\.credits, today\.value\);/);
     const sheet = src('workspace/ShipSheet.vue');

@@ -1,23 +1,34 @@
 <script setup lang="ts">
 /**
- * Directions on the chart (streams/D.md DN1), for the referee and players alike: From and To, Jump 1 to 6,
+ * Directions on the chart (streams/D.md DN1, DN2), for the referee and players alike: From and To, Jump 1 to 6,
  * the fuel choice and the ship's kit, then the route drawn and its legs listed (`directions.ts`, on A's
  * planner). Nothing is saved: closing the panel clears the route. MapView.vue mounts it and draws.
+ *
+ * DN2: each box suggests systems as it is typed (`directions_search.ts`); the first empty box offers
+ * "Use <name>" for the system open in the system panel; the system panel's From here and To here arrive as an
+ * ask (`directions_state.ts`). With both ends set the route is planned at once, and again on any change.
+ * Below 600 px, while a system is open, the panel folds to its ends and total above the world sheet.
  */
-import { reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import type { RouteEnd } from './route_plan.ts';
-import { blankForm, directions, endWords, FUEL_CHOICES, JUMPS, type DirectionsIndex } from './directions.ts';
+import { blankForm, endWords, FUEL_CHOICES, JUMPS, sameEnd, type DirectionsIndex, type PinnedEnd } from './directions.ts';
+import { bothSettled, FINDING_WORDS, planFetching, saidAfter, type GridSector } from './directions_fetch.ts';
+import { directionsState, emptyBox, otherBox, type EndBox } from './directions_state.ts';
+import { suggestEnds, type EndSuggestion } from './directions_search.ts';
 
 const props = defineProps<{
-    /** The loaded sectors, read on each press. */
+    /** The loaded sectors, read on each plan. */
     indexes: () => DirectionsIndex[];
-    /** The hex selected on the chart, read on Use selected. */
-    selected: () => RouteEnd | null;
     /** The party ship's jump (1 to 6) in a campaign with a party ship; absent, the button is not offered. */
     partyJump?: number | null;
     /** The party ship's name, for the button. */
     partyShip?: string;
+    /** DN1b: the chart's sectors, loaded or not, to read an end by sector and hex and to find the route's box. */
+    grid?: () => GridSector[];
+    /** DN1b: fetch one sector's index; resolves when it is in (or it does not come). */
+    fetchIndex?: (slug: string) => Promise<unknown>;
 }>();
 
 const emit = defineEmits<{
@@ -25,76 +36,234 @@ const emit = defineEmits<{
     close: [];
 }>();
 
+const BOXES = ['from', 'to'] as const;
+
+const route = useRoute();
 const form = reactive(blankForm());
+const pinned = reactive<{ from: PinnedEnd | null; to: PinnedEnd | null }>({ from: null, to: null });
 const lines = ref<string[]>([]);
 const total = ref('');
 const said = ref('');
+const boxes: Record<EndBox, HTMLInputElement | null> = { from: null, to: null };
+/** On a phone with a system open, the full form shows only after a press. */
+const expanded = ref(false);
+/** The box whose suggestions show, and them; the wait before asking, and the ask in flight. */
+const suggestFor = ref<EndBox | null>(null);
+const suggestions = ref<EndSuggestion[]>([]);
+let timer: ReturnType<typeof setTimeout> | null = null;
+let asking: AbortController | null = null;
 
-function clear(): void {
-    lines.value = [];
-    total.value = '';
-    said.value = '';
-    emit('route', null);
+/** The system open in the system panel, from the page's address. */
+const here = computed((): RouteEnd | null => {
+    const sector = route.params.sector;
+    const hex = route.params.hex;
+    if ((route.name !== 'hex' && route.name !== 'body') || typeof sector !== 'string' || typeof hex !== 'string') return null;
+    return /^\d{4}$/.test(hex) ? { sector, hex } : null;
+});
+const hereWords = computed(() => (here.value ? endWords(props.indexes(), here.value) : ''));
+/** "Use <name>" sits by the first empty box, unless the other box already holds that system. */
+const offerBox = computed((): EndBox | null => {
+    if (!here.value) return null;
+    const box = emptyBox(form);
+    if (!box) return null;
+    const other = pinned[otherBox(box)];
+    if (other && sameEnd(other.end, here.value) && form[otherBox(box)].trim() === other.label) return null;
+    return box;
+});
+const tucked = computed(() => !!here.value && !expanded.value);
+
+function setBox(box: EndBox, el: unknown): void {
+    boxes[box] = el && typeof (el as HTMLInputElement).focus === 'function' ? el as HTMLInputElement : null;
 }
 
-function useSelected(box: 'from' | 'to'): void {
-    const at = props.selected();
-    if (!at) {
-        said.value = 'Select a system on the chart first.';
-        return;
-    }
-    form[box] = endWords(props.indexes(), at);
-    said.value = '';
+function focusBox(box: EndBox | null): void {
+    if (box) void nextTick(() => boxes[box]?.focus());
+}
+
+function fill(box: EndBox, end: RouteEnd, label: string): void {
+    form[box] = label;
+    pinned[box] = { label, end };
+    closeSuggestions();
+}
+
+function useHere(box: EndBox): void {
+    if (!here.value) return;
+    fill(box, here.value, hereWords.value);
+    focusBox(emptyBox(form));
 }
 
 function swap(): void {
     const from = form.from;
     form.from = form.to;
     form.to = from;
-    if (lines.value.length) go();
+    const pin = pinned.from;
+    pinned.from = pinned.to;
+    pinned.to = pin;
 }
 
 function useShipJump(): void {
     if (props.partyJump) form.jump = props.partyJump;
 }
 
+function clearRoute(): void {
+    lines.value = [];
+    total.value = '';
+    emit('route', null);
+}
+
+function clear(): void {
+    clearRoute();
+    said.value = '';
+}
+
+/** Get directions pressed (or Enter): the suggestions close, then the plan. */
 function go(): void {
-    const result = directions(props.indexes(), form);
+    closeSuggestions();
+    void plan();
+}
+
+let planTicket = 0;
+
+/** DN1b: the sectors in the route's box fetched first ("Finding a route…"), then the plan (`directions_fetch.ts`). */
+async function plan(): Promise<void> {
+    const ticket = ++planTicket;
+    const how = { indexes: props.indexes, grid: props.grid ? props.grid() : [], fetchIndex: props.fetchIndex, finding: () => { said.value = FINDING_WORDS; } };
+    const { result, capped } = await planFetching(how, form, pinned);
+    if (ticket !== planTicket) return;
+    said.value = saidAfter(result, capped);
     if (!result.ok) {
-        lines.value = [];
-        total.value = '';
-        said.value = result.message;
-        emit('route', null);
+        clearRoute();
         return;
     }
-    said.value = '';
+    // Both boxes were settled to plan: what was typed is done, so the suggestions go.
+    closeSuggestions();
     lines.value = result.lines;
     total.value = result.total;
     emit('route', result.stops);
+}
+
+// Both ends set: plan at once, and again on any change. Words that do not find one system yet say nothing.
+watch(
+    () => [form.from, form.to, form.jump, form.fuel, form.scoops, form.processors, form.allowRed, pinned.from, pinned.to],
+    () => {
+        if (bothSettled(props.indexes(), props.grid ? props.grid() : [], form, pinned)) void plan();
+        else if (lines.value.length) clearRoute();
+    },
+);
+
+// The system panel's From here and To here.
+watch(
+    () => (directionsState.ask ? directionsState.ask.seq : 0),
+    () => {
+        const ask = directionsState.ask;
+        if (!ask) return;
+        fill(ask.box, ask.end, endWords(props.indexes(), ask.end));
+        focusBox(otherBox(ask.box));
+    },
+    { immediate: true },
+);
+
+// Another system opened on a phone folds the panel again, above its sheet.
+watch(here, (now, before) => {
+    if (!now || !before || !sameEnd(now, before)) expanded.value = false;
+});
+
+// ---- Suggestions -------------------------------------------------------------------------------------------
+
+function closeSuggestions(): void {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (asking) asking.abort();
+    asking = null;
+    suggestFor.value = null;
+    suggestions.value = [];
+}
+
+function typed(box: EndBox): void {
+    const words = form[box];
+    const pin = pinned[box];
+    if (pin && words.trim() === pin.label.trim()) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+        timer = null;
+        if (asking) asking.abort();
+        const ticket = new AbortController();
+        asking = ticket;
+        void suggestEnds(words, ticket.signal).then((found) => {
+            if (asking !== ticket) return;
+            suggestFor.value = found.length ? box : null;
+            suggestions.value = found;
+        });
+    }, 200);
+}
+
+function pick(box: EndBox, item: EndSuggestion): void {
+    fill(box, item.end, item.label);
+    focusBox(emptyBox(form));
+}
+
+function boxKey(event: KeyboardEvent, box: EndBox): void {
+    if (suggestFor.value !== box) return;
+    if (event.key === 'Escape') {
+        event.stopPropagation();
+        closeSuggestions();
+    } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        const wrap = (event.currentTarget as HTMLElement).closest('.dir-fld-wrap');
+        const first = wrap ? wrap.querySelector<HTMLButtonElement>('.dir-sug-item') : null;
+        if (first) first.focus();
+    }
 }
 
 function close(): void {
     clear();
     emit('close');
 }
+
+onBeforeUnmount(closeSuggestions);
 </script>
 
 <template>
-  <section class="dir ui-frame" aria-labelledby="dir-h" data-directions>
+  <section class="dir ui-frame" :class="{ 'is-tucked': tucked }" aria-labelledby="dir-h" data-directions>
     <div class="dir-head">
       <h2 id="dir-h" class="ui-frame-label">Directions</h2>
       <button type="button" class="ui-btn dir-x" aria-label="Close Directions" title="Close" data-directions-close @click="close"><Icon name="xmark" :size="12" /></button>
     </div>
+    <!-- On a phone with a system open: the ends and the total, the rest a press away. -->
+    <div class="dir-brief" data-directions-brief>
+      <p class="dir-brief-line">{{ form.from.trim() || 'From' }} → {{ form.to.trim() || 'To' }}</p>
+      <p v-if="total" class="dir-brief-total">{{ total }}</p>
+      <button type="button" class="ui-btn" aria-expanded="false" data-directions-expand @click="expanded = true">Show all of Directions</button>
+    </div>
     <form class="dir-form" @submit.prevent="go">
       <div class="dir-ends">
-        <label class="dir-fld"><span>From</span>
-          <input v-model="form.from" class="dir-box" placeholder="Regina, or Spinward Marches 1910" autocomplete="off" data-directions-from />
-        </label>
-        <button type="button" class="ui-btn dir-use" data-directions-from-selected @click="useSelected('from')">Use selected</button>
-        <label class="dir-fld"><span>To</span>
-          <input v-model="form.to" class="dir-box" placeholder="A system's name or hex" autocomplete="off" data-directions-to />
-        </label>
-        <button type="button" class="ui-btn dir-use" data-directions-to-selected @click="useSelected('to')">Use selected</button>
+        <div v-for="box in BOXES" :key="box" class="dir-fld-wrap">
+          <label class="dir-fld"><span>{{ box === 'from' ? 'From' : 'To' }}</span>
+            <input
+              :ref="(el) => setBox(box, el)"
+              v-model="form[box]"
+              class="dir-box"
+              :placeholder="box === 'from' ? 'Regina, or Spinward Marches 1910' : 'A system’s name or hex'"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-expanded="suggestFor === box ? 'true' : 'false'"
+              :aria-controls="'dir-sug-' + box"
+              :data-directions-from="box === 'from' ? '' : undefined"
+              :data-directions-to="box === 'to' ? '' : undefined"
+              @input="typed(box)"
+              @keydown="boxKey($event, box)"
+            />
+          </label>
+          <ul v-if="suggestFor === box" :id="'dir-sug-' + box" class="dir-sug" role="listbox" :aria-label="(box === 'from' ? 'From' : 'To') + ' suggestions'" data-directions-suggestions>
+            <li v-for="item in suggestions" :key="item.end.sector + '/' + item.end.hex" role="option" aria-selected="false">
+              <button type="button" class="dir-sug-item" data-directions-suggestion @click="pick(box, item)" @keydown.esc.stop="closeSuggestions">
+                <b>{{ item.label }}</b><small>{{ item.detail }}</small>
+              </button>
+            </li>
+          </ul>
+          <button v-if="offerBox === box" type="button" class="ui-btn dir-use" :data-directions-use="box" @click="useHere(box)">Use {{ hereWords }}</button>
+        </div>
       </div>
       <button type="button" class="ui-btn dir-swap" data-directions-swap @click="swap">Swap From and To</button>
       <div class="dir-row">
@@ -132,15 +301,16 @@ function close(): void {
 </template>
 
 <style>
-/* Over the chart, on its right. The frame's own rule sets position and padding, so these are the more specific. */
+/* Under the top bar, to the right of the system panel (--panel-width, published by shell/PanelHost.vue), never
+   under or over it. The frame's own rule sets position and padding, so these are the more specific. */
 .ui-frame.dir {
   position: absolute;
   z-index: 6;
-  top: 76px;
-  right: 16px;
+  top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
+  left: calc(var(--rail-width) + max(var(--chrome-inset), calc(var(--panel-width, 0px) + 8px)));
   box-sizing: border-box;
-  width: min(380px, calc(100% - 32px));
-  max-height: calc(100% - 150px);
+  width: min(380px, calc(100% - var(--rail-width) - max(var(--chrome-inset), calc(var(--panel-width, 0px) + 8px)) - var(--chrome-inset)));
+  max-height: calc(100% - var(--chrome-top) - var(--chrome-height) - 8px - var(--chrome-inset));
   overflow-y: auto;
   padding: 12px 14px 14px;
 }
@@ -156,6 +326,11 @@ function close(): void {
   margin: 0;
 }
 
+/* The folded view is a phone's alone. */
+.dir-brief {
+  display: none;
+}
+
 .dir-form {
   display: grid;
   gap: 10px;
@@ -164,9 +339,16 @@ function close(): void {
 
 .dir-ends {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 8px;
-  align-items: end;
+  gap: 8px;
+}
+
+.dir-fld-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.dir-use {
+  justify-self: start;
 }
 
 .dir-fld {
@@ -187,6 +369,41 @@ function close(): void {
   background: var(--panel-raised);
   color: var(--text-0);
   font: 400 13px/1.2 var(--font-text);
+}
+
+.dir-sug {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  background: var(--bg-1);
+  list-style: none;
+}
+
+.dir-sug-item {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--text-0);
+  font: 500 13px/1.3 var(--font-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dir-sug-item small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.dir-sug-item:hover,
+.dir-sug-item:focus-visible {
+  background: var(--row-active);
 }
 
 .dir-row {
@@ -254,23 +471,56 @@ function close(): void {
   font: 400 11.5px/1.4 var(--font-text);
 }
 
-/* On a phone the panel is the width of the screen less its gutters, and the controls meet 44 px. */
+/* On a phone: from past the rail to the gutter, under the top bar's two rows, ending above the world sheet when
+   it is up (--sheet-cover), scrolling inside itself; the controls meet 44 px. */
 @media (max-width: 599px) {
-  /* Below the search box and the date, from past the rail (as the search box starts) to the gutter. It ends
-     above the corner buttons, which sit on the world sheet when it is up (--sheet-cover, shell/PanelHost.vue),
-     and scrolls inside itself when the legs run long. */
   .ui-frame.dir {
-    top: 128px;
+    top: calc(var(--chrome-top) + 2 * (var(--chrome-height) + 8px));
     right: 16px;
-    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)) + 52px);
     left: calc(var(--rail-width) + var(--chrome-inset));
     width: auto;
-    height: auto;
+    max-height: calc(100% - var(--chrome-top) - 2 * (var(--chrome-height) + 8px) - var(--chrome-inset) - max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* A system open (its sheet up): the ends and the total, just above the sheet; the rest a press away. */
+  .ui-frame.dir.is-tucked {
+    top: auto;
+    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
     max-height: none;
   }
 
+  .dir.is-tucked .dir-brief {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .dir.is-tucked .dir-form,
+  .dir.is-tucked .dir-said,
+  .dir.is-tucked .dir-result {
+    display: none;
+  }
+
+  .dir-brief-line,
+  .dir-brief-total {
+    margin: 0;
+    color: var(--text-0);
+    font: 500 13px/1.4 var(--font-text);
+    overflow-wrap: anywhere;
+  }
+
+  .dir-brief-total {
+    color: var(--text-1);
+    font-weight: 400;
+  }
+
+  .dir-brief .ui-btn {
+    justify-self: start;
+  }
+
   .dir .ui-btn,
-  .dir-box {
+  .dir-box,
+  .dir-sug-item {
     min-height: 44px;
   }
 

@@ -16,6 +16,8 @@ import DirectionsCorner from '../map/DirectionsCorner.vue';
 import DirectionsPanel from '../map/DirectionsPanel.vue';
 import { DirectionsLayer, stopPoints, type DirectionsInk } from '../map/directions_layer.ts';
 import { jumpForBox, type DirectionsIndex } from '../map/directions.ts';
+import type { GridSector } from '../map/directions_fetch.ts';
+import { closeDirections as shutDirections, directionsState, openDirections } from '../map/directions_state.ts';
 import type { RouteEnd } from '../map/route_plan.ts';
 import { onNewsAsk, type NewsAsk } from '../map/news_ask.ts';
 import { newsArrivals } from '../news/arrivals.ts';
@@ -229,7 +231,8 @@ const directionsEl = ref<HTMLCanvasElement | null>(null);
 let directionsLayer: DirectionsLayer | null = null;
 let directionsInk: DirectionsInk = { line: '', casing: '' };
 let directionsPoints: { x: number; y: number }[] | null = null;
-const directionsOpen = ref(false);
+/** Open or shut from here, the corner button, `d`, and the system panel's From here and To here (DN2). */
+const directionsOpen = computed(() => directionsState.open);
 let unregisterDirections: (() => void) | null = null;
 let chartPanning = false;
 let chartHoverFrame = 0;
@@ -1877,12 +1880,10 @@ function routeIndexes(): DirectionsIndex[] {
     return out;
 }
 
-/** The hex selected on the chart, else the world open in the dossier. */
-function selectedEnd(): RouteEnd | null {
-    if (selected) return { sector: selected.slug, hex: selected.hhhh };
-    const open = dossier.value as { state?: { slug?: unknown; hex?: unknown } } | null;
-    const state = open && open.state ? open.state : null;
-    return state && typeof state.slug === 'string' && typeof state.hex === 'string' ? { sector: state.slug, hex: state.hex } : null;
+/** DN1b: the chart's own sectors, loaded or not (the canonical grid), for Directions to read and to fetch. */
+function routeGrid(): GridSector[] {
+    if (!chart) return [];
+    return chart.sectors.filter((item) => item.canonical).map((item) => ({ slug: item.slug, name: item.name, x: item.x, y: item.y }));
 }
 
 /** The party's first ship whose sheet gives a jump of 1 to 6, for "Use … 's jump". */
@@ -1899,12 +1900,17 @@ const directionsShip = computed((): { name: string; jump: number } | null => {
 });
 
 function showDirections(stops: RouteEnd[] | null): void {
-    directionsPoints = stops ? stopPoints(stops, sectorOf) : null;
-    markDirty();
+    directionsState.stops = stops ? stops.slice() : null;
 }
 
+// The route drawn is the shared state's: opening or closing systems never clears it (DN2); Clear and closing do.
+watch(() => directionsState.stops, (stops) => {
+    directionsPoints = stops ? stopPoints(stops, sectorOf) : null;
+    markDirty();
+});
+
 function closeDirections(): void {
-    directionsOpen.value = false;
+    shutDirections();
     directionsPoints = null;
     markDirty();
 }
@@ -1912,7 +1918,7 @@ function closeDirections(): void {
 /** The corner button and the d command open and close the same panel. */
 function toggleDirections(): void {
     if (directionsOpen.value) closeDirections();
-    else directionsOpen.value = true;
+    else openDirections();
 }
 
 // ---- How fast news travels (spec_xboat_ripples.md §3; streams/D.md XD1) ----------------------------------
@@ -3353,6 +3359,7 @@ onBeforeUnmount(() => {
     if (unregisterLocate) unregisterLocate();
     if (unregisterQuickNote) unregisterQuickNote();
     if (unregisterDirections) unregisterDirections();
+    if (directionsState.open) shutDirections();
     if (unregisterSave) unregisterSave();
     if (unregisterNews) unregisterNews();
     if (unregisterNewsTo) unregisterNewsTo();
@@ -3440,7 +3447,8 @@ onBeforeUnmount(() => {
     <DirectionsPanel
       v-if="directionsOpen"
       :indexes="routeIndexes"
-      :selected="selectedEnd"
+      :grid="routeGrid"
+      :fetch-index="indexWhenReady"
       :party-jump="directionsShip ? directionsShip.jump : null"
       :party-ship="directionsShip ? directionsShip.name : ''"
       @route="showDirections"
@@ -3462,13 +3470,15 @@ onBeforeUnmount(() => {
       @pause="stopPlay"
       @close="closeNews"
     />
-    <MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" />
-    <SaveImageButton v-if="!shipSheet && versionRef" title="Save an image of the chart" @click="openSaveSheet" />
-    <DirectionsCorner v-if="!shipSheet" :open="directionsOpen" @click="toggleDirections" />
     <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
-    <!-- The pane paints above this view. The date has to leave it, or a full sheet covers the chip. -->
+    <!-- The pane paints above this view. The date and the chart's buttons leave it, or a full sheet covers them. -->
     <Teleport to=".app">
-      <StardateChip @open="openDateEditor" />
+      <div class="map-chrome">
+        <StardateChip @open="openDateEditor" />
+        <DirectionsCorner v-if="!shipSheet" :open="directionsOpen" @click="toggleDirections" />
+        <SaveImageButton v-if="!shipSheet && versionRef" title="Save an image of the chart" @click="openSaveSheet" />
+        <MapHelp v-if="!shipSheet" :build="buildOffered" :auto="helpAuto" @seen="helpWasSeen" />
+      </div>
     </Teleport>
     <AccountMenu :open="accountOpen" @close="closeAccount" @campaign="openCampaignFromMenu" />
     <p class="status ui-status">{{ status }}</p>
@@ -3519,32 +3529,79 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Save image (DP1): at the map's bottom right, beside the help button. */
-.map > .save-img-btn {
+/* Directions, Save image, How to use the map: in the date's row, to its right (CU49). */
+.map-chrome {
   position: absolute;
-  right: calc(var(--chrome-inset) + 48px);
-  bottom: var(--chrome-inset);
-  z-index: 3;
+  top: var(--chrome-top);
+  left: calc(var(--rail-width) + var(--chrome-inset) + min(440px, calc(100% - var(--rail-width) - 2 * var(--chrome-inset))) + 12px);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--chrome-height);
 }
 
-/* On a phone the world sheet covers the lower half. The button sits above it, as the orbit card does. */
-@media (max-width: 599px) {
-  .map > .save-img-btn {
-    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+.app .map-chrome > .stardate {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+}
+
+.map-chrome .dir-corner,
+.map-chrome .save-img-btn,
+.map-chrome .map-help {
+  flex: 0 0 auto;
+}
+
+.map-chrome .dir-corner,
+.map-chrome .save-img-btn,
+.map-chrome .map-help-ask {
+  width: var(--chrome-height);
+  height: var(--chrome-height);
+}
+
+/* Below 680 px the date takes the row under the search. The buttons stay in that row, to its right. */
+@media (max-width: 680px) {
+  .map-chrome {
+    top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
+    left: calc(var(--rail-width) + var(--chrome-inset));
+    right: var(--chrome-inset);
+    justify-content: flex-end;
+    max-width: none;
   }
 }
 
-/* Directions (CU47): one step further left, the same gap the help button leaves for Save image. */
-.map > .dir-corner {
-  position: absolute;
-  right: calc(var(--chrome-inset) + 96px);
-  bottom: var(--chrome-inset);
-  z-index: 3;
+/* From 600 to 680 an open side panel covers this row, as it covers the date. */
+@media (min-width: 600px) and (max-width: 680px) {
+  .app:has(.panel.is-open) .map-chrome {
+    visibility: hidden;
+  }
 }
 
 @media (max-width: 599px) {
-  .map > .dir-corner {
-    bottom: calc(var(--chrome-inset) + max(var(--sheet-cover, 0px), env(safe-area-inset-bottom, 0px)));
+  .map-chrome .dir-corner,
+  .map-chrome .save-img-btn,
+  .map-chrome .map-help-ask {
+    width: 44px;
+    height: 44px;
+  }
+
+  .app:has(.panel.is-open.is-sheet-full) .map-chrome {
+    visibility: hidden;
+  }
+}
+
+/* At 360 the date, the 8 px gaps and three 44 px targets are wider than the band. The icon
+   steps aside and the chip's side padding tightens, so nothing slides under the rail. */
+@media (max-width: 360px) {
+  .map-chrome > .stardate > .ui-icon {
+    display: none;
+  }
+
+  .app .map-chrome > .stardate {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }
 

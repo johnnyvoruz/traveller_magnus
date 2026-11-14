@@ -67,7 +67,7 @@ import { moveCredits } from './transfer_send.ts';
 import { may } from './crew.ts';
 import { actingPerson } from './players/me.ts';
 import { sendTrade, type Who } from './trade_send.ts';
-import { postedBy, type Switch } from './trade_write.ts';
+import { postedBy, type DoorPress, type Switch } from './trade_write.ts';
 import CrewList from './CrewList.vue';
 import ShipLocker from './ShipLocker.vue';
 
@@ -96,10 +96,13 @@ function can(key: Switch): boolean {
 
 /** A press the door refused, or one a player's page can't make: said at the head of the sections. */
 const sendSaid = ref('');
-function push(now: CampaignRecord, change: Parameters<typeof sendTrade>[2]): void {
+function push(now: CampaignRecord, change: Parameters<typeof sendTrade>[2], press?: DoorPress): Promise<string> {
     sendSaid.value = '';
-    void sendTrade(who.value, now, change).then((said) => { sendSaid.value = said; });
+    return sendTrade(who.value, now, change, undefined, press).then((said) => { sendSaid.value = said; return said; });
 }
+
+/** DT9: Board and Pay now post a line, so a player needs the Trade and Ledger switches both (BT2). */
+const canPost = computed(() => can('trade') && can('ledger'));
 
 /** "Posted by Tam Oduya" on a line a player posted. */
 function byWords(line: LedgerLine): string {
@@ -539,7 +542,7 @@ function boardNow(): void {
     const found = lot && parsecs ? fareFor(lot.class, parsecs) : null;
     if (!lot || !found) { boardError.value = 'Choose a passage the fares table names, and the jump.'; return; }
     const line = fareLine(passengerName(lot), lot.class, parsecs, found.credits, today.value);
-    push(now, { status: statusWithTrade(now, { passengers: boarded(passengers.value, i, lot.class, found.credits), ledger: postLedger(ledger.value, line) }) });
+    void push(now, { status: statusWithTrade(now, { passengers: boarded(passengers.value, i, lot.class, found.credits), ledger: postLedger(ledger.value, line) }) }, { board: { index: i, parsecs } });
     boarding.value = null;
 }
 
@@ -690,8 +693,9 @@ function payToday(): void {
     if (!now || !owed || props.readOnly) return;
     const paid = payNow(owed, today.value);
     if (!paid) return;
-    push(now, { status: statusWithTrade(now, { ledger: postLedger(ledger.value, paid.line), payment: paid.payment }) });
-    paySaid.value = 'Paid ' + credits(owed.amountCr) + '. Next due ' + dayWords(paid.payment.nextDueDay) + '.';
+    const words = 'Paid ' + credits(owed.amountCr) + '. Next due ' + dayWords(paid.payment.nextDueDay) + '.';
+    paySaid.value = '';
+    void push(now, { status: statusWithTrade(now, { ledger: postLedger(ledger.value, paid.line), payment: paid.payment }) }, { payNow: true }).then((said) => { if (!said) paySaid.value = words; });
 }
 
 /** The recurring boxes summed: one figure, and each part (Lane A's upkeep). */
@@ -848,7 +852,7 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
           </select>
           <span v-if="isBoarded(item)" class="vt-fare" data-fare>Boarded, {{ credits(item.fareCr ?? 0) }}</span>
           <button v-if="isBoarded(item) && !underway && can('trade')" type="button" class="ui-btn" :disabled="readOnly" data-disembark @click="disembarkOne(i)">Disembark</button>
-          <button v-else-if="boarding !== i && !player" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard(i)">Board</button>
+          <button v-else-if="boarding !== i && (!player || canPost)" type="button" class="ui-btn" :disabled="readOnly" data-board @click="openBoard(i)">Board</button>
           <form v-if="boarding === i" class="vt-form is-inline vt-board" data-board-form @submit.prevent="boardNow">
             <p v-if="nextLegWords" class="vt-fine vt-leg" data-board-leg>{{ nextLegWords }}</p>
             <label class="vt-fld vt-jump"><span>Jump</span>
@@ -950,6 +954,21 @@ const KIND_WORDS: Record<LedgerLine['kind'], string> = { income: 'Income', expen
           </ul>
         </template>
         <p v-else class="vt-none">Write the ship's recurring costs on the ship sheet ({{ MONTHLY_COST_FIELDS.join(', ') }}) to see its upkeep.</p>
+      </div>
+    </section>
+
+    <!-- DT9: a player with the Trade and Ledger switches pays the stored payment; the referee sets it. -->
+    <section v-if="player && payment && canPost" class="vt-sec ui-frame" data-player-payment aria-labelledby="vt-ppay-h">
+      <div class="vt-head">
+        <h3 id="vt-ppay-h" class="ui-frame-label">Payment</h3>
+      </div>
+      <div class="vt-part" data-payment>
+        <p class="vt-at"><b>{{ credits(payment.amountCr) }} every {{ plural(payment.everyDays, 'day') }}</b><template v-if="payment.payee"> to {{ payment.payee }}</template></p>
+        <p class="vt-due" :class="{ 'is-late': due && due.state !== 'due' }" role="status">{{ dueWords }} · <span class="ui-date">{{ dayWords(payment.nextDueDay) }}</span></p>
+        <div class="vt-acts">
+          <button type="button" class="ui-btn is-primary" data-pay-now :disabled="readOnly" @click="payToday">Pay now: {{ credits(-payment.amountCr) }}</button>
+        </div>
+        <p v-if="paySaid" class="vt-said" role="status">{{ paySaid }}</p>
       </div>
     </section>
 

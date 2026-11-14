@@ -127,6 +127,11 @@ function withName(value: unknown, name: string): string {
     return name ? `${value} — ${name}` : String(value);
 }
 
+/** A trade code's full name from the table above, or null for a code it does not name (DT10). */
+export function tradeCodeName(code: string): string | null {
+    return TRADE_CODE_NAMES[code.trim()] ?? null;
+}
+
 function formatTradeCode(code: unknown): string {
     const key = String(code || '').trim();
     if (!key) return '';

@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * The round "Save image" control among a view's floating controls (streams/D.md DP1): the chart's
- * corner beside the map's help, the system map's and the world surface's frames. The host places
- * it; this file holds its look, the map help button's (workspace/MapHelp.vue), in tokens.
+ * The round "Save image" control (streams/D.md DP1): the chart's date row, the system map's
+ * frame and the world surface's frame. The host places it; this file holds its look, in tokens.
  */
 import Icon from '../design/Icon.vue';
 

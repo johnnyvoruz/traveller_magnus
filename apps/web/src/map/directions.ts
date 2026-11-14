@@ -105,12 +105,38 @@ export type DirectionsResult =
     | { ok: true; stops: RouteEnd[]; lines: string[]; total: string }
     | { ok: false; message: string };
 
+/**
+ * A box filled from a system rather than typed (DN2: From here, To here, Use <name>, a suggestion picked): the
+ * words shown and the system they stand for. While the box still says those words, the system is the end.
+ */
+export type PinnedEnd = { label: string; end: RouteEnd };
+export type PinnedEnds = { from?: PinnedEnd | null; to?: PinnedEnd | null };
+
+/** The box's end: the pinned system while the box says its words, else the typed words read. */
+export function boxEnd(indexes: readonly DirectionsIndex[], typed: string, box: 'From' | 'To', pinned?: PinnedEnd | null): EndFound {
+    if (pinned && typed.trim() === pinned.label.trim()) return { ok: true, end: pinned.end, label: pinned.label };
+    return findEnd(indexes, typed, box);
+}
+
+/** A box settled on one system: pinned, a whole name, or a sector and hex; not the start of a name still typed. */
+export function settled(typed: string, found: EndFound): boolean {
+    if (!found.ok) return false;
+    const text = typed.trim();
+    return squash(found.label) === squash(text) || /\d{4}$/.test(text);
+}
+
+/** Both boxes settled (`settled`): the panel plans at once. Nothing is said for a box not settled yet. */
+export function bothEnds(indexes: readonly DirectionsIndex[], form: DirectionsForm, pinned: PinnedEnds = {}): boolean {
+    return settled(form.from, boxEnd(indexes, form.from, 'From', pinned.from)) && settled(form.to, boxEnd(indexes, form.to, 'To', pinned.to));
+}
+
 /** One press of Get directions: both ends read, the planner asked, the words made. */
-export function directions(indexes: readonly DirectionsIndex[], form: DirectionsForm): DirectionsResult {
-    const from = findEnd(indexes, form.from, 'From');
+export function directions(indexes: readonly DirectionsIndex[], form: DirectionsForm, pinned: PinnedEnds = {}): DirectionsResult {
+    const from = boxEnd(indexes, form.from, 'From', pinned.from);
     if (!from.ok) return from;
-    const to = findEnd(indexes, form.to, 'To');
+    const to = boxEnd(indexes, form.to, 'To', pinned.to);
     if (!to.ok) return to;
+    if (sameEnd(from.end, to.end)) return { ok: false, message: 'From and To are the same system.' };
     const query: RouteQuery = { from: from.end, to: to.end, jump: form.jump, fuel: form.fuel, scoops: form.scoops, processors: form.processors, allowRed: form.allowRed };
     const plan: RoutePlan = planRoute(indexes, query);
     if (!plan.ok) return { ok: false, message: plan.reason };
