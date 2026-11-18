@@ -13,7 +13,8 @@ export const QUIET_KEY = 'voyage.living.quiet';
 /** The orbit view's Traffic chip. Absent means shown. Quiet still hides the ships. */
 export const TRAFFIC_LAYER_KEY = 'voyage.living.traffic';
 /** System Comms in the orbit view. Absent means on. This device only. */
-export const COMMS_KEY = 'voyage.comms.on';
+/** `.2` since 2026-11-14: System Comms opens by default again on every device (Johnny); the old key's "off" is not read. */
+export const COMMS_KEY = 'voyage.comms.on.2';
 
 export type Living = { chatter: boolean; traffic: boolean };
 
@@ -42,15 +43,30 @@ export function setCommsShown(on: boolean): void {
     storageSet(COMMS_KEY, on ? '1' : '0');
 }
 
+/**
+ * The receiver's own minimize: put away for this visit, and open again the next time the app loads.
+ * Nothing is stored; the System Comms button is what this device remembers.
+ */
+export function minimizeComms(): void {
+    deviceComms.shown = false;
+}
+
 export function setQuiet(on: boolean): void {
     device.quiet = on;
     storageSet(QUIET_KEY, on ? '1' : '0');
 }
 
-/** The referee's switches as stored: both off when the campaign has none. */
+/** A campaign that has never set the switches: traffic shows (Johnny, 2026-11-14: the system should feel alive), chatter as before. */
+export const LIVING_UNSET: Living = { chatter: false, traffic: true };
+
+/**
+ * The referee's switches as stored. A campaign that has none stored gets LIVING_UNSET: background
+ * traffic is on until the referee turns it off. No campaign at all is both off.
+ */
 export function livingOf(settings: Pick<CampaignSettings, 'living'> | null | undefined): Living {
-    const living = settings ? settings.living : undefined;
-    return living ? { chatter: living.chatter, traffic: living.traffic } : LIVING_OFF;
+    if (!settings) return LIVING_OFF;
+    const living = settings.living;
+    return living ? { chatter: living.chatter, traffic: living.traffic } : LIVING_UNSET;
 }
 
 /** What shows on this device: the referee's switches, unless this device is quiet. Signed out or no campaign: nothing. */

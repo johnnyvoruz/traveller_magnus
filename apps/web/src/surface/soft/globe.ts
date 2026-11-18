@@ -20,7 +20,7 @@
  */
 import type { HybridWorld } from '../hybrid/inputs.ts';
 import { SHEET_LAYOUT, layoutFor, type SheetLayout } from '../hybrid/field.ts';
-import { gridOf, type Face } from '../hybrid/grid.ts';
+import { gridOf, onSheetX, type Face } from '../hybrid/grid.ts';
 import { cachedHybridModel, hybridModelWith, rememberHybridModel } from '../hybrid/index.ts';
 import type { HexEdits } from '../hybrid/serialize.ts';
 import { modelPreparation, startHybridBuild } from '../hybrid/model.ts';
@@ -209,7 +209,7 @@ export function netPixel(layout: SheetLayout, p: readonly [number, number, numbe
     w0 /= sum;
     w1 /= sum;
     w2 /= sum;
-    const nx = w0 * a[0] + w1 * b[0] + w2 * c[0];
+    const nx = onSheetX(w0 * a[0] + w1 * b[0] + w2 * c[0]);
     const ny = w0 * a[1] + w1 * b[1] + w2 * c[1];
     return [layout.ox + nx * layout.side, layout.oy + ny * layout.side];
 }

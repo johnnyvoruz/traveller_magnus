@@ -17,9 +17,9 @@ import { applyMgT2EOrbitalNames } from './core/names.js';
 import { genState } from './core/settings.js';
 import { restoreSeedWorldsIntoGenerated, captureSeededMoonCaps, trimGeneratedMoonsToSeededCaps, captureSeededRingCaps, trimGeneratedRingsToSeededCaps } from './seed_restoration.js';
 import { MgT2EMath } from './mgt2e_math.js';
-import { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography } from './mgt2e_stellar_engine.js';
-import { generatePhysicals, generateAtmospherics, generateRotationalDynamics, generateBiospherics, evaluateMainworldCandidates } from './mgt2e_world_engine.js';
-import { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial, generateMainworldUWP } from './mgt2e_socio_engine.js';
+import { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography, assignInclinations, assignOrbitalAngles } from './mgt2e_stellar_engine.js';
+import { generatePhysicals, generateAtmospherics, generateRotationalDynamics, generateBiospherics, evaluateMainworldCandidates, finalizeBeltResources } from './mgt2e_world_engine.js';
+import { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial, generateMainworldUWP, assignTravelZone, applyGovernmentNames } from './mgt2e_socio_engine.js';
 import { runAndLog } from './mgt2e_uwp_auditor.js';
     if (!StellarEngine || !WorldEngine || !SocioEngine) {
         console.error("MgT2EBottomUpGenerator DI Failure: Critical engines missing!", { StellarEngine, WorldEngine, SocioEngine });
@@ -334,6 +334,12 @@ import { runAndLog } from './mgt2e_uwp_auditor.js';
 
         // Action 6.4: Planet-Centric Biographies (v0.6.0.0)
         // Groups all disparate generation data into a human-readable biography per world.
+        finalizeBeltResources(sys);
+        assignTravelZone(sys);
+        applyGovernmentNames(sys);
+        assignInclinations(sys);
+        assignOrbitalAngles(sys);
+
         if (StellarEngine && StellarEngine.walkMgT2ESystem && StellarEngine.logMgT2EBodyBiography) {
             tSection('System Biographies');
             StellarEngine.walkMgT2ESystem(sys, (body) => {

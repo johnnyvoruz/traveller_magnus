@@ -16,9 +16,10 @@ import { trace, startTrace, tSection, endTrace } from './core/trace.js';
 import { getNextSystemName, applyMgT2EOrbitalNames } from './core/names.js';
 import { genState } from './core/settings.js';
 import { MgT2EMath } from './mgt2e_math.js';
-import { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography } from './mgt2e_stellar_engine.js';
-import { generatePhysicals, generateAtmospherics, generateRotationalDynamics, generateBiospherics } from './mgt2e_world_engine.js';
-import { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial, generateMainworldUWP } from './mgt2e_socio_engine.js';
+import { generateMgT2ESystemBottomUp } from './mgt2e_bottomup_generator.js';
+import { generateStellarSystem, generateSystemInventory, allocateOrbits, walkMgT2ESystem, logMgT2EBodyBiography, assignInclinations, assignOrbitalAngles } from './mgt2e_stellar_engine.js';
+import { generatePhysicals, generateAtmospherics, generateRotationalDynamics, generateBiospherics, finalizeBeltResources } from './mgt2e_world_engine.js';
+import { generateCoreSocial, generateExtendedSocioeconomics, finalizeSubordinateSocial, generateMainworldUWP, assignTravelZone, applyGovernmentNames } from './mgt2e_socio_engine.js';
 import { runAndLog } from './mgt2e_uwp_auditor.js';
     /**
      * Main MgT2E Top-Down Generation Orchestrator.
@@ -28,6 +29,8 @@ import { runAndLog } from './mgt2e_uwp_auditor.js';
      * @returns {Object} sys - The fully populated system object
      */
     function generateMgT2ESystemTopDown(hexId, mwOverride = null, priorT5Socio = null) {
+        // An unknown hex is the expanded method. A supplied UWP stays on this path.
+        if (!mwOverride) return generateMgT2ESystemBottomUp(hexId, null);
         // =================================================================
         // PHASE 1: INITIALIZATION
         // =================================================================
@@ -187,6 +190,12 @@ import { runAndLog } from './mgt2e_uwp_auditor.js';
         
         // Action 6.4: Planet-Centric Biographies (v0.6.0.0)
         // Groups all disparate generation data into a human-readable biography per world.
+        finalizeBeltResources(sys);
+        assignTravelZone(sys);
+        applyGovernmentNames(sys);
+        assignInclinations(sys);
+        assignOrbitalAngles(sys);
+
         if (StellarEngine && StellarEngine.walkMgT2ESystem && StellarEngine.logMgT2EBodyBiography) {
             tSection('System Biographies');
             StellarEngine.walkMgT2ESystem(sys, (body) => {

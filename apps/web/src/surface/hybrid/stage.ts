@@ -9,13 +9,16 @@ import type { V3 } from './grid.ts';
 import type { HybridModel } from './model.ts';
 import { sunVector, type ShadowMode } from './overlay.ts';
 
-/** The net's outline in sheet pixels, clockwise from the left corner of the band. */
+/**
+ * The net's outline in sheet pixels, clockwise from the top left corner. The left and right edges are
+ * straight (the cut, hybrid/grid.ts): half a north triangle stands at each end of the top.
+ */
 export function netOutline(layout: SheetLayout): [number, number][] {
     const h = Math.sqrt(3) / 2;
-    const pts: [number, number][] = [[0, h]];
-    for (let k = 0; k < 5; k += 1) pts.push([k + 0.5, 0], [k + 1, h]);
-    pts.push([5.5, 2 * h]);
-    for (let k = 4; k >= 0; k -= 1) pts.push([k + 1, 3 * h], [k + 0.5, 2 * h]);
+    const pts: [number, number][] = [];
+    for (let k = 0; k < 5; k += 1) pts.push([k, 0], [k + 0.5, h]);
+    pts.push([5, 0], [5, 2 * h]);
+    for (let k = 4; k >= 0; k -= 1) pts.push([k + 0.5, 3 * h], [k, 2 * h]);
     return pts.map(([x, y]) => [layout.ox + x * layout.side, layout.oy + y * layout.side]);
 }
 

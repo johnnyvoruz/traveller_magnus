@@ -30,7 +30,7 @@ test('the instrument is bars only, one line, and it does not ship the preview', 
     assert.doesNotMatch(vue, /LOCAL COMMS/);
     assert.match(vue, /data-trx-sig/);
     assert.match(vue, /data-signal="0"/);
-    assert.equal((vue.match(/<button/g) || []).length, 0);
+    assert.equal((vue.match(/<button/g) || []).length, 1, 'one control: Minimize, in the corner');
     assert.doesNotMatch(vue, /skip/i);
     assert.doesNotMatch(render, /runDemo/);
     assert.doesNotMatch(render, /Beowulf/);
@@ -447,4 +447,18 @@ test('a mounted receiver completes one transmission from a facts fixture', { tim
         await server.close();
         fs.rmSync(cacheDir, { recursive: true, force: true });
     }
+});
+
+// Minimize (Johnny, 2026-11-14): the receiver shrinks into the System Comms button, which answers with a ring.
+test('the receiver\'s corner minimizes it into the System Comms button', () => {
+    const orbitSrc = fs.readFileSync(path.join(root, 'apps/web/src/views/OrbitView.vue'), 'utf8');
+    assert.match(vue, /<button type="button" class="trx-min" aria-label="Minimize System Comms"[^>]*data-comms-minimize @click="emit\('minimize'\)">/);
+    assert.match(vue, /\.trx-min \{[^}]*pointer-events: auto;/, 'the receiver lets the pointer through; its one control takes it');
+    assert.match(orbitSrc, /@minimize="minimizeComms"/);
+    assert.match(orbitSrc, /function minimizeComms\(\): void \{[\s\S]*?commsFly\.value = \{[\s\S]*?putCommsAway\(\);[\s\S]*?commsLanded\.value = true;/, 'measured from the receiver to the button, then put away for this visit (nothing stored), then the button\'s ring');
+    assert.match(orbitSrc, /'is-minimizing': commsFly !== null/);
+    assert.match(orbitSrc, /\.orbit-comms\.is-minimizing\.is-hidden \{\s+transform: translate\(var\(--comms-fly-x, 0\), var\(--comms-fly-y, 0\)\) scale\(var\(--comms-fly-scale, 1\)\);/);
+    assert.match(orbitSrc, /:class="\{ 'is-landing': commsLanded \}"/);
+    assert.match(orbitSrc, /prefers-reduced-motion: reduce\) \{[\s\S]*?\.orbit-comms\.is-minimizing\.is-hidden \{\s+transform: none;/, 'no flight with reduced motion');
+    assert.match(orbitSrc, /commsEntered\.value = false;\s+commsFly\.value = null;/, 'turned on again, it opens in place');
 });

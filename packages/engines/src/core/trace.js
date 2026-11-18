@@ -1,4 +1,4 @@
-import { masterSeed, hashString, roll1D, roll2D, rollD3, rollND, rollFlux } from './rng.js';
+import { masterSeed, hashString, rng, roll1D, roll2D, rollD3, rollND, rollFlux } from './rng.js';
 
 export const trace = { enabled: false, lines: [], indent: 0 };
 
@@ -62,6 +62,14 @@ export function tDM(label, value) {
 
 export function tSkip(reason) { writeLogLine(`  Skipped: ${reason}`); }
 export function tTrade(code, reason) { writeLogLine(`  Trade Code [${code}]: ${reason}`); }
+
+/** Linear draw in [0, 1). Handbook angles multiply this by 360. */
+export function tRollUnit(label) {
+    const roll = rng();
+    flushPendingRoll();
+    pendingRoll = { label, val: roll, dms: [], type: 'unit' };
+    return roll;
+}
 
 export function tRoll1D(label) {
     const roll = roll1D();

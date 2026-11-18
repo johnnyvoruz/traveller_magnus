@@ -6,7 +6,7 @@
 import { CODE_TABLE, codeRow, SURFACE_CODES, terrainRgb, type CodeKind, type RGB, type SurfaceCode } from './codes.ts';
 import type { SheetLayout } from './field.ts';
 import { sheetPoint } from './field.ts';
-import { dot, hexSpacing, latticeNet, sphere, type V3 } from './grid.ts';
+import { dot, hexSpacing, latticeNet, NET_HEIGHT, NET_WIDTH, sphere, type V3 } from './grid.ts';
 import { drawCode, iconPaint, type Ctx2D, type IconSet, type Tinter } from './icons.ts';
 import type { HexRecord, HybridModel } from './model.ts';
 import { seaColoursOf } from './paint.ts';
@@ -178,8 +178,26 @@ export type SymbolOptions = {
     readonly outlineInk?: string;
 };
 
-/** Hex outlines and symbols. The context is in sheet pixels (scale it for a sharper canvas). */
+/**
+ * Hex outlines and symbols. The context is in sheet pixels (scale it for a sharper canvas). Nothing is
+ * drawn past the net's straight left and right edges: a face the cut divides is drawn in two halves.
+ */
 export function drawSymbols(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, options: SymbolOptions): void {
+    ctx.save();
+    const right = layout.ox + NET_WIDTH * layout.side;
+    const bottom = layout.oy + NET_HEIGHT * layout.side;
+    ctx.beginPath();
+    ctx.moveTo(layout.ox, layout.oy);
+    ctx.lineTo(right, layout.oy);
+    ctx.lineTo(right, bottom);
+    ctx.lineTo(layout.ox, bottom);
+    ctx.closePath();
+    ctx.clip();
+    drawSymbolsOn(ctx, model, layout, options);
+    ctx.restore();
+}
+
+function drawSymbolsOn(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, options: SymbolOptions): void {
     const grid = model.grid;
     const n = grid.n;
     const s = layout.side;
@@ -403,10 +421,12 @@ export function drawMarks(ctx: Ctx2D, model: HybridModel, layout: SheetLayout, o
         const px = layout.side / model.grid.n;
         const km = (model.world.diamKm / 2) * hexSpacing(model.grid.n);
         const label = '1 hex ≈ ' + Math.round(km).toLocaleString('en-US') + ' km';
-        const x0 = layout.ox + 4.35 * layout.side;
+        // The chip ends at the net's right edge, in the corner under the last south triangle.
+        const chip = px + 10 + label.length * 5.6;
+        const x0 = layout.ox + NET_WIDTH * layout.side - chip + 5;
         const y0 = layout.oy + 1.5 * Math.sqrt(3) * layout.side - 6;
         ctx.fillStyle = iconPaint('--surface-scale-chip');
-        ctx.fillRect(x0 - 5, y0 - 14, px + 10 + label.length * 5.6, 20);
+        ctx.fillRect(x0 - 5, y0 - 14, chip, 20);
         ctx.strokeStyle = iconPaint('--icon-port');
         ctx.lineWidth = 1.5;
         ctx.beginPath();

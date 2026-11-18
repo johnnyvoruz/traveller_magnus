@@ -610,7 +610,7 @@ describe('the orbit disc shows the painted hexes (DW2c)', () => {
         assert.doesNotMatch(DRAW_FRAG, /uPaint/);
         // The wiring: the service keys the epoch on the paint, sends the texture before the watch, and the worker keeps it by key.
         const service = read('surface/service.ts');
-        assert.match(service, /const paint = request\.mode === 'enhanced' \? discPaintFor\(disc\) : null;/);
+        assert.match(service, /const surface = request\.mode !== 'enhanced' \? null : webglState\(\) === 'missing' \? discPaintFor\(disc\) : discSurfaceFor\(disc\);\s+\/\/ [^\n]*\s+if \(surface === DISC_WAITS\) \{\s+waiting \+= 1;\s+continue;\s+\}/);
         assert.match(service, /for \(const paint of paints\.values\(\)\) link\.paint\(paint\.key, paint\.texture\);\s+link\.submit\(shades\);/);
         assert.match(service, /paints\.has\(disc\.key\) \? ':' \+ \(paints\.get\(disc\.key\) as DiscPaint\)\.key : ''/);
         assert.match(service, /resetDiscPaint\(\);/);

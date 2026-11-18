@@ -50,7 +50,8 @@ test('the enhanced program gates city light and neither program paints it in the
     );
     const discard = planet.indexOf('if (d > 1.0 + aa) return vec4(0.0);');
     const gate = planet.indexOf('float T =');
-    const cloudMix = planet.indexOf('color = mix(color, uCloudColor');
+    // Look pass 1 gives the clouds body: the mix is the same step, with the cloud's own colour worked out first.
+    const cloudMix = planet.indexOf('color = mix(color, cloudCol, pow(cloud, 1.25) * 0.94);');
     const cityAdd = planet.indexOf('color += city * (uGas < 0.5 ? 1.0 : 0.0)');
     const limb = planet.indexOf('color += tint * uSun * uAirStrength');
     assert.ok(discard >= 0 && gate > discard);
@@ -63,4 +64,35 @@ test('the enhanced program gates city light and neither program paints it in the
     assert.ok(planet.includes('float glowShow = exp(-1.35 * cover);'));
     assert.ok(planet.includes('bias + log2(3.0)'));
     assert.ok(planet.includes('bias + log2(8.0)'));
+});
+
+// Look pass 1 (Johnny, 2026-11-14; judged on /dev/planet-sheet): the enhanced program alone.
+test('look pass 1 is in the enhanced program, and the vanilla program and the sheet\'s "before" are without it', async () => {
+    const { ENHANCED_DRAW_FRAG_BEFORE, enhancedDrawSource } = await import('../../apps/web/src/surface/enhanced/draw.ts');
+    const marks = [
+        'float weave = urban * mix(0.34, 0.9, clamp(cityCore, 0.0, 1.0));',
+        '* uBump * 2.4 * (1.0 - mapMode) * (1.0 - props.r)',
+        'grain = vnoise(qc * 46.0 + uOffset) * 0.6 + vnoise(qc * 118.0 + uOffset.yzx) * 0.4;',
+        'color += uSun * (pow(spec, 160.0) * 1.25 * swell + pow(spec, 18.0) * 0.14) * sea * diffuse;',
+        'vec3 cloudCol = uCloudColor * min(1.0, cloudLight * 1.22) * cloudSun * mix(0.9, 1.1, smoothstep(0.1, 0.9, cloud));',
+        // Look pass 2: detail at the screen's scale, on a disc large enough to show it.
+        'float fine = smoothstep(26.0, 60.0, uRadiusPx) * (1.0 - step(0.5, uGas));',
+        'vec3 qs = normalize(q + crinkle);',
+        'float nearLand = (1.0 - texture(uB, qg, bias + 3.2).r) * props.r * (1.0 - mapMode);',
+        'cloud = clamp(cloud + (fray - 0.5) * 1.5 * cloud * (1.0 - cloud) * fine, 0.0, 1.0);',
+        'color = max(mix(vec3(luma), color, 1.2), 0.0);',
+    ];
+    for (const mark of marks) {
+        assert.ok(ENHANCED_DRAW_FRAG.includes(mark), 'in the enhanced program: ' + mark);
+        assert.equal(ENHANCED_DRAW_FRAG_BEFORE.includes(mark), false, 'not in the before: ' + mark);
+        assert.equal(DRAW_FRAG.includes(mark), false, 'the vanilla program is as it was: ' + mark);
+    }
+    assert.equal(enhancedDrawSource(DRAW_FRAG, false), ENHANCED_DRAW_FRAG_BEFORE);
+    // The city terms, the gates and the diagnostics are the same in both.
+    for (const kept of ['float T = exp(-3.0 * c / max(z, 0.35)) * clear;', 'if (uDiag > 1.5) color = vec3(cityCore);', 'color += city * (uGas < 0.5 ? 1.0 : 0.0);']) {
+        assert.ok(ENHANCED_DRAW_FRAG.includes(kept) && ENHANCED_DRAW_FRAG_BEFORE.includes(kept), kept);
+    }
+    // No new uniform: the pass reads what the program already has.
+    const uniforms = (text) => (text.match(/^uniform [^;]+;/gm) || []).join('\n');
+    assert.equal(uniforms(ENHANCED_DRAW_FRAG), uniforms(ENHANCED_DRAW_FRAG_BEFORE));
 });

@@ -127,3 +127,25 @@ test('an ocean cell and a shallows cell each carry a glyph on paper, and stay pl
     assert.equal(symbolOf(cell('OC', ['town']), false), 'town');
     assert.equal(symbolOf(cell('FO')), 'FO');
 });
+
+// The Texture look (Johnny, 2026-11-14): the bare map at its exact size, to wrap a sphere.
+test('Texture: the net\'s own rectangle, nothing around it, offered on the surface map alone', async () => {
+    const { textureSize, TEXTURE_SIDE } = await import('../../apps/web/src/surface/capture.ts');
+    const { textureName } = await import('../../apps/web/src/capture/paper.ts');
+    const net = textureSize('enhanced');
+    assert.deepEqual(net, { width: 5 * TEXTURE_SIDE, height: Math.ceil(NET_HEIGHT * TEXTURE_SIDE) }, 'five sides wide, one and a half triangle heights tall');
+    assert.deepEqual(textureSize('vanilla'), { width: 4000, height: 2000 });
+    assert.equal(textureName({ kind: 'world', name: 'Regina', sector: 'Spinward Marches', hex: '1910', uwp: 'A788899-C' }, net.width, net.height), 'Regina A788899-C surface, Spinward Marches 1910 (texture, 4000 x 2079).png');
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const read = (rel) => fs.readFileSync(path.join(root, 'apps/web/src', rel), 'utf8');
+    const capture = read('surface/capture.ts');
+    assert.match(capture, /if \(input\.look === 'texture'\) return captureTexture\(/, 'before any page is made');
+    const texture = capture.slice(capture.indexOf('async function captureTexture'), capture.indexOf('/** Draws one frame and downloads it.'));
+    assert.match(texture, /paintHybrid\(input\.shot\.model, layoutFor\(width, height, TEXTURE_SIDE\), wait\)/);
+    assert.doesNotMatch(texture, /drawSymbols|drawLegend|drawCaption|fillRect/, 'no symbols, key, caption or page: the pixels off the map stay clear');
+    const sheet = read('capture/SaveImageSheet.vue');
+    assert.match(sheet, /<button v-if="texture" type="button" :aria-pressed="look === 'texture'"[^>]*data-save-image-texture[^>]*>Texture<\/button>/);
+    assert.match(sheet, /:disabled="busy \|\| onTexture" @click="paper = item"/, 'a texture has no paper');
+    assert.match(read('dossier/SurfaceStage.vue'), /<SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" :texture="textureSize\(mode\)"/);
+    for (const view of ['views/MapView.vue', 'views/OrbitView.vue']) assert.doesNotMatch(read(view), /<SaveImageSheet[^>]*:texture=/, view + ' has no texture');
+});

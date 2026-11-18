@@ -152,6 +152,16 @@ function flip(key: (typeof LAYERS)[number]['key']): void {
   border-radius: 2px;
 }
 
+/* The HUD's mark: an open ring with a pip at its middle. */
+.orbit-key-mark.is-hud::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  border: 1px dashed var(--signal);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--signal) 0 2px, transparent 2.5px);
+}
+
 .orbit-key-mark.is-traffic::before {
   content: '';
   width: 8px;

@@ -32,6 +32,11 @@ export type Layers = {
     linear: boolean;
     /** The star that marks the mainworld, and its name (!_hideMainworldHighlight). */
     markMainworld: boolean;
+    /**
+     * The HUD (Johnny, 2026-11-14): a small mark on every world too small to make out, so the whole system
+     * reads at a glance from far out. It fades as a disc grows, and is gone by the time the surface shows.
+     */
+    hud: boolean;
     /** Orbit ring strength, 0.1 to 1 (_orbitOpacity). */
     pathStrength: number;
 };
@@ -39,7 +44,7 @@ export type Layers = {
 /** js/system_viewer.js:71-88, 111. */
 export const DEFAULT_LAYERS: Layers = {
     paths: true, moons: true, habitable: true, jump: true, dayNight: true, scan: false,
-    linear: false, markMainworld: true, pathStrength: 0.65,
+    linear: false, markMainworld: true, hud: true, pathStrength: 0.65,
 };
 
 /** Path alphas, as shares of the ring strength (3226, 2961, 2606). */

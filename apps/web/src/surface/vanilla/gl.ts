@@ -250,7 +250,8 @@ export function createDiscBaker(
     let cityPass: CityBakePass | null = null;
     /** The painted hexes by key: the pixels, and the texture once uploaded (dropped with the context). */
     const paints = new Map<string, { image: PaintImage; texture: WebGLTexture | null }>();
-    const PAINTS_MAX = 6;
+    // The hex-map textures ride this road too (map_disc.ts): the page keeps 56 quick and 3 full.
+    const PAINTS_MAX = 72;
     let programState: 'idle' | 'pending' | 'ready' = 'idle';
     let parallel: ParallelCompile | null = null;
     let opened: OpenProgram[] = [];
@@ -822,6 +823,7 @@ export function createDiscBaker(
                 cityLook: item.req.cityLook,
                 paint: paintTexture(item.req.paintKey),
                 paintLon: item.req.paintLon ?? 0,
+                paintMap: item.req.paintMap === true,
             });
         }
         const gpu = requireOps();

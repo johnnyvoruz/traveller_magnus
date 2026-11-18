@@ -858,7 +858,8 @@ describe('symbol key and the always-on grid', () => {
             strokeStyle: '', fillStyle: '', font: '', lineWidth: 1, textAlign: '', textBaseline: '',
             beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
             fillText(text) { wide.push(text); },
-        }, model, SHEET_LAYOUT, { graticule: false, ring: false, scale: false, font: '18px sans-serif' });
+        }, model, SHEET_LAYOUT, { graticule: false, ring: false, scale: false, font: '34px sans-serif' });
+        // The net is five sides wide since the cut went straight, so the margin left of it is 70 px: 34 px type is what no longer fits.
         assert.ok(wide.includes('0°') && !wide.includes('90°N'), 'a label that does not fit is dropped: ' + wide.join(','));
     });
 
@@ -893,5 +894,57 @@ describe('large map zoom and the night tune', () => {
         const lines = terminusSegments(model.grid, SHEET_LAYOUT, sunVector(0, 0));
         assert.ok(lines.length > 10);
         for (const line of lines) assert.ok(line.every((n) => Number.isFinite(n)));
+    });
+});
+
+// The net is cut square (Johnny, 2026-11-14): straight left and right edges, so a saved texture maps onto a sphere.
+describe('the net cut square', () => {
+    test('the outline is a rectangle five sides wide with half a north triangle at each end', async () => {
+        const { netOutline } = await import('../../apps/web/src/surface/hybrid/stage.ts');
+        const { NET_WIDTH, NET_HEIGHT, FACE_COUNT, buildNet } = await import('../../apps/web/src/surface/hybrid/grid.ts');
+        assert.equal(NET_WIDTH, 5);
+        const unit = { width: 5, height: NET_HEIGHT, side: 1, ox: 0, oy: 0 };
+        const pts = netOutline(unit);
+        const h = Math.sqrt(3) / 2;
+        const near = (a, b) => Math.abs(a - b) < 1e-9;
+        assert.ok(near(pts[0][0], 0) && near(pts[0][1], 0), 'starts at the top left corner');
+        const has = (x, y) => pts.some((q) => near(q[0], x) && near(q[1], y));
+        assert.ok(has(5, 0) && has(5, 2 * h) && has(0, 2 * h), 'both edges run straight down from the top to the band\'s foot');
+        assert.ok(pts.every((q) => q[0] > -1e-9 && q[0] < 5 + 1e-9), 'nothing of the outline past either edge');
+        const faces = buildNet();
+        assert.equal(faces.length, FACE_COUNT + 2);
+        assert.deepEqual(faces.map((f) => !!f.ghost), [...Array(FACE_COUNT).fill(false), true, true], 'the two faces the cut divides, again');
+        assert.deepEqual(faces[20].A, faces[0].A);
+        assert.equal(faces[20].a[0], faces[0].a[0] + 5);
+        assert.deepEqual(faces[21].C, faces[5].C);
+    });
+
+    test('the sheet is filled edge to edge across the band, with the same hexes as before and nothing outside', () => {
+        const n = 4;
+        const grid = gridOf(n);
+        assert.equal(grid.count, hexCount(n), 'the second halves add no hexes');
+        let area = 0;
+        for (let id = 0; id < grid.count; id += 1) area += grid.area[id];
+        assert.ok(Math.abs(area - 1) < 1e-9, 'nor any area');
+        const field = fieldOf(SHEET_LAYOUT, n);
+        const { width: W, side, ox, oy } = SHEET_LAYOUT;
+        const left = Math.ceil(ox);
+        const right = Math.floor(ox + 5 * side) - 1;
+        const seen = new Set();
+        for (let k = 0; k < field.hex.length; k += 1) {
+            if (field.hex[k] < 0) continue;
+            seen.add(field.hex[k]);
+            const x = k % W;
+            assert.ok(x >= left - 1 && x <= right + 1, 'a painted pixel past the edge at x ' + x);
+        }
+        assert.equal(seen.size, grid.count, 'every hex is on the sheet');
+        // A row through the middle of the band: painted from the left edge to the right edge without a gap.
+        const y = Math.round(oy + 1.5 * (Math.sqrt(3) / 2) * side);
+        for (let x = left; x <= right; x += 1) assert.ok(field.hex[y * W + x] >= 0, 'a gap in the band at x ' + x);
+        // Every hex centre lands on the sheet, the ones left of the cut at the right edge.
+        for (let id = 0; id < grid.count; id += 1) {
+            const [x] = sheetPoint(SHEET_LAYOUT, grid.P[id]);
+            assert.ok(x >= ox - 1e-6 && x <= ox + 5 * side + 1e-6, 'hex ' + id + ' off the sheet at ' + x);
+        }
     });
 });

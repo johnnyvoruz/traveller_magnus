@@ -11,7 +11,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { SettingsChange } from '@voyage/shared';
-import { livingChange, livingOf, livingShown, LIVING_OFF } from '../../apps/web/src/living/quiet.ts';
+import { livingChange, livingOf, livingShown, LIVING_OFF, LIVING_UNSET } from '../../apps/web/src/living/quiet.ts';
 
 const settings = (over = {}) => ({
     party: { vesselIds: [], aboard: {}, memberIds: [], anchor: null },
@@ -21,8 +21,9 @@ const settings = (over = {}) => ({
     ...over,
 });
 
-test('absent means both off; the device\'s quiet wins over the referee', () => {
-    assert.deepEqual(livingOf(settings()), LIVING_OFF);
+test('a campaign that never set them shows traffic; no campaign is both off; the device\'s quiet wins over the referee', () => {
+    assert.deepEqual(livingOf(settings()), LIVING_UNSET, 'traffic on until the referee turns it off (Johnny, 2026-11-14)');
+    assert.deepEqual(livingShown(settings(), true), LIVING_OFF);
     assert.deepEqual(livingOf(null), LIVING_OFF, 'signed out or no campaign: nothing');
     const on = settings({ living: { chatter: true, traffic: true } });
     assert.deepEqual(livingShown(on, false), { chatter: true, traffic: true });

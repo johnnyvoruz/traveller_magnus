@@ -6,8 +6,12 @@
 
 export type Paper = 'A4' | 'Letter' | 'A3' | 'Tabloid';
 export type Orientation = 'portrait' | 'landscape';
-/** Ink on white from the print tokens, or the screen's colours on the same white (DP1d: no saved image has a dark background). */
-export type Look = 'paper' | 'screen';
+/**
+ * Ink on white from the print tokens, or the screen's colours on the same white (DP1d: no saved image has a dark
+ * background). `texture` is the world surface map's alone: the bare map at its exact size, edge to edge, with no
+ * page, key or caption, for wrapping a sphere.
+ */
+export type Look = 'paper' | 'screen' | 'texture';
 
 export const PAPERS: readonly Paper[] = ['A4', 'Letter', 'A3', 'Tabloid'];
 export const PRINT_DPI = 300;
@@ -95,6 +99,11 @@ export function asciiName(text: string): string {
 /** "Regina subsector, Spinward Marches (A4, 300 dpi).png" */
 export function captureName(area: CaptureArea, paper: Paper): string {
     return asciiName(areaWords(area)) + ' (' + paper + ', ' + PRINT_DPI + ' dpi).png';
+}
+
+/** "Regina A788899-C surface, Spinward Marches 1910 (texture, 4000 x 2079).png" */
+export function textureName(area: CaptureArea, width: number, height: number): string {
+    return asciiName(areaWords(area)) + ' (texture, ' + width + ' x ' + height + ').png';
 }
 
 /** "chart v10" from "10" or "v10"; empty with no version. */

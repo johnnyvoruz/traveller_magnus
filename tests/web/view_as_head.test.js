@@ -1,6 +1,6 @@
-// View as players in the Campaign panel's head (streams/D.md DU36): the switch sits in the tabs row at Half
-// and Full, before Timeline, with the words at Full and the eye alone at Half; the bar stays above the tabs
-// at Column and where no head is shown, and the banner while viewing is the same bar as before.
+// View as players in the Campaign panel's head (streams/D.md DU36): the switch sits in the tabs row at every
+// width, before Timeline, with the words at Full and the eye alone at Column and Half; the bar stays above
+// where no head is shown, and the banner while viewing is the same bar as before.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -25,10 +25,10 @@ describe('View as players in the head (DU36)', () => {
         assert.equal((bar.match(/data-view-as\b(?!-)/g) || []).length, 2, 'both buttons carry data-view-as');
     });
 
-    test('the panel puts the switch in the head at Half and Full, before Timeline; the bar stays at Column and without a head', () => {
+    test('the panel puts the switch in the head at every width, before Timeline; the bar stays without a head', () => {
         const panel = read('workspace/CampaignPanel.vue');
         assert.match(panel, /const headShown = computed\(\(\) => status\.value === 'ready' && \(\(!props\.recordId && !props\.entryId\) \|\| span\.value === 'full'\)\);/, 'the old inline rule, named');
-        assert.match(panel, /const viewAsInHead = computed\(\(\) => headShown\.value && span\.value !== 'column'\);/);
+        assert.match(panel, /const viewAsInHead = computed\(\(\) => headShown\.value\);/, 'Column too: one row, not a bar over the tabs');
         assert.match(panel, /<div v-if="headShown" class="camp-head">/);
         assert.match(panel, /<\/div>\s+<ViewAsBar v-if="viewAsInHead && !example\.on" place="head" :words="span === 'full'" \/>\s+<button v-if="!headFolded" type="button" class="camp-timeline" :aria-pressed="onTimeline/, 'after the tabs, before Timeline; words at Full only');
         assert.match(panel, /<ViewAsBar v-if="status === 'ready' && !example\.on" :place="viewAsInHead \? 'banner' : 'bar'" \/>/, 'above the tabs: the banner alone when the head holds the switch');

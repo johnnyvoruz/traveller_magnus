@@ -118,6 +118,11 @@ function drawnAnchor(anchor: CampaignAnchor, atDays: number, bodiesAt: BodiesAt,
  * for an anchor or a jump, and at the leg's two dates for a flight. A point is placed
  * by `pictureOf` and `bodiesAt` is not asked.
  */
+/** Two anchors that name one body of one system. */
+function sameBody(a: CampaignAnchor, b: CampaignAnchor): boolean {
+    return !!a && !!b && a.kind === 'system' && b.kind === 'system' && a.hexKey === b.hexKey && !!a.bodyKey && a.bodyKey === b.bodyKey && !a.point && !b.point;
+}
+
 export function placeShips(
     tracks: readonly ShipTrack[], bodiesAt: BodiesAt, days: number, pictureOf?: PictureOf,
 ): ShipMark[] {
@@ -127,6 +132,13 @@ export function placeShips(
         if (!at) continue;
         const base = { id: track.id, name: track.name, kind: track.kind, shape: track.shape };
         if ('fraction' in at) {
+            // A background shuttle's hop is a flight from a body to that same body: it is at the body, not on a course.
+            // (Its two ends are the body at two dates, a hair apart, which gave it a heading and kept it on the disc.)
+            if (track.kind === 'traffic' && at.leg.mode === 'flight' && sameBody(at.leg.from, at.leg.to)) {
+                const point = drawnAnchor(at.leg.from, days, bodiesAt, pictureOf);
+                if (point) marks.push({ ...base, x: point.x, y: point.y });
+                continue;
+            }
             const flight = at.leg.mode === 'flight';
             const from = drawnAnchor(at.leg.from, flight ? at.leg.departs : days, bodiesAt, pictureOf);
             const to = drawnAnchor(at.leg.to, flight ? at.leg.arrives : days, bodiesAt, pictureOf);
@@ -209,6 +221,70 @@ export function shipAt(
         }
     }
     return best;
+}
+
+/** A contact's holding orbit: its ring as a share of the body's drawn radius, the least gap in pixels, and the hours one turn takes. */
+export const HOLD_RING_MIN = 1.5;
+export const HOLD_RING_SPAN = 1.3;
+export const HOLD_GAP_PX = 9;
+export const HOLD_HOURS_MIN = 2.5;
+export const HOLD_HOURS_SPAN = 7;
+
+function holdSeed(id: string, salt: number): number {
+    let h = 2166136261 ^ salt;
+    for (let i = 0; i < id.length; i += 1) {
+        h ^= id.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+    }
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x2c1b3c6d) >>> 0;
+    h ^= h >>> 12;
+    return (h >>> 0) / 4294967296;
+}
+
+/**
+ * Background ships that are docked or holding at a body, put into orbits about it (Johnny, 2026-11-14:
+ * "it's all in a straight line and when we scroll their position moves"). Each such contact gets a ring
+ * of its own from its id, a place on it, a direction and a period of a few hours, and moves along it
+ * with the campaign clock, pointing the way it goes. The ring is a share of the body's drawn radius, so
+ * zooming scales the traffic with the world and never slides it along the screen. The mark itself is
+ * moved, so what is drawn, what the pointer hovers and what a press hits are one place. A ship under
+ * way clear of every disc, a jump, and every ship of the campaign are left exactly as they are: those keep the docked step
+ * beside the body (dockedBeside) and their tags.
+ */
+export function contactsInOrbit(marks: readonly ShipMark[], hits: readonly { kind: string; cx: number; cy: number; r: number; visualR?: number }[], days: number): ShipMark[] {
+    return marks.map((mark) => {
+        if (mark.kind !== 'traffic' || mark.jump) return mark;
+        // A world is drawn many times its true size, so its 100-diameter limit lies inside its own disc at
+        // any zoom that shows the system: a ship flying between the limit and the world is, on the picture,
+        // on the world. It is shown holding about the world until its course carries it clear of the disc.
+        const underWay = typeof mark.heading === 'number';
+        let body: { cx: number; cy: number; r: number; visualR?: number } | null = null;
+        let best = Infinity;
+        for (const hit of hits) {
+            if (hit.kind !== 'star' && hit.kind !== 'world' && hit.kind !== 'moon') continue;
+            const d = (mark.x - hit.cx) ** 2 + (mark.y - hit.cy) ** 2;
+            // On the body: within a pixel or two of its middle, or anywhere on the inner part of its disc (a
+            // followed world is drawn a little off the place its anchor resolves to, by more than a pixel).
+            const reach = underWay ? (hit.visualR ?? hit.r) : Math.max(1.5, (hit.visualR ?? hit.r) * 0.5);
+            if (d <= reach * reach && d < best) {
+                best = d;
+                body = hit;
+            }
+        }
+        if (!body) return mark;
+        const radius = body.visualR ?? body.r;
+        const ring = radius * (HOLD_RING_MIN + HOLD_RING_SPAN * holdSeed(mark.id, 1)) + HOLD_GAP_PX + 10 * holdSeed(mark.id, 2);
+        const turn = holdSeed(mark.id, 3) < 0.5 ? -1 : 1;
+        const hours = HOLD_HOURS_MIN + HOLD_HOURS_SPAN * holdSeed(mark.id, 4);
+        const angle = 2 * Math.PI * (holdSeed(mark.id, 5) + turn * (days * 24) / hours);
+        return {
+            ...mark,
+            x: body.cx + ring * Math.cos(angle),
+            y: body.cy + ring * Math.sin(angle),
+            heading: angle + turn * Math.PI / 2,
+        };
+    });
 }
 
 /**

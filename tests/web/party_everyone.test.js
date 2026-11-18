@@ -79,10 +79,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 test('the Party tab shows the card first, with a Locate per row that has a place', () => {
     const panel = fs.readFileSync(path.join(root, 'apps/web/src/workspace/PartyPanel.vue'), 'utf8');
     const card = panel.indexOf('data-everyone');
-    assert.ok(card > 0 && card < panel.indexOf('<section class="party-ship">'), 'before the ships');
-    assert.match(panel, /<h3 id="party-everyone-h" class="ui-heading ui-kicker">Where is everyone<\/h3>/);
+    assert.ok(card > 0, 'the party is one list');
+    assert.doesNotMatch(panel, /<section class="party-ship">|<section class="party-people">/, 'the ships and the people are not listed a second time: Manage turns the same rows into their controls');
+    assert.match(panel, /<template v-if="managing && row\.kind === 'ship'">/);
+    assert.match(panel, /class="ui-btn party-manage"[^>]*data-party-manage @click="toggleManage"/);
+    assert.match(panel, /<h3 id="party-everyone-h" class="ui-heading ui-kicker">The party <span class="party-count">\{\{ countWords \}\}<\/span><\/h3>/);
     assert.match(panel, /v-if="row\.hexKey"\s+type="button"\s+class="ui-btn party-locate"/);
     assert.match(panel, /startLocate\(id, row\.hexKey, \(\) => \{/);
-    // DU3b: the people rows say where a member aboard no ship is by the card's rule.
-    assert.match(panel, /const standing = shipId \? '' : standsAt\(party\.value, campaign\.records, record, days\.value\)\.words;/);
+    // DU3b: a member aboard no ship is one row, and it says where by the card's rule (everyoneWhere's words).
+    assert.match(panel, /if \(row\.kind === 'ship' \|\| !row\.aboard\) return row\.words;/);
 });

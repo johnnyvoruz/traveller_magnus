@@ -29,7 +29,6 @@ test('the records list, the party, the hover card and the timeline each draw it'
     assert.match(read('CampaignList.vue'), /<RecordAvatar :record="item\.record" :universe-id="campaign\.universeId" size="row" \/>/);
     const party = read('PartyPanel.vue');
     assert.match(party, /<RecordAvatar :record="row\.record" :universe-id="campaign\.universeId" size="chip" \/>/);
-    assert.match(party, /<RecordAvatar :record="ship" :universe-id="campaign\.universeId" size="chip" \/>/);
     assert.match(read('RecordCard.vue'), /<RecordAvatar :record="record" :universe-id="campaign\.universeId" size="row" \/>/);
     assert.match(read('TimelineList.vue'), /<RecordAvatar :record="row\.avatar" :universe-id="campaign\.universeId" size="row"/);
     // A record's row in the timeline carries the record's own images.

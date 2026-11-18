@@ -43,7 +43,9 @@ export function runWrangler(args) {
                 : command;
             const result = spawnSync(process.execPath, [wranglerBin, ...full], {
                 cwd: apiRoot,
-                env: { ...process.env, CI: '1' },
+                // Wrangler 4.155 colours its banner on a pipe. The banner's colour code
+                // contains '[', and the tests read the first '[' as the JSON result.
+                env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
                 encoding: 'utf8',
             });
             last = `${result.stdout || ''}\n${result.stderr || ''}`;

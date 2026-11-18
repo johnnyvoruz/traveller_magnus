@@ -53,8 +53,9 @@ test('liquid and temperature census: every invariant holds on the fixed sample',
         // 353 on engine 1.2.0. Engine 1.3.0 draws belt span and belt composition on the shared
         // stream and drops the gas-giant class modifier, so five of those exotic atmospheres
         // are no longer unresolved (348). Engine 1.4.0 builds a fresh hex by the expanded
-        // method, so the 60 uncharted hexes move. 352 is the count on this same sample.
-        assert.equal(counted.length, 352);
+        // method, so the 60 uncharted hexes move. 352 is the count on engine 1.4.0.
+        // Engine 1.5.0 draws Size S, belt-body, and city dice on that stream. 324 is the count.
+        assert.equal(counted.length, 324);
     });
 });
 

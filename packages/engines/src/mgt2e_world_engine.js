@@ -252,6 +252,56 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
      * @param {Object} mainworldBase - Mainworld baseline data (for size locking)
      * @returns {Object} Modified system object
      */
+    function beltIsOutermost(sys, body) {
+        if (!sys || !Array.isArray(sys.worlds) || !sys.worlds.includes(body)) return false;
+        let max = -Infinity;
+        for (const world of sys.worlds) {
+            if (!world || world.type === 'Empty' || !Number.isFinite(world.orbitId)) continue;
+            if (world.orbitId > max) max = world.orbitId;
+        }
+        return Number.isFinite(body.orbitId) && body.orbitId === max;
+    }
+
+    // Page 28 eccentricity table. A belt body is DM+1. An old inner orbit is DM-1.
+    // A P-type orbit circles one star beyond the first, so it is another DM+1.
+    function rollBeltBodyEccentricity(orbitNum, sys, orbitType) {
+        const roll = tRoll2D('Belt body eccentricity');
+        let dm = 1;
+        tDM('Belt body', 1);
+        if (orbitType === 'P-Type') { tDM('Orbits a second star', 1); dm += 1; }
+        const age = Number(sys && sys.age) || 0;
+        if (age > 1 && Number.isFinite(orbitNum) && orbitNum < 1) { tDM('Old inner orbit', -1); dm -= 1; }
+        const sum = roll + dm;
+        let base = 0;
+        let fraction = 0;
+        if (sum <= 5) { base = -0.001; fraction = tRoll1D('Belt body ecc jitter') / 1000; }
+        else if (sum <= 7) { base = 0; fraction = tRoll1D('Belt body ecc jitter') / 200; }
+        else if (sum <= 9) { base = 0.03; fraction = tRoll1D('Belt body ecc jitter') / 100; }
+        else if (sum === 10) { base = 0.05; fraction = tRoll1D('Belt body ecc jitter') / 20; }
+        else if (sum === 11) { base = 0.05; fraction = tRoll2D('Belt body ecc jitter') / 20; }
+        else { base = 0.3; fraction = tRoll2D('Belt body ecc jitter') / 20; }
+        return Math.min(0.999, Math.max(0, base + fraction));
+    }
+
+    function placeBeltBodies(body, sys) {
+        const span = body.beltSpan;
+        const beltOrbit = body.orbitId;
+        if (!Number.isFinite(span) || !Number.isFinite(beltOrbit)) return;
+        const records = [];
+        const place = (kind, count) => {
+            const n = Math.floor(Number(count) || 0);
+            for (let i = 0; i < n; i++) {
+                const flux = tRoll2D('Belt body orbit') - 7;
+                const orbit = beltOrbit + (flux * span) / 8;
+                const eccentricity = rollBeltBodyEccentricity(orbit, sys, body.orbitType);
+                records.push({ kind, orbit, eccentricity });
+            }
+        };
+        place('1', body.beltSize1);
+        place('S', body.beltSizeS);
+        if (records.length) body.beltBodies = records;
+    }
+
     function generatePhysicals(sys, mainworldBase) {
         let primary = sys.stars[0];
         tSection('World & Moon Sizing');
@@ -395,6 +445,14 @@ import { decideSurfaceLiquid, liquidCandidates, isExoticAtmosphere } from './sur
                     if (Number.isFinite(body.beltSpan) && body.beltSpan < 0.1 && sizeS > 0) sizeS = Math.ceil(sizeS / 2);
                     body.beltSizeS = sizeS;
                     tResult('Belt Size S', body.beltSizeS, 'WBH p.75');
+                    if (body.beltSizeS > 50 && beltIsOutermost(sys, body)) {
+                        const num = tRoll1D('Size S variance');
+                        const den = tRoll1D3('Size S variance');
+                        const add = tRoll1D('Size S variance add');
+                        body.beltSizeS = body.beltSizeS * (num / den) + add;
+                        tResult('Belt Size S variance', body.beltSizeS, 'WBH p.75');
+                    }
+                    placeBeltBodies(body, sys);
                 }
 
                 // Precision Orbit Recalculation

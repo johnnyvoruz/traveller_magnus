@@ -10,7 +10,7 @@ import { linkDiscProgram } from '../vanilla/gl.ts';
 import { DRAW_FRAG } from '../vanilla/gl_shade.ts';
 import { ENHANCED_BAKE_PASSES, discResourceKey } from './bake.ts';
 import { CITY_BAKE_FRAG, createCityBake, type CityBake } from './city_cube.ts';
-import { ENHANCED_DRAW_FRAG } from './draw.ts';
+import { ENHANCED_DRAW_FRAG, ENHANCED_DRAW_FRAG_BEFORE } from './draw.ts';
 
 const mounted = new WeakMap<DiscBaker, string>();
 let epoch = 0;
@@ -30,14 +30,17 @@ export function resetDiscProgram(): void {
     cityGl = null;
 }
 
-/** Prepare the draw program for this mode. A no-op when that baker already has it. */
-export function mountDiscProgram(baker: DiscBaker, mode: SurfaceMode, version: string): void {
+/**
+ * Prepare the draw program for this mode. A no-op when that baker already has it. `before` is the
+ * contact sheet's alone (dev/planet-sheet): the enhanced program without look pass 1.
+ */
+export function mountDiscProgram(baker: DiscBaker, mode: SurfaceMode, version: string, before = false): void {
     if (!baker.ready()) return;
     const gl = baker.gl();
     if (!gl) return;
     baker.setCityPass(mode === 'enhanced' ? cityFor(gl) : null);
     const revision = ENHANCED_BAKE_PASSES.length === 0 ? 'baseline' : 'cities';
-    const key = String(epoch) + '|' + discResourceKey('draw-program', revision, mode, version, 0);
+    const key = String(epoch) + '|' + discResourceKey('draw-program', revision, mode, version, 0) + (before ? '|before' : '');
     if (mounted.get(baker) === key) return;
     // This baker's first link is already the vanilla baseline. Claiming it
     // avoids a second compile and a second resident program.
@@ -45,7 +48,7 @@ export function mountDiscProgram(baker: DiscBaker, mode: SurfaceMode, version: s
         mounted.set(baker, key);
         return;
     }
-    const source = mode === 'enhanced' ? ENHANCED_DRAW_FRAG : DRAW_FRAG;
+    const source = mode === 'enhanced' ? (before ? ENHANCED_DRAW_FRAG_BEFORE : ENHANCED_DRAW_FRAG) : DRAW_FRAG;
     baker.bindDraw(linkDiscProgram(gl, source));
     mounted.set(baker, key);
 }

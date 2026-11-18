@@ -95,6 +95,11 @@ if (import.meta.env.DEV) {
         component: () => import('./dev/deck-plan/DeckPlanPage.vue'),
     });
     router.addRoute({
+        path: '/dev/planet-sheet',
+        name: 'planet-sheet',
+        component: () => import('./dev/planet-sheet/PlanetSheet.vue'),
+    });
+    router.addRoute({
         path: '/dev/city-lights',
         name: 'city-lights',
         component: () => import('./dev/city-lights/CityLights.vue'),

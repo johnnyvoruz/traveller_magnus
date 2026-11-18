@@ -101,8 +101,12 @@ export function sameEnd(a: RouteEnd, b: RouteEnd): boolean {
     return a.sector === b.sector && a.hex === b.hex;
 }
 
+/** One jump as the list shows it: the system reached, how far, the fuel taken there, and A's notes for the jump. */
+export type DirectionsLeg = { end: RouteEnd; name: string; parsecs: string; fuel: string; notes: string[] };
+
+/** `origin` and `legs` are the list's rows (the start, then one row a jump); `lines` are the same legs as sentences. */
 export type DirectionsResult =
-    | { ok: true; stops: RouteEnd[]; lines: string[]; total: string }
+    | { ok: true; stops: RouteEnd[]; lines: string[]; total: string; origin?: { end: RouteEnd; name: string }; legs?: DirectionsLeg[] }
     | { ok: false; message: string };
 
 /**
@@ -146,6 +150,8 @@ export function directions(indexes: readonly DirectionsIndex[], form: Directions
         stops: [from.end, ...plan.legs.map((leg) => leg.to)],
         lines: plan.legs.map((leg, i) => legLine(indexes, leg, i + 1)),
         total: totalWords(plan.legs),
+        origin: { end: from.end, name: placeName(indexes, from.end) },
+        legs: plan.legs.map((leg) => legRow(indexes, leg)),
     };
 }
 
@@ -171,6 +177,11 @@ export function legLine(indexes: readonly DirectionsIndex[], leg: RouteLeg, n: n
     if (fuel) parts.push(fuel);
     for (const note of leg.notes) parts.push(note);
     return parts.join(' · ');
+}
+
+/** The same leg for the list: the stop's name, "2 parsecs", the fuel words, the notes apart. */
+export function legRow(indexes: readonly DirectionsIndex[], leg: RouteLeg): DirectionsLeg {
+    return { end: leg.to, name: placeName(indexes, leg.to), parsecs: plural(leg.parsecs, 'parsec'), fuel: fuelWords(indexes, leg), notes: leg.notes.slice() };
 }
 
 /** The mean hours of one jump: the base plus the dice's mean (3.5 a die). */

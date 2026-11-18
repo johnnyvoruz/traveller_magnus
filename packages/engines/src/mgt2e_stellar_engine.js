@@ -7,7 +7,7 @@
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
 import { MgT2EMath } from './mgt2e_math.js';
 import { rng, reseedForHex, roll2D, rollD3, toEHex } from './core/rng.js';
-import { trace, writeLogLine, startTrace, tSection, tResult, tDM, tRoll1D, tRoll2D, tRoll3D, endTrace } from './core/trace.js';
+import { trace, writeLogLine, startTrace, tSection, tResult, tDM, tRoll1D, tRoll2D, tRoll3D, tRollUnit, endTrace } from './core/trace.js';
 import { settings } from './core/settings.js';
     // =========================================================================
     // INTERNAL HELPERS (Mapped from Legacy Logic)
@@ -2115,7 +2115,34 @@ function assignInclinations(sys) {
     walk(sys.worlds);
 }
 
+function assignOrbitalAngles(sys) {
+    tSection('Orbital angles');
+    const draw = (label) => tRollUnit(label) * 360;
+    const setAngles = (obj, label) => {
+        if (!obj) return;
+        if (!Number.isFinite(obj.longitudeOfAscendingNode)) {
+            obj.longitudeOfAscendingNode = draw(label + ' longitude');
+        }
+        if (!Number.isFinite(obj.argumentOfPeriapsis)) {
+            obj.argumentOfPeriapsis = draw(label + ' periapsis');
+        }
+        if (!Number.isFinite(obj.trueAnomaly)) {
+            obj.trueAnomaly = draw(label + ' anomaly');
+        }
+    };
+    for (const star of sys.stars || []) setAngles(star, 'Star');
+    const walk = (list) => {
+        for (const body of list || []) {
+            if (!body || body.type === 'Empty') continue;
+            setAngles(body, 'Orbit');
+            if (body.moons) walk(body.moons);
+        }
+    };
+    walk(sys.worlds);
+}
+
 export { assignInclinations };
+export { assignOrbitalAngles };
 export { generateStellarSystem };
 export { generateSystemInventory };
 export { allocateOrbits };

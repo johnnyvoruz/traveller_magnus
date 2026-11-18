@@ -6,7 +6,7 @@
  */
 import type { Layers, Mode } from './picture.ts';
 
-export type LayerToggle = 'paths' | 'moons' | 'habitable' | 'jump' | 'dayNight' | 'scan' | 'markMainworld';
+export type LayerToggle = 'paths' | 'moons' | 'habitable' | 'jump' | 'dayNight' | 'scan' | 'markMainworld' | 'hud';
 
 export type OrbitCommand = {
     id: string;
@@ -51,6 +51,10 @@ export const LAYERS: readonly { key: LayerToggle; id: string; label: string; hot
         title: 'Scan view: sensor outlines and designations on every world and moon, and a slow sweep around the primary.',
     },
     { key: 'markMainworld', id: 'orbit-layer-mainworld', label: 'Mainworld', hotkey: '0', title: 'The cyan star that marks the mainworld' },
+    {
+        key: 'hud', id: 'orbit-layer-hud', label: 'HUD', hotkey: 'h',
+        title: 'A small mark on every world too small to make out, so the whole system reads at a glance. The marks fade as you zoom in.',
+    },
 ];
 
 /**

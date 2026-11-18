@@ -77,7 +77,7 @@ import { buildReady, discardPreview, hexName, hexState, setBuildMap, tallyOf } f
 import { BUILD_COMMANDS, canBuild, menuFor, menuKeysFor, runBuild, type BuildCommandId } from '../workspace/build/commands.ts';
 import { hexPoints, hexWorldBox, hexesPath, keyAt, keysInBox, keysWorldBox, screenBox, slotGhostPath, slotsInView, type SectorPlace } from '../workspace/build/marks.ts';
 import type { BoxMark, HoverMark } from '../workspace/build/BuildMarks.vue';
-import { boxResult, boxWords, centreIn, chipPlace, clickIntent, cursorFor, fitIn, gestureFor, hoverTone, hoverWords, clearGlide, visibleArea, type Area, type Gesture, type Held } from '../workspace/build/pointer.ts';
+import { AREA_MIN, boxResult, boxWords, centreIn, chipPlace, clickIntent, cursorFor, fitIn, gestureFor, hoverTone, hoverWords, clearGlide, visibleArea, type Area, type Gesture, type Held } from '../workspace/build/pointer.ts';
 import { cancelMove, cancelRename, moveTo, sectorUi, setSectorAt, setSectorNav, stepCursor } from '../workspace/build/sector_acts.ts';
 import { placing } from '../workspace/market/place.ts';
 import { freeSlots, isOwnSlug, ownIndex, parseSlot, slotHolder, slotSlug, slotWords, withOwn } from '../workspace/build/sectors.ts';
@@ -1915,6 +1915,39 @@ function closeDirections(): void {
     markDirty();
 }
 
+/** How far inside the free chart the route's ends sit when it is shown whole. */
+const ROUTE_MARGIN = 56;
+
+/** Directions asked for the whole route: it is fitted into the chart that neither the pane nor Directions covers. */
+function fitDirections(): void {
+    const stops = directionsState.stops;
+    const points = stops ? stopPoints(stops, sectorOf) : [];
+    if (points.length < 2) return;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const point of points) {
+        x0 = Math.min(x0, point.x);
+        y0 = Math.min(y0, point.y);
+        x1 = Math.max(x1, point.x);
+        y1 = Math.max(y1, point.y);
+    }
+    const vp = viewport();
+    const free = area(true);
+    // Directions is docked at the chart's right edge. Where it leaves chart beside it, the route goes there; on a phone it does not.
+    const canvas = canvasEl.value;
+    const box = mapEl.value ? mapEl.value.querySelector('[data-directions]') : null;
+    if (canvas && box) {
+        const left = box.getBoundingClientRect().left - canvas.getBoundingClientRect().left;
+        if (left - free.left > AREA_MIN + 2 * ROUTE_MARGIN) free.right = Math.min(free.right, left);
+    }
+    const room = { width: Math.max(1, free.right - free.left), height: Math.max(1, free.bottom - free.top) };
+    const whole = fit({ x0, y0, x1, y1 }, room, ROUTE_MARGIN);
+    // A short route is not zoomed in past the scale the chart is at, or the one where names read.
+    flyTo(centreIn({ ...whole, ppp: Math.min(whole.ppp, Math.max(cam.ppp, PPP_NAMES)) }, vp, free));
+}
+
 /** The corner button and the d command open and close the same panel. */
 function toggleDirections(): void {
     if (directionsOpen.value) closeDirections();
@@ -3452,6 +3485,7 @@ onBeforeUnmount(() => {
       :party-jump="directionsShip ? directionsShip.jump : null"
       :party-ship="directionsShip ? directionsShip.name : ''"
       @route="showDirections"
+      @fit="fitDirections"
       @close="closeDirections"
     />
     <NewsScrubber

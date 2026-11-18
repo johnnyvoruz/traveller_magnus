@@ -417,6 +417,8 @@ export type ShadeRequest = {
     /** The painted hexes' texture the worker holds for this body (DW2c), and its longitude offset. Unset: none. */
     paintKey?: string;
     paintLon?: number;
+    /** The texture is the body's whole hex map (map_disc.ts): the enhanced program draws the globe from it. */
+    paintMap?: boolean;
     uTime: number;
     /** Below zero, clouds stay the baked field. A harness sets 0..1. The orbit page leaves this unset. */
     cloudForce?: number;
@@ -457,6 +459,8 @@ export type ShadeDraw = {
     /** The painted hexes (DW2c): the texture, or null for none; the enhanced program alone reads it. */
     paint?: WebGLTexture | null;
     paintLon?: number;
+    /** The texture is the whole hex map: uHasPaint is 2, and the program reads alpha as open liquid. */
+    paintMap?: boolean;
 };
 
 type LinkedProgram = { prog: WebGLProgram; uniforms: Record<string, WebGLUniformLocation | null> };
@@ -550,7 +554,7 @@ export function attachShade(
             if (u.uPaint) {
                 gl.activeTexture(gl.TEXTURE3);
                 gl.bindTexture(gl.TEXTURE_2D, req.paint ?? clearPaint());
-                gl.uniform1f(u.uHasPaint ?? null, req.paint ? 1 : 0);
+                gl.uniform1f(u.uHasPaint ?? null, req.paint ? (req.paintMap ? 2 : 1) : 0);
                 gl.uniform1f(u.uPaintLon ?? null, req.paintLon ?? 0);
             }
             const p = req.profile;

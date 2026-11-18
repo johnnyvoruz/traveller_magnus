@@ -49,6 +49,7 @@ import { clearDiscs, discHeld, retainDiscs } from './disc_hold.ts';
 import { discShadeRequest, type DiscPaint } from './disc_shade.ts';
 import { editsHeld, surfaceEdits } from './edits.ts';
 import { LOCKED_NIGHT_CENTRED_LON } from './hybrid/model.ts';
+import { discMapTexture, MAP_DISC_FULL, MAP_DISC_MIN, resetDiscMaps } from './map_disc.ts';
 import { discPaintTexture, resetDiscPaint, type PaintTexture } from './paint_disc.ts';
 import { COASTLINE_COMPLEXITY, CONTINENTAL_DEFINITION } from './identity.ts';
 import { disposeSoftDiscs, prepareSoftDiscs } from './soft/link.ts';
@@ -496,6 +497,41 @@ export function discPaintFor(disc: Pick<DiscRequest, 'hexKey' | 'dossierKey' | '
     return { key: texture.key, lon: world.locked ? LOCKED_NIGHT_CENTRED_LON * Math.PI / 180 : 0, texture };
 }
 
+/**
+ * What a body's disc is drawn from (Johnny, 2026-11-14): its own hex map, when the disc is large enough to
+ * show one and the map's texture is ready (map_disc.ts), so the globe and the surface map are one world;
+ * until then, and for a small disc, the painted hexes alone as before (DW2c). The edits are read once per
+ * body, and the map waits for them, so it is never built twice. A locked world's texture is turned as the
+ * painted hexes' is.
+ */
+export function discSurfaceFor(disc: Pick<DiscRequest, 'hexKey' | 'dossierKey' | 'body' | 'radiusPx' | 'near'>): (DiscPaint & { texture: PaintTexture }) | typeof DISC_WAITS | null {
+    if (disc.radiusPx >= MAP_DISC_MIN) {
+        const world = hybridWorld(disc.hexKey, disc.dossierKey, disc.body, { continental: CONTINENTAL_DEFINITION, coastline: COASTLINE_COMPLEXITY });
+        if (world) {
+            const edits = editsHeld(disc.hexKey, disc.dossierKey);
+            if (edits === undefined) {
+                surfaceEdits(disc.hexKey, disc.dossierKey);
+                return DISC_WAITS;
+            }
+            const kept = edits && edits.edits.length ? edits : null;
+            const texture = discMapTexture(world, kept, disc.radiusPx >= MAP_DISC_FULL, disc.near ?? 0);
+            if (texture) return { key: texture.key, lon: world.locked ? LOCKED_NIGHT_CENTRED_LON * Math.PI / 180 : 0, texture, map: true };
+            // The world has a map and it is not painted yet: nothing textured is drawn in its place.
+            return DISC_WAITS;
+        }
+    }
+    return discPaintFor(disc);
+}
+
+/**
+ * A disc that waits for its map (Johnny, 2026-11-14: "it doesn't load a texture until the final one is
+ * built, the snapping is too much"). A world with a hex map used to show the disc program's own continents
+ * for the moment its map took to paint, and then change to the map's. Now no shaded tile is asked for
+ * until the map texture is ready: the painter's plain disc stands for the world meanwhile, and the first
+ * texture it ever wears is its own. A body with no hex map (a gas giant) is not held.
+ */
+export const DISC_WAITS = 'waits' as const;
+
 function advanceDiscs(request: DiscBatchRequest, paints: ReadonlyMap<string, DiscPaint>): DiscEnvelope {
     const epoch = discEpochOf(request, paints);
     const modeChanged = discMode !== null && discMode !== request.mode;
@@ -513,15 +549,24 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     if (request.discs.length === 0) return { status: 'unavailable', mode: request.mode, requestId };
     const shades: ShadeRequest[] = [];
     const paints = new Map<string, DiscPaint & { texture: PaintTexture }>();
+    /** Discs held back until their map texture is ready: the frame is not finished while any waits. */
+    let waiting = 0;
     for (const disc of request.discs) {
-        const paint = request.mode === 'enhanced' ? discPaintFor(disc) : null;
+        // Without WebGL the discs are painted from the hex map's globes already (soft/): nothing waits and no texture is built.
+        const surface = request.mode !== 'enhanced' ? null : webglState() === 'missing' ? discPaintFor(disc) : discSurfaceFor(disc);
+        // Its map is on the way: no tile is asked for, so no other geography is ever shown on it.
+        if (surface === DISC_WAITS) {
+            waiting += 1;
+            continue;
+        }
+        const paint = surface;
         if (paint) paints.set(disc.key, paint);
         const shade = discShadeRequest(request.timeSeconds, disc, request.mode, devicePixelRatio(), paint);
         if (shade) shades.push(shade);
     }
     const envelope = advanceDiscs(request, paints);
     const frameKeys = new Set(request.discs.map((disc) => disc.key));
-    if (shades.length === 0) {
+    if (shades.length === 0 && waiting === 0) {
         discLink?.note(envelope, frameKeys);
         retainDiscs(frameKeys);
         return { status: 'ready', mode: request.mode, requestId };
@@ -545,7 +590,7 @@ export function prepareDiscs(request: DiscBatchRequest): SurfaceReply {
     for (const paint of paints.values()) link.paint(paint.key, paint.texture);
     link.submit(shades);
     retainDiscs(frameKeys);
-    if (!link.ready()) return { status: 'pending', mode: request.mode, requestId };
+    if (!link.ready() || waiting > 0) return { status: 'pending', mode: request.mode, requestId };
     return { status: 'ready', mode: request.mode, requestId };
 }
 
@@ -588,6 +633,7 @@ export function disposeSurfaces(): void {
     discLink = null;
     discBroken = false;
     resetDiscPaint();
+    resetDiscMaps();
     disposeSoftDiscs();
     discMode = null;
     discGeneration = 0;

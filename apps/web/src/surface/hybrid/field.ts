@@ -3,7 +3,7 @@
  * on the sphere, the nearest hex and the three hexes it blends between. Depends only on the
  * layout and the grid side, never on a world, so it is built once and shared.
  */
-import { bary, facePoint, gridOf, NET_HEIGHT, NET_WIDTH, type Grid } from './grid.ts';
+import { bary, facePoint, gridOf, NET_HEIGHT, NET_WIDTH, onSheetX, type Grid } from './grid.ts';
 
 export type SheetLayout = {
     readonly width: number;
@@ -105,8 +105,10 @@ function buildField(layout: SheetLayout, grid: Grid): FieldBuild {
         const yRow = y - 1;
         for (let x = 0; x < W; x += 1) {
             const nx = (x + 0.5 - ox) / s;
+            // The sheet ends at the cut: the net's left and right edges are straight.
+            if (nx < -slack || nx > NET_WIDTH + slack) continue;
             const k = yRow * W + x;
-            for (let fi = 0; fi < 20; fi += 1) {
+            for (let fi = 0; fi < faces.length; fi += 1) {
                 const bb = box[fi];
                 if (nx < bb[0] - slack || nx > bb[1] + slack || ny < bb[2] - slack || ny > bb[3] + slack) continue;
                 const [w0, w1, w2] = bary(faces[fi], nx, ny);
@@ -174,7 +176,7 @@ export function sheetPoint(layout: SheetLayout, p: readonly [number, number, num
         const w1 = w[1] / sum;
         const w2 = w[2] / sum;
         if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
-        const nx = w0 * f.a[0] + w1 * f.b[0] + w2 * f.c[0];
+        const nx = onSheetX(w0 * f.a[0] + w1 * f.b[0] + w2 * f.c[0]);
         const ny = w0 * f.a[1] + w1 * f.b[1] + w2 * f.c[1];
         return [layout.ox + nx * layout.side, layout.oy + ny * layout.side];
     }

@@ -262,17 +262,217 @@ const DAY_C = `    float urban = smoothstep(0.015, 0.3, density) * 0.95;
  */
 const PAINT_AT = '    float density = props.g;';
 const PAINT_C = `    float density = props.g;
+    // 1 where the globe is drawn from the body's hex map (map_disc.ts), else 0.
+    float mapMode = 0.0;
     if (uHasPaint > 0.5 && uGas < 0.5) {
         float plon = uPaintLon - atan(qc.y, qc.x);
         plon -= floor((plon + 3.14159265) / 6.28318531) * 6.28318531;
         vec2 puv = vec2((plon + 3.14159265) / 6.28318531, (1.57079633 - asin(clamp(qc.z, -1.0, 1.0))) / 3.14159265);
         vec4 paint = texture(uPaint, puv);
-        albedo = albedo * (1.0 - paint.a) + paint.rgb;
+        if (uHasPaint > 1.5) {
+            // The whole hex map: its colour is the ground, and its alpha is open liquid. The bake's own
+            // seas, lava and relief belong to another geography and stand down; the cities' own light
+            // keeps to the map's land, and their glow still spills over the water beside them. Clouds,
+            // air and the sun are untouched.
+            mapMode = 1.0;
+            albedo = paint.rgb;
+            // Open liquid is the top of alpha. Lava is a band about 96/255 with a hot colour under it;
+            // a coast passes through that band too, but never with red well over green and blue.
+            float mapSea = smoothstep(0.62, 0.9, paint.a);
+            float mapLand = 1.0 - mapSea;
+            props.r = mapSea;
+            props.b = (1.0 - smoothstep(0.035, 0.1, abs(paint.a - 0.3765))) * smoothstep(1.15, 1.75, paint.r / max(paint.g, 0.04)) * step(paint.b * 1.6, paint.r);
+            density *= mapLand;
+            cityRaw *= mapLand;
+            cityMat *= mapLand;
+            cityCore *= mapLand;
+        } else {
+            albedo = albedo * (1.0 - paint.a) + paint.rgb;
+        }
     }`;
 
 const CLAMP = '    color = clamp(color, 0.0, 1.0);';
 const CLAMP_C = `    if (uDiag > 1.5) color = vec3(cityCore);
     else if (uDiag > 0.5) color = cityMat;
+    color = clamp(color, 0.0, 1.0);`;
+
+/*
+ * Look pass 1 (Johnny, 2026-11-14; judged on /dev/planet-sheet). The enhanced program alone; the vanilla
+ * program, the bake and every uniform stay as they are. Five changes, each one replacement:
+ *   the day city is a weave over the land, so a crowded world keeps its continents;
+ *   the ground has grain at the screen's scale and its highlands read lighter than its lowlands;
+ *   relief takes more of the sun, so ranges and crater rims show toward the terminator;
+ *   open water has a tight glint inside a broad sheen and brightens toward the limb;
+ *   clouds have body (thick cores brighter than thin edges) and warm where day meets night;
+ * and a last grade lifts colour and contrast a little.
+ *
+ * Look pass 2 (the same day; "these look like a bump map"): the bake's fields stop at features about six
+ * degrees across, so every coast, biome edge and cloud ended in a soft blob. The draw now adds what the
+ * bake cannot hold, at the screen's own scale, and only on a disc large enough to show it (`fine`):
+ *   the ground is read through a small fractal offset (`crinkle`), so coasts, biome edges and ice margins
+ *     break up into bays and headlands; the relief reads the same offset, so shade and colour agree;
+ *   water near a coast pales into a shelf (the blurred sea mask says how near);
+ *   cloud edges fray into wisps, and a full deck carries zonal streaks;
+ *   an airless world carries small craters between the baked ones;
+ *   the sea's glint is broken by swell.
+ * A disc under about 26 px across its radius, and a gas giant, skip all of it: that is most discs on
+ * screen, so the pass costs nothing where it cannot be seen.
+ */
+const DAY_LOOK = `    float urban = smoothstep(0.015, 0.3, density) * 0.95;
+    if (urban > 0.0 && uGas < 0.5 && uCityOn > 0.5) {
+        vec3 day = mix(uUrbanColor, uGlassColor, clamp(cityCore, 0.0, 1.0));
+        float lum = clamp(dot(cityMat, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+        day *= 0.92 + 0.16 * lum;
+        // Built ground is a weave over the land, not a coat of paint: the country shows between the
+        // districts, and only the cores go over to concrete and glass.
+        float weave = urban * mix(0.34, 0.9, clamp(cityCore, 0.0, 1.0));
+        albedo = mix(albedo, mix(day, albedo, 0.3), weave);
+    }`;
+
+const RELIEF = '        nl = normalize(n - (east * g.x + north * g.y) * uBump * (1.0 - props.r) * smoothstep(0.12, 0.45, z));';
+// On a globe drawn from the hex map the relief is the map painter's own shading; the bake's heights are not its land.
+const RELIEF_LOOK = '        nl = normalize(n - (east * g.x + north * g.y) * uBump * 2.4 * (1.0 - mapMode) * (1.0 - props.r) * smoothstep(0.12, 0.45, z));';
+
+const GROUND = '    vec3 color = albedo * uAlbedo * light * uSun * (1.0 - cloudShadow * 0.45 * diffuse);';
+const GROUND_LOOK = `    // Each world its own cast: a small lean of tone from the world's own seed (uOffset), so two worlds of
+    // one kind are kin and not copies. A gas giant leans further; open water hardly at all.
+    vec3 lean = 0.92 + 0.16 * fract(uOffset * vec3(0.137, 0.219, 0.311));
+    lean /= dot(lean, vec3(0.3333));
+    albedo *= mix(vec3(1.0), lean, uGas > 0.5 ? 1.7 : 1.0 - props.r * 0.7);
+    // Ground the eye can read: grain at the screen's own scale, and highlands a shade lighter than the
+    // lowlands, on land alone. Open water, city cores and gas giants keep their own surface.
+    if (uGas < 0.5) {
+        float landK = (1.0 - props.r) * (1.0 - urban * 0.6);
+        vec3 qg = normalize(qc + crinkle);
+        float high = texture(uA, qg, bias).a;
+        float grain = 0.5;
+        if (fine > 0.0) {
+            grain = vnoise(qc * 46.0 + uOffset) * 0.6 + vnoise(qc * 118.0 + uOffset.yzx) * 0.4;
+            // The shelf: water near a coast is shallower and paler. The blurred sea mask says how near.
+            float nearLand = (1.0 - texture(uB, qg, bias + 3.2).r) * props.r * (1.0 - mapMode);
+            albedo = mix(albedo, albedo * 1.4 + vec3(0.015, 0.07, 0.06), smoothstep(0.06, 0.55, nearLand) * 0.8 * fine);
+            // No air, no weather: small craters between the baked ones.
+            if (uAirStrength <= 0.0) {
+                // From value noise, not a cell search: this program does no per-pixel cell search (cube C holds the streets).
+                float pock = vnoise(qc * 42.0 + uOffset.yzx);
+                float bowl = smoothstep(0.74, 0.86, pock);
+                float rim = smoothstep(0.64, 0.74, pock) * (1.0 - bowl);
+                albedo *= 1.0 + landK * fine * (rim * 0.12 - bowl * 0.22);
+            }
+        }
+        albedo *= 1.0 + landK * ((grain - 0.5) * mix(0.24, 0.1, mapMode) + (smoothstep(0.35, 0.8, high) - 0.4) * 0.18 * (1.0 - mapMode));
+    }
+    vec3 color = albedo * uAlbedo * light * uSun * (1.0 - cloudShadow * 0.55 * diffuse);`;
+
+const GLINT = '    color += uSun * pow(max(dot(n, H), 0.0), 70.0) * props.r * (1.0 - cloud) * diffuse * 0.9;';
+const GLINT_LOOK = `    // Open water: a tight glint inside a broad sheen, and the sea brightening toward the limb, where
+    // it is seen at a grazing angle.
+    float sea = props.r * (1.0 - cloud);
+    float spec = max(dot(n, H), 0.0);
+    float swell = fine > 0.0 ? 0.7 + 0.6 * vnoise(qc * 96.0 + uOffset.zxy) : 1.0;
+    color += uSun * (pow(spec, 160.0) * 1.25 * swell + pow(spec, 18.0) * 0.14) * sea * diffuse;
+    color += (albedo * 0.5 + airTint(0.5, 0.0) * 0.14) * uSun * sea * diffuse * pow(1.0 - z, 3.0) * 0.9;`;
+
+const CLOUDS = '    color = mix(color, uCloudColor * cloudLight * uSun, cloud * 0.92);';
+const CLOUDS_LOOK = `    // Clouds with body: thick cores brighter than thin edges, and warm where day meets night.
+    // Cloud is the brightest thing on a world and takes little of the sun's tint.
+    vec3 cloudSun = mix(vec3(dot(uSun, vec3(0.2126, 0.7152, 0.0722))), uSun, 0.35);
+    vec3 cloudCol = uCloudColor * min(1.0, cloudLight * 1.22) * cloudSun * mix(0.9, 1.1, smoothstep(0.1, 0.9, cloud));
+    if (fine > 0.0) {
+        vec3 dq = toPlanet(n, uCloudSpin);
+        // A deck with no gaps still has weather: streaks along the latitudes.
+        cloudCol *= 0.9 + 0.2 * vnoise(vec3(dq.xy * 2.6, dq.z * 19.0) + uOffset.yzx);
+        // A tinted deck (corrosive, insidious, exotic air) is not one colour: broad bands along the
+        // latitudes, turned by slow swirls, run from pale to deep and from the deck's hue toward amber.
+        float tinted = clamp(distance(uCloudColor, vec3(1.0)) * 2.4, 0.0, 1.0);
+        if (tinted > 0.05) {
+            float band = vnoise(vec3(dq.xy * 1.3, dq.z * 7.5) + uOffset + uTime * 0.003);
+            float swirl = vnoise(dq * 4.6 + uOffset.zxy + band * 2.2 - uTime * 0.005);
+            float depth = smoothstep(0.22, 0.78, band * 0.62 + swirl * 0.38);
+            cloudCol *= mix(1.0, mix(0.58, 1.22, depth), tinted);
+            cloudCol = mix(cloudCol, cloudCol * vec3(1.14, 0.78, 0.5), smoothstep(0.5, 0.85, swirl) * 0.6 * tinted);
+            cloudCol = mix(cloudCol, cloudCol * vec3(0.86, 1.02, 1.12), smoothstep(0.5, 0.15, swirl) * 0.3 * tinted);
+        }
+    }
+    cloudCol = mix(cloudCol, cloudCol * vec3(1.0, 0.7, 0.48), exp(-pow((geo - 0.03) / 0.075, 2.0)) * 0.5 * (1.0 - uGas));
+    // Thin cloud lets the ground through.
+    color = mix(color, cloudCol, pow(cloud, 1.25) * 0.94);
+    // Lightning in a storm: a cell of thick cloud flashes for a moment, now and then, brightest on the
+    // night side. The sky is cut into cells; each strikes on its own clock.
+    if (uHasClouds > 0.5 && fine > 0.0 && uLightMode < 0.5) {
+        vec3 lq = toPlanet(n, uCloudSpin) * 8.0;
+        vec3 cell = floor(lq);
+        float clock = uTime * 2.2 + hash13(cell) * 9.0;
+        // Rare enough to be weather and not a crowd of cameras (Johnny, 2026-11-14): about one cell in 140 a beat.
+        float strike = step(0.993, hash13(cell * 1.7 + floor(clock) * 0.37));
+        float fade = 1.0 - fract(clock);
+        vec3 off = fract(lq) - 0.5 - (vec3(hash13(cell + 3.1), hash13(cell + 7.7), hash13(cell + 5.3)) - 0.5) * 0.5;
+        float core = exp(-dot(off, off) * 14.0);
+        float flicker = 0.6 + 0.4 * sin(uTime * 61.0 + hash13(cell) * 40.0);
+        color += vec3(0.8, 0.88, 1.0) * 1.7 * strike * fade * fade * flicker * core * smoothstep(0.5, 0.9, cloud) * (0.1 + 0.9 * smoothstep(0.2, -0.2, geo)) * fine;
+    }`;
+
+/**
+ * Lava after dark (Johnny, 2026-11-14): molten ground glows on the night side, from orange at its edge to
+ * yellow-white at its heart, and breathes. The bake's lava and the hex map's (map_disc.ts) both come here.
+ */
+const LAVA = '        color += vec3(1.0, 0.5, 0.18) * props.b * (0.35 + 0.65 * night) * (1.0 - cloud * 0.5) * 0.9 * mix(1.0, seen, 0.6);';
+const LAVA_LOOK = `        float ember = 0.8 + 0.2 * sin(uTime * 1.6 + vnoise(qc * 38.0 + uOffset) * 6.2832);
+        vec3 lavaGlow = mix(vec3(1.0, 0.34, 0.07), vec3(1.0, 0.72, 0.3), props.b * props.b);
+        // Half the glow is the ground's own colour, so crust and cracks stay readable in the dark.
+        color += mix(lavaGlow, albedo * 1.5, 0.5) * props.b * (0.22 + 0.62 * night) * (1.0 - cloud * 0.5) * ember * mix(1.0, seen, 0.6);`;
+
+/** Before the samples are gathered: how fine the disc is drawn, and the offset the ground is read through. */
+const CRINKLE_AT = `    vec3 albedo = vec3(0.0);
+    vec4 props = vec4(0.0);
+    float cloud = 0.0;
+    vec3 cityRaw = vec3(0.0);`;
+const CRINKLE = `    float fine = smoothstep(26.0, 60.0, uRadiusPx) * (1.0 - step(0.5, uGas));
+    vec3 crinkle = vec3(0.0);
+    if (fine > 0.0) {
+        vec3 w0 = toPlanet(n, uSpin);
+        vec3 wa = vec3(vnoise(w0 * 13.0 + uOffset), vnoise(w0 * 13.0 + uOffset.yzx + 7.3), vnoise(w0 * 13.0 + uOffset.zxy + 3.1)) - 0.5;
+        vec3 wb = vec3(vnoise(w0 * 37.0 + uOffset.zxy), vnoise(w0 * 37.0 + uOffset + 5.7), vnoise(w0 * 37.0 + uOffset.yzx + 1.9)) - 0.5;
+        vec3 wc = vec3(vnoise(w0 * 97.0 + uOffset.yzx), vnoise(w0 * 97.0 + uOffset.zxy + 2.3), vnoise(w0 * 97.0 + uOffset + 8.1)) - 0.5;
+        // The hex map has its own coasts: nothing is read through the offset there.
+        crinkle = (wa * 0.062 + wb * 0.026 + wc * 0.009) * fine * (uHasPaint > 1.5 ? 0.0 : 1.0);
+    }
+${CRINKLE_AT}`;
+
+/** The ground's two cubes are read through the offset; the city cube keeps its own straight read. */
+const GROUND_READ = `        albedo += texture(uA, q, bias).rgb;
+        vec4 ground = texture(uB, q, bias);`;
+const GROUND_READ_LOOK = `        vec3 qs = normalize(q + crinkle);
+        albedo += texture(uA, qs, bias).rgb;
+        vec4 ground = texture(uB, qs, bias);`;
+
+/** The relief's three height reads, through the same offset, so the shade lies on the land it belongs to. */
+const RELIEF_READS: readonly (readonly [string, string, string])[] = [
+    ['        float h0 = texture(uA, toPlanet(n, uSpin)).a;', '        float h0 = texture(uA, normalize(toPlanet(n, uSpin) + crinkle)).a;', 'relief centre'],
+    ['        float h1 = texture(uA, toPlanet(normalize(n + east * eps), uSpin)).a;', '        float h1 = texture(uA, normalize(toPlanet(normalize(n + east * eps), uSpin) + crinkle)).a;', 'relief east'],
+    ['        float h2 = texture(uA, toPlanet(normalize(n + north * eps), uSpin)).a;', '        float h2 = texture(uA, normalize(toPlanet(normalize(n + north * eps), uSpin) + crinkle)).a;', 'relief north'],
+];
+
+/** After the samples are averaged, before the relief: cloud edges fray at the screen's scale. */
+const FRAY_AT = '    // Relief, lit by the real sun, when the surface is sharp enough to show it.';
+const FRAY = `    // Cloud edges fray into wisps at the screen's scale; thin cloud thins further.
+    if (uHasClouds > 0.5 && fine > 0.0) {
+        vec3 cq = toPlanet(n, uCloudSpin);
+        // The edges boil slowly: weather that moves, not a picture of it.
+        float fray = vnoise(cq * 27.0 + uOffset.zyx + uTime * 0.021) * 0.55 + vnoise(cq * 71.0 + uOffset - uTime * 0.034) * 0.45;
+        // Only the edges move: a thick deck stays whole and clear sky stays clear.
+        cloud = clamp(cloud + (fray - 0.5) * 1.5 * cloud * (1.0 - cloud) * fine, 0.0, 1.0);
+    }
+`;
+
+const CLAMP_LOOK = `    if (uDiag > 1.5) color = vec3(cityCore);
+    else if (uDiag > 0.5) color = cityMat;
+    else {
+        // The grade: a little more colour and contrast, the same on every world.
+        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = max(mix(vec3(luma), color, 1.2), 0.0);
+        color = pow(color, vec3(0.95)) * 1.05;
+    }
     color = clamp(color, 0.0, 1.0);`;
 
 function once(source: string, from: string, to: string, label: string): string {
@@ -283,20 +483,36 @@ function once(source: string, from: string, to: string, label: string): string {
     return source.slice(0, at) + to + source.slice(at + from.length);
 }
 
-/** The enhanced program. Throws if the vanilla source no longer has the markers. */
-export function enhancedDrawSource(vanilla: string): string {
+/**
+ * The enhanced program. Throws if the vanilla source no longer has the markers. `look` false leaves look
+ * pass 1 out: the contact sheet's "before", and nothing else.
+ */
+export function enhancedDrawSource(vanilla: string, look = true): string {
     let source = once(vanilla, HAZE_GATE, AIR_GATE, 'halo haze gate');
     source = once(source, SAMPLERS, SAMPLERS_C, 'cube C samplers');
     source = once(source, ACCUM, ACCUM_C, 'city accumulators');
     source = once(source, SAMPLE, SAMPLE_C, 'per-sample city');
     source = once(source, INV, INV_C, 'city average');
     source = once(source, NETWORK, NETWORK_C, 'per-frame streets');
-    source = once(source, DAY, DAY_C, 'day material');
+    source = once(source, DAY, look ? DAY_LOOK : DAY_C, 'day material');
     source = once(source, CITY_AND_PORT, GATED_CITY, 'direct city light');
     source = once(source, PORT, GATED_PORT, 'downport');
-    source = once(source, CLAMP, CLAMP_C, 'city diagnostic');
+    source = once(source, CLAMP, look ? CLAMP_LOOK : CLAMP_C, 'city diagnostic');
     source = once(source, PAINT_AT, PAINT_C, 'painted hexes');
+    if (look) {
+        source = once(source, RELIEF, RELIEF_LOOK, 'relief');
+        source = once(source, GROUND, GROUND_LOOK, 'ground grain');
+        source = once(source, GLINT, GLINT_LOOK, 'water');
+        source = once(source, CLOUDS, CLOUDS_LOOK, 'cloud body');
+        source = once(source, LAVA, LAVA_LOOK, 'lava after dark');
+        source = once(source, CRINKLE_AT, CRINKLE, 'fractal offset');
+        source = once(source, GROUND_READ, GROUND_READ_LOOK, 'ground through the offset');
+        source = once(source, FRAY_AT, FRAY + FRAY_AT, 'cloud fray');
+        for (const [from, to, label] of RELIEF_READS) source = once(source, from, to, label);
+    }
     return source;
 }
 
 export const ENHANCED_DRAW_FRAG = enhancedDrawSource(DRAW_FRAG);
+/** The program before look pass 1, for the contact sheet's "before" (dev/planet-sheet). */
+export const ENHANCED_DRAW_FRAG_BEFORE = enhancedDrawSource(DRAW_FRAG, false);

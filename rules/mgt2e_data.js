@@ -19,6 +19,26 @@ const MgT2EData = {
         thermalHydro: { Hot: -2, Boiling: -6 }
     },
 
+    // World Builder's Handbook page 158. Names only. The code is still 2D−7 + Population.
+    governmentTypes: [
+        'None',
+        'Company/Corporation',
+        'Participating Democracy',
+        'Self-Perpetuating Oligarchy',
+        'Representative Democracy',
+        'Feudal Technocracy',
+        'Captive Government',
+        'Balkanisation',
+        'Civil Service Bureaucracy',
+        'Impersonal Bureaucracy',
+        'Charismatic Dictatorship',
+        'Non-Charismatic Dictatorship',
+        'Charismatic Oligarchy',
+        'Religious Dictatorship',
+        'Religious Autocracy',
+        'Totalitarian Oligarchy'
+    ],
+
     // Scaled HZCO deviation thresholds (uses getEffectiveHzcoDeviation output).
     // Entries are checked in order; first match wins. Last entry (no maxDeviation) is the fallback.
     temperatureBands: [
@@ -167,7 +187,8 @@ const MgT2EData = {
     // =========================================================================
     stellar: {
         primaryType: [
-            { maxRoll: 2, type: 'M', class: 'VI' },
+            // May 2024 Type column: roll 2 is Special, then the Special column. Rolls 3–12 are unchanged.
+            { maxRoll: 2, type: 'Special' },
             { maxRoll: 6, type: 'M', class: 'V' },
             { maxRoll: 8, type: 'K', class: 'V' },
             { maxRoll: 10, type: 'G', class: 'V' },
@@ -500,6 +521,23 @@ const MgT2EData = {
             perPostStellar: 1,
             multiStar: 1
         },
+        // May 2024 page 38. The ESM inventory reads these. gasGiantDMs and planetoidBeltDMs
+        // stay as the frozen legacy script applies them.
+        wbhGasGiantDMs: {
+            primaryProtostar: 3,
+            primaryPrimordial: 2,
+            primaryPostStellar: 1,
+            perPostStellar: 1,
+            multiStar: 1
+        },
+        wbhPlanetoidBeltDMs: {
+            gasGiantsPresent: 1,
+            singleClassV: 1,
+            primaryBrownDwarf: -2,
+            primaryPostStellar: -2,
+            perPostStellar: -1,
+            fourOrMoreStars: -1
+        },
         terrestrialPlanets: {
             baseFormula: "2D-2",
             threshold: 3,
@@ -790,6 +828,23 @@ const MgT2EData = {
             { m: 1, s: 9, c: 90 }, // 10
             { m: 0, s: 5, c: 95 }, // 11
             { m: 0, s: 0, c: 100 } // 12+
+        ],
+        // May 2024 page 74. Each term is a constant, a D3, or base + die × mult.
+        // Index 0 is the 0− row. The frozen legacy script still reads compositionTable.
+        compositionFormulas: [
+            { m: { base: 60, die: '1d', mult: 5 }, s: { base: 0, die: '1d', mult: 5 }, c: { base: 0 } },
+            { m: { base: 50, die: '1d', mult: 5 }, s: { base: 5, die: '1d', mult: 5 }, c: { die: 'd3' } },
+            { m: { base: 40, die: '1d', mult: 5 }, s: { base: 15, die: '1d', mult: 5 }, c: { die: '1d' } },
+            { m: { base: 25, die: '1d', mult: 5 }, s: { base: 30, die: '1d', mult: 5 }, c: { die: '1d' } },
+            { m: { base: 15, die: '1d', mult: 5 }, s: { base: 35, die: '1d', mult: 5 }, c: { base: 5, die: '1d', mult: 1 } },
+            { m: { base: 5, die: '1d', mult: 5 }, s: { base: 40, die: '1d', mult: 5 }, c: { base: 5, die: '1d', mult: 2 } },
+            { m: { base: 0, die: '1d', mult: 5 }, s: { base: 40, die: '1d', mult: 5 }, c: { base: 0, die: '1d', mult: 5 } },
+            { m: { base: 5, die: '1d', mult: 2 }, s: { base: 35, die: '1d', mult: 5 }, c: { base: 10, die: '1d', mult: 5 } },
+            { m: { base: 5, die: '1d', mult: 1 }, s: { base: 30, die: '1d', mult: 5 }, c: { base: 20, die: '1d', mult: 5 } },
+            { m: { die: '1d' }, s: { base: 15, die: '1d', mult: 5 }, c: { base: 40, die: '1d', mult: 5 } },
+            { m: { die: '1d' }, s: { base: 5, die: '1d', mult: 5 }, c: { base: 50, die: '1d', mult: 5 } },
+            { m: { die: 'd3' }, s: { base: 5, die: '1d', mult: 2 }, c: { base: 60, die: '1d', mult: 5 } },
+            { m: { base: 0 }, s: { die: '1d' }, c: { base: 70, die: '1d', mult: 5 } }
         ]
     },
 

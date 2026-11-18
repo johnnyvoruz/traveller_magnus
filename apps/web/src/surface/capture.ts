@@ -39,6 +39,18 @@ export type SurfaceShot = {
     worldName: string;
 };
 
+/** The Texture look's triangle side in pixels: the net is five sides wide. */
+export const TEXTURE_SIDE = 800;
+
+/**
+ * The bare map's pixels (the Texture look): the net's own rectangle, five sides by one and a half
+ * triangle heights, with the height rounded up to a whole pixel; the vanilla diamond is two by one.
+ */
+export function textureSize(mode: SurfaceModeName): { width: number; height: number } {
+    const width = NET_WIDTH * TEXTURE_SIDE;
+    return mode === 'enhanced' ? { width, height: Math.ceil(NET_HEIGHT * TEXTURE_SIDE) } : { width, height: width / 2 };
+}
+
 /** Wider than tall: the hybrid net, and the vanilla diamond. */
 export function projectionAspect(mode: SurfaceModeName): number {
     return mode === 'enhanced' ? NET_WIDTH / NET_HEIGHT : 2;
@@ -123,7 +135,17 @@ function swatchInk(code: SurfaceCode, ink: SurfaceInk): string {
 
 type Point = [number, number];
 
+/** The paper net, kept inside the net's straight left and right edges (hybrid/grid.ts, the cut). */
 function drawPaperNet(ctx: CanvasRenderingContext2D, model: HybridModel, layout: SheetLayout, ink: SurfaceInk, iconSet: IconSet | null, tint: Tinter | undefined, worldName: string, font: string): void {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(layout.ox, layout.oy, NET_WIDTH * layout.side, NET_HEIGHT * layout.side);
+    ctx.clip();
+    drawPaperNetOn(ctx, model, layout, ink, iconSet, tint, worldName, font);
+    ctx.restore();
+}
+
+function drawPaperNetOn(ctx: CanvasRenderingContext2D, model: HybridModel, layout: SheetLayout, ink: SurfaceInk, iconSet: IconSet | null, tint: Tinter | undefined, worldName: string, font: string): void {
     const grid = model.grid;
     const n = grid.n;
     const s = layout.side;
@@ -245,8 +267,43 @@ export type SurfaceCaptureInput = {
     wait?: () => Promise<void>;
 };
 
+/**
+ * The Texture look: the painted map alone, at textureSize, from the image's left edge to its right. No page,
+ * no key, no caption, no symbols and no hex lines; the pixels off the map (between the polar triangles) are
+ * clear. The net's left and right edges are straight (hybrid/grid.ts, the cut), so the image wraps a sphere.
+ */
+async function captureTexture(input: SurfaceCaptureInput, wait: () => Promise<void>): Promise<boolean> {
+    const { width, height } = textureSize(input.shot.mode);
+    let pixels: Uint8ClampedArray | null = null;
+    if (input.shot.mode === 'enhanced') {
+        if (!input.shot.model) return false;
+        pixels = await paintHybrid(input.shot.model, layoutFor(width, height, TEXTURE_SIDE), wait);
+    } else {
+        const spec = diamondMapSpec(input.shot.body, input.shot.hexKey);
+        if (!spec) return false;
+        pixels = await paintVanilla({
+            worldData: spec.worldData,
+            imageSeed: spec.seed,
+            masterSeed: VANILLA_MASTER_SEED,
+            continentalDefinition: CONTINENTAL_DEFINITION,
+            coastlineComplexity: COASTLINE_COMPLEXITY,
+            printMode: false,
+        }, width, height, wait);
+    }
+    if (!pixels) return false;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.putImageData(new ImageData(pixels as Uint8ClampedArray<ArrayBuffer>, width, height), 0, 0);
+    const blob = await canvasToBlob(canvas);
+    if (!blob) return false;
+    saveBlob(blob, input.fileName);
+    return true;
+}
+
 /** Draws one frame and downloads it. False when the browser refuses the canvas or the blob. */
 export async function captureSurface(input: SurfaceCaptureInput): Promise<boolean> {
+    if (input.look === 'texture') return captureTexture(input, input.wait ?? ((): Promise<void> => Promise.resolve()));
     const px = paperPixels(input.paper, 'landscape');
     const canvas = createCanvas(px.deviceWidth, px.deviceHeight);
     const ctx = canvas.getContext('2d');

@@ -67,3 +67,8 @@ test('the Connections head wraps on a phone: the button drops under the label an
     assert.match(block, /\.lnk-head \{\s+display: flex;\s+flex-wrap: wrap;/);
     assert.match(block, /\.lnk-head > \.ui-btn \{\s+margin-left: auto;/);
 });
+
+test('a card never opens for a link that has gone: a press that closes the list leaves no card in the corner', () => {
+    const source = fs.readFileSync(path.join(root, 'apps/web/src/workspace/record_card.ts'), 'utf8');
+    assert.match(source, /function show\(id: string, el: HTMLElement\): void \{\s+clearTimers\(\);[\s\S]*?if \(el\.isConnected === false\) return;/);
+});

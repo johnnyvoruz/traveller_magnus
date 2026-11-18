@@ -266,7 +266,8 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.match(html, /How to use the map sits at the top, right of the date/);
         assert.match(html, /type more of the name/);
         assert.match(html, /Select Get directions/);
-        assert.match(html, /one line for each leg/);
+        assert.match(html, /the start and one stop for each jump, with the fuel there/);
+        assert.match(html, /Select Show the route to see it again/);
         assert.match(html, /Select Clear to drop the route/);
         assert.match(html, /Nothing is saved; closing Directions clears the route/);
         assert.match(html, /Which one is you\?/);

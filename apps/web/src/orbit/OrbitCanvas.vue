@@ -25,7 +25,7 @@ import { OrbitStage } from './stage.ts';
 import { publishOrbitClock } from './running.ts';
 import { bodiesAtOf, datedBodies, pressMeans, sameHover, sceneBodies, shipMarkOf, shipStanding, shipTags as tagsFor, tagBoxes, type PlotHover, type ShipStanding, type ShipTag, type TagsMore } from './ship_marks.ts';
 import { BODY_SNAP_PX, pictureOfAu, placeAtPicture, type PictureLayout } from './distance.ts';
-import { pictureBodies, placeShips, shipAt, waypointAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
+import { contactsInOrbit, pictureBodies, placeShips, shipAt, waypointAt, standInMarks, type PlotReadout, type ShipMark, type ShipTrack } from './ships.ts';
 import { blockPlace, fitLabel } from '../map/traffic.ts';
 import ShipTags from './ShipTags.vue';
 import { readOrbitMotion, readOrbitTheme, type OrbitMotion } from './theme.ts';
@@ -91,6 +91,8 @@ const emit = defineEmits<{
     plotPoint: [au: { x: number; y: number }];
     /** A ship was pressed, on the picture or by its tag: select it. */
     ship: [id: string];
+    /** A sensor contact (a background ship) was pressed: the view shows what it is, and the referee may promote it. */
+    contact: [id: string];
     /** In plotting mode, what is under the pointer changed (at most once a painted frame); null when the pointer is off the picture. */
     plotHover: [under: PlotHover | null];
     /** In plotting mode, a drawn waypoint was picked up: its place in the route, or in the preview (which runs on from the route). */
@@ -380,6 +382,12 @@ function onUp(event: PointerEvent): void {
         waypoint: props.shipTags && shipAt(tagMarks, at) ? null : wayUnder(at),
     });
     if (means.kind === 'grab') return;
+    // A sensor contact under the press: it is asked about, and nothing else is picked (plotting or not: a contact is small, and a press on one means it).
+    const contact = means.kind !== 'ship' ? trafficUnder(at) : null;
+    if (contact) {
+        emit('contact', contact);
+        return;
+    }
     if (means.kind === 'ship') emit('ship', means.id);
     // Plotting: a body is a destination, and the camera stays where it is.
     else if (means.kind === 'waypoint') emit('plot', means.key);
@@ -672,7 +680,8 @@ function marksFor(picture: Picture, clockDays: number): readonly ShipMark[] | un
         const orbits = picture.mode !== 'row' && picture.mode !== 'column' && picture.mode !== 'blend';
         const signature = view && orbits ? planTurn + '|' + JSON.stringify(view) : '';
         const bodiesOn = (at: number) => (at === clockDays || !signature ? here : dated.on(signature, at));
-        lastMarks = placeShips(props.tracks, bodiesAtOf(props.hexKey, bodiesOn, placeAu), clockDays, placeAu);
+        // Contacts holding at a body go into orbits about it; the marks are moved, so drawing, hover and press agree.
+        lastMarks = contactsInOrbit(placeShips(props.tracks, bodiesAtOf(props.hexKey, bodiesOn, placeAu), clockDays, placeAu), picture.hits, clockDays);
         return lastMarks;
     }
     if (props.ships) return props.ships;
@@ -827,7 +836,7 @@ function paint(clockDays: number, time: number): void {
     const tint = route.query.ghostTint;
     const hologram = (Array.isArray(tint) ? tint[0] : tint) === '1' ? 'tint' as const : 'wire' as const;
     renderer.draw(current, frame.picture, frame.view, {
-        selected, days: clockDays, time, motion: !reduced, layers: stage.layers,
+        selected, days: clockDays, time, motion: !reduced, contacts: true, layers: stage.layers,
         ...(ships && ships.length > 0 ? { ships } : {}),
         ...(plot ? { plot } : {}),
         ...(typeof props.holdAt === 'number' ? { holdAt: props.holdAt } : {}),

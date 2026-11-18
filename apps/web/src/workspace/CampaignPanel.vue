@@ -107,8 +107,8 @@ const sessionLive = computed(() => liveFor(campaign.universeId) !== null);
 const headFolded = computed(() => span.value === 'column' && isReferee.value);
 /** The tabs row: on the list screens, and at Full always (a record or entry opens beside the list). */
 const headShown = computed(() => status.value === 'ready' && ((!props.recordId && !props.entryId) || span.value === 'full'));
-/** View as players sits in the head at Half and Full (DU36); at Column, or with no head, its bar stays above. */
-const viewAsInHead = computed(() => headShown.value && span.value !== 'column');
+/** View as players sits in the head at every width, the eye alone below Full (DU36); with no head, its bar stays above. */
+const viewAsInHead = computed(() => headShown.value);
 const online = ref(true);
 let stopSize: (() => void) | null = null;
 let stopOnline: (() => void) | null = null;
@@ -223,9 +223,7 @@ watch(() => props.tab, () => {
 });
 const crumb = computed(() => {
     if (status.value !== 'ready') return [];
-    if (props.tab === 'party' && !props.recordId && !props.entryId) {
-        return campaignCrumb({ level: 'party', beside: false, middle: 'Party', pageName: 'Party' });
-    }
+    // The Party tab is a tab like Records and Journal: it keeps the campaign's name above, not a trail.
     if (onTimeline.value) {
         return campaignCrumb({ level: 'timeline', beside: false, middle: 'Timeline', pageName: 'Timeline' });
     }

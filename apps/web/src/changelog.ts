@@ -17,6 +17,23 @@ export type Release = {
 
 export const CHANGELOG: readonly Release[] = [
     {
+        version: '1.3.12',
+        date: '2026-11-17',
+        title: 'The same world',
+        story: [
+            'In the orbit view the globe is the same map as the world, and a background ship can be kept as a vessel only you can see.',
+            'System Comms starts on. Directions lists each stop of a route, and Party lists every ship and who is aboard.',
+        ],
+        items: [
+            'Open a system and select Explore orbits. The globe is that world\'s map, including any edits you kept, at every size. Worlds of one kind vary a little in cloud, ground, and the colour of a gas giant. Background ships hold in rings around a world. Select a contact to see what it is. A referee can select Promote to a ship. That adds it to the records as a vessel only the referee can see, and it stops being scenery. Players see a contact\'s kind, not its name. Turn off Traffic in Layers to hide contacts.',
+            'System Comms sits beside Fit and starts on. This device remembers when you turn it off. Select Minimize in its upper right corner to put it away for this visit. It shrinks into the System Comms button, and it opens again the next time you load the app. A campaign that has never set its switches shows background traffic.',
+            'Open Directions. When both ends are filled, the panel shows the jumps, the parsecs, and about how long the jumps take, then the start and one stop for each jump. Select a stop\'s name to open that system. The chart moves to show the whole route. Select Show the route to see it again. When the party ship has a jump, Jump starts on it. Select the button under Jump to use that ship\'s jump again after you change it. Select Swap to exchange From and To.',
+            'Open Campaign, then Party. The list shows each ship, the people aboard it, and anyone ashore, with a count of ships and people. Select Locate to show one on the map. Select Manage to change the party in place: Ship, Person, Make lead, and which ship a person is aboard. Select Done when you finish.',
+            'On a world\'s surface map, Save image offers Texture. Texture saves the bare map at its exact size, with nothing around it, to wrap a sphere. On paper and Full colour stay as they are.',
+            'A panel\'s name, its width switch, and its corner buttons sit on one row. The place, when there is one, sits under the name.',
+        ],
+    },
+    {
         version: '1.3.11',
         date: '2026-11-12',
         title: 'From here',

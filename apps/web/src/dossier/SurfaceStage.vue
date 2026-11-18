@@ -52,8 +52,8 @@ import SurfaceTimeBar from './SurfaceTimeBar.vue';
 import { lightingOf } from './world_panel.ts';
 import SaveImageButton from '../capture/SaveImageButton.vue';
 import SaveImageSheet, { type SheetArea, type SheetChoice } from '../capture/SaveImageSheet.vue';
-import { captionText, captureName, type CaptureArea } from '../capture/paper.ts';
-import { captureSurface, projectionAspect, TOO_LARGE, type SurfaceShot } from '../surface/capture.ts';
+import { captionText, captureName, textureName, type CaptureArea } from '../capture/paper.ts';
+import { captureSurface, projectionAspect, textureSize, TOO_LARGE, type SurfaceShot } from '../surface/capture.ts';
 import { printSurfaceInk, surfaceFont } from '../surface/print_theme.ts';
 import { rememberedVersion } from '../map/chart_version.ts';
 import { campaign } from '../campaign/store.ts';
@@ -1422,7 +1422,7 @@ async function saveImage(choice: SheetChoice): Promise<void> {
             ground: ink.paper,
             font: surfaceFont(el),
             caption: captionText(area, date, rememberedVersion()),
-            fileName: captureName(area, choice.paper),
+            fileName: choice.look === 'texture' ? textureName(area, textureSize(shot.mode).width, textureSize(shot.mode).height) : captureName(area, choice.paper),
             wait: () => new Promise((resolve) => { nextFrame(() => resolve()); }),
         });
         if (ok) saveSheet.value = false;
@@ -1615,7 +1615,7 @@ watch([figureEl, stageEl], observeSize, { flush: 'post' });
   </div>
   </div>
   </Teleport>
-  <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" @save="saveImage" @cancel="closeSaveSheet" />
+  <SaveImageSheet v-if="saveSheet" :areas="saveAreas" :busy="saving" :texture="textureSize(mode)" @save="saveImage" @cancel="closeSaveSheet" />
   <AskModal v-if="paintAsk" title="Discard the painted hexes?" :text="askText" confirm="Discard" cancel-label="Keep painting" danger @confirm="answerAsk(true)" @cancel="answerAsk(false)" />
   </div>
 </template>

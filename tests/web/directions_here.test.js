@@ -201,11 +201,11 @@ describe('rendered', { concurrency: 1 }, () => {
         assert.doesNotMatch(none, /is-tucked/);
     });
 
-    test('pins: the system panel\'s rows carry it; the panel sits right of the system panel under the top bar', () => {
+    test('pins: the system panel\'s rows carry it; the panel is docked at the right edge under the top bar', () => {
         const overview = read('dossier/DossierOverview.vue');
         assert.equal((overview.match(/<DirectionsHere v-if="[^"]*hexKey" :hex-key="hexKey" \/>/g) || []).length, 2, 'both action rows');
         const panel = read('map/DirectionsPanel.vue');
-        assert.match(panel, /\.ui-frame\.dir \{[^}]*top: calc\(var\(--chrome-top\) \+ var\(--chrome-height\) \+ 8px\);[^}]*left: calc\(var\(--rail-width\) \+ max\(var\(--chrome-inset\), calc\(var\(--panel-width, 0px\) \+ 8px\)\)\);/);
+        assert.match(panel, /\.ui-frame\.dir \{[^}]*top: calc\(var\(--chrome-top\) \+ var\(--chrome-height\) \+ 8px\);[^}]*right: var\(--chrome-inset\);\s+left: auto;[^}]*width: min\(380px, calc\(100% - var\(--rail-width\) - max\(var\(--chrome-inset\), calc\(var\(--panel-width, 0px\) \+ 8px\)\) - var\(--chrome-inset\)\)\);/, 'docked at the right edge; its width gives way to the system panel');
         const phone = panel.slice(panel.indexOf('@media (max-width: 599px)'));
         assert.match(phone, /\.ui-frame\.dir\.is-tucked \{\s+top: auto;\s+bottom: calc\(var\(--chrome-inset\) \+ max\(var\(--sheet-cover, 0px\), env\(safe-area-inset-bottom, 0px\)\)\);/);
         assert.match(phone, /\.dir\.is-tucked \.dir-form,\s+\.dir\.is-tucked \.dir-said,\s+\.dir\.is-tucked \.dir-result \{\s+display: none;/);

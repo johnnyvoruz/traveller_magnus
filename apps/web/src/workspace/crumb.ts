@@ -12,7 +12,7 @@ export type CrumbPart = {
     go: CrumbGo | null;
 };
 
-export type CrumbLevel = 'record' | 'entry' | 'party' | 'timeline' | 'web';
+export type CrumbLevel = 'record' | 'entry' | 'timeline' | 'web';
 
 /** The words of the trail, in order. The last part is the page and is not a link. */
 export function campaignCrumb(input: {
@@ -26,7 +26,6 @@ export function campaignCrumb(input: {
     const here: CrumbPart = { label: input.pageName, go: null };
     if (input.level === 'timeline') return [{ label: 'Campaign', go: 'campaign' }, { label: 'Timeline', go: null }];
     if (input.level === 'web') return [{ label: 'Campaign', go: 'campaign' }, { label: 'Relationships', go: null }];
-    if (input.level === 'party') return [{ label: 'Campaign', go: 'campaign' }, { label: 'Party', go: null }];
     const parent: CrumbGo = input.level === 'entry' ? 'journal' : 'records';
     if (input.beside) return [{ label: 'Campaign', go: parent }, here];
     return [{ label: 'Campaign', go: 'campaign' }, { label: input.middle, go: parent }, here];

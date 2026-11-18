@@ -15,6 +15,7 @@
  */
 import { rng, roll1D, toEHex, fromEHex, clampUWP } from './core/rng.js';
 import { trace, writeLogLine, tSection, tResult, tDM, tSkip, tTrade, tRoll1D, tRoll1D3, tRoll2D, tRoll2D3, tClamp, tOverride, pendingRoll } from './core/trace.js';
+import { determineMajorCities, rollTariff, rollPortFacilities } from './mgt2e_settlement.js';
 import { getNextSystemName } from './core/names.js';
 import { settings, genState } from './core/settings.js';
 import { MgT2EData } from './generated/rules/mgt2e_data.js';
@@ -746,36 +747,16 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
         let totalUrbanPop = Math.round(totalWorldPop * (urbanPercent / 100));
     
         // 5. Determine Major Cities and Total Major City Population
-        let majorCities = 0;
-        let totalMajorCityPop = 0;
-    
-        if (pcr === 0) {
-            majorCities = 0;
-            totalMajorCityPop = 0;
-            tResult('City Formula', 'PCR 0 forces 0 cities');
-        } else if (base.pop <= 5 && pcr === 9) {
-            majorCities = 1;
-            totalMajorCityPop = totalUrbanPop;
-            tResult('City Formula', 'Small Pop + PCR 9 forces 1 city');
-        } else if (base.pop <= 5 && pcr >= 1 && pcr <= 8) {
-            majorCities = Math.min(9 - pcr, base.pop);
-            totalMajorCityPop = totalUrbanPop;
-            tResult('City Formula', `Small Pop + PCR 1-8: min(9 - PCR(${pcr}), PopCode(${base.pop})) = ${majorCities}`);
-        } else if (base.pop >= 6 && pcr === 9) {
-            let mCRoll = tRoll2D('Major Cities Roll (2D)');
-            majorCities = Math.max(base.pop - mCRoll, 1);
-            totalMajorCityPop = totalUrbanPop;
-            tResult('City Formula', `Pop 6+ + PCR 9: max(PopCode(${base.pop}) - Roll(${mCRoll}), 1) = ${majorCities}`);
-        } else { // Population >= 6 AND PCR 1-8
-            let mCRoll = tRoll2D('Major Cities Roll (2D)');
-            let urbanFactor = ((urbanPercent / 100) * 20) / pcr;
-            let cityFormula = mCRoll - pcr + urbanFactor;
-            majorCities = Math.max(1, Math.round(cityFormula));
-            totalMajorCityPop = totalUrbanPop;
-            tResult('City Formula', `Pop 6+ + PCR 1-8: Roll(${mCRoll}) - PCR(${pcr}) + [ (Urban%(${urbanPercent}) * 20) / PCR(${pcr}) ] = ${cityFormula.toFixed(2)} -> ${majorCities}`);
-        }
-        tResult('Major Cities Count', majorCities);
-        tResult('Total Major City Pop', totalMajorCityPop.toLocaleString());
+        const cityResult = determineMajorCities({
+            pop: base.pop,
+            pcr,
+            urbanPercent,
+            totalUrbanPop,
+        });
+        let majorCities = cityResult.majorCities;
+        let totalMajorCityPop = cityResult.totalMajorCityPop;
+        base.cities = cityResult.cities;
+        base.largestCityPop = cityResult.largestCityPop;
     
         // 6. Government Profile - Centralisation Code (C)
         tSection('Government: Centralization');
@@ -1719,6 +1700,15 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
     
         let economicProfile = `${formatIm}, ${rlie}, ${RU}, Cr${pcGWP}, ${wtnChar}, ${IR}, ${DR}`;
         tResult('Final Economic Profile', economicProfile);
+
+        base.tariff = rollTariff({
+            gov: base.gov,
+            law: overallLaw,
+            xenophilia: base.xenophilia,
+            portWtnMod,
+            allegiance: base.allegiance || base.Allegiance || base.al,
+            freeport: base.freeport,
+        });
     
         // 14. Starport Profile
         tSection('Starport Profile');
@@ -1755,6 +1745,23 @@ import { MgT2EData } from './generated/rules/mgt2e_data.js';
         let formatSpIm = spIm >= 0 ? "+" + spIm : spIm.toString();
         let starportProfile = `${spClass}-${hxObj}:${dxObj}:${formatSpIm}`;
         tResult('Final Starport Profile', starportProfile);
+
+        const port = rollPortFacilities({
+            starport: spClass,
+            highport: hxObj === 'HY',
+            downport: dxObj === 'DY',
+            importance: Im,
+            trafficImportance: spIm,
+            efficiency: ecoE,
+            infrastructure: ecoI,
+            pop: base.pop,
+            totalWorldPop,
+            tl: base.tl,
+            industrial: tcArr.includes('In'),
+            nonIndustrial: tcArr.includes('Ni'),
+            atmCode: base.atmCode !== undefined ? base.atmCode : base.atm,
+        });
+        Object.assign(base, port);
     
         // 15. Military Profile
         tSection('Military Profile');

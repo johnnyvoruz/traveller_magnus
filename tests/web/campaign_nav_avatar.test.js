@@ -24,13 +24,6 @@ test('full width leaves off the middle part, because the list is on screen', () 
     assert.deepEqual(parts.map((part) => [part.label, part.go]), [['Campaign', 'records'], ['Captain Voss', null]]);
 });
 
-test('the party is one step under Campaign', () => {
-    const parts = campaignCrumb({ level: 'party', beside: true, middle: 'Party', pageName: 'Party' });
-    assert.deepEqual(parts.map((part) => part.label), ['Campaign', 'Party']);
-    assert.equal(parts[0].go, 'campaign');
-    assert.equal(parts[1].go, null);
-});
-
 test('a search stays in the list’s name', () => {
     assert.equal(listCrumbLabel('People', '  voss '), 'People matching “voss”');
     assert.equal(listCrumbLabel('Records', ''), 'Records');

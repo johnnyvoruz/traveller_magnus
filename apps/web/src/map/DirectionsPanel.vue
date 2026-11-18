@@ -8,12 +8,16 @@
  * "Use <name>" for the system open in the system panel; the system panel's From here and To here arrive as an
  * ask (`directions_state.ts`). With both ends set the route is planned at once, and again on any change.
  * Below 600 px, while a system is open, the panel folds to its ends and total above the world sheet.
+ *
+ * The result is a list of stops: the start, then one row a jump with its parsecs, the fuel taken there and the
+ * planner's notes. A stop's name opens that system. A new pair of ends asks the chart to show the whole route
+ * (`fit`), and Show the route asks again. In a campaign with a party ship the jump starts at the ship's.
  */
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import Icon from '../design/Icon.vue';
 import type { RouteEnd } from './route_plan.ts';
-import { blankForm, endWords, FUEL_CHOICES, JUMPS, sameEnd, type DirectionsIndex, type PinnedEnd } from './directions.ts';
+import { blankForm, endWords, FUEL_CHOICES, JUMPS, sameEnd, type DirectionsIndex, type DirectionsLeg, type PinnedEnd } from './directions.ts';
 import { bothSettled, FINDING_WORDS, planFetching, saidAfter, type GridSector } from './directions_fetch.ts';
 import { directionsState, emptyBox, otherBox, type EndBox } from './directions_state.ts';
 import { suggestEnds, type EndSuggestion } from './directions_search.ts';
@@ -33,16 +37,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     route: [stops: RouteEnd[] | null];
+    /** Show the whole route on the chart. */
+    fit: [];
     close: [];
 }>();
 
 const BOXES = ['from', 'to'] as const;
 
 const route = useRoute();
+const router = useRouter();
 const form = reactive(blankForm());
+// The party ship's jump is where the choice starts; the person may change it.
+if (props.partyJump) form.jump = props.partyJump;
 const pinned = reactive<{ from: PinnedEnd | null; to: PinnedEnd | null }>({ from: null, to: null });
 const lines = ref<string[]>([]);
+const origin = ref<{ end: RouteEnd; name: string } | null>(null);
+const legs = ref<DirectionsLeg[]>([]);
 const total = ref('');
+/** The ends of the route last shown whole, so a change of jump or fuel leaves the camera alone. */
+let fitted = '';
 const said = ref('');
 const boxes: Record<EndBox, HTMLInputElement | null> = { from: null, to: null };
 /** On a phone with a system open, the full form shows only after a press. */
@@ -107,7 +120,10 @@ function useShipJump(): void {
 
 function clearRoute(): void {
     lines.value = [];
+    legs.value = [];
+    origin.value = null;
     total.value = '';
+    fitted = '';
     emit('route', null);
 }
 
@@ -138,8 +154,22 @@ async function plan(): Promise<void> {
     // Both boxes were settled to plan: what was typed is done, so the suggestions go.
     closeSuggestions();
     lines.value = result.lines;
+    legs.value = result.legs ?? [];
+    origin.value = result.origin ?? null;
     total.value = result.total;
     emit('route', result.stops);
+    const first = result.stops[0];
+    const last = result.stops[result.stops.length - 1];
+    const ends = first.sector + '/' + first.hex + '>' + last.sector + '/' + last.hex;
+    if (ends !== fitted) {
+        fitted = ends;
+        emit('fit');
+    }
+}
+
+/** A stop's name opens that system; the route stays drawn. */
+function openStop(end: RouteEnd): void {
+    void router.push('/s/' + end.sector + '/' + end.hex);
 }
 
 // Both ends set: plan at once, and again on any change. Words that do not find one system yet say nothing.
@@ -237,35 +267,37 @@ onBeforeUnmount(closeSuggestions);
     </div>
     <form class="dir-form" @submit.prevent="go">
       <div class="dir-ends">
-        <div v-for="box in BOXES" :key="box" class="dir-fld-wrap">
-          <label class="dir-fld"><span>{{ box === 'from' ? 'From' : 'To' }}</span>
-            <input
-              :ref="(el) => setBox(box, el)"
-              v-model="form[box]"
-              class="dir-box"
-              :placeholder="box === 'from' ? 'Regina, or Spinward Marches 1910' : 'A system’s name or hex'"
-              autocomplete="off"
-              role="combobox"
-              aria-autocomplete="list"
-              :aria-expanded="suggestFor === box ? 'true' : 'false'"
-              :aria-controls="'dir-sug-' + box"
-              :data-directions-from="box === 'from' ? '' : undefined"
-              :data-directions-to="box === 'to' ? '' : undefined"
-              @input="typed(box)"
-              @keydown="boxKey($event, box)"
-            />
-          </label>
-          <ul v-if="suggestFor === box" :id="'dir-sug-' + box" class="dir-sug" role="listbox" :aria-label="(box === 'from' ? 'From' : 'To') + ' suggestions'" data-directions-suggestions>
-            <li v-for="item in suggestions" :key="item.end.sector + '/' + item.end.hex" role="option" aria-selected="false">
-              <button type="button" class="dir-sug-item" data-directions-suggestion @click="pick(box, item)" @keydown.esc.stop="closeSuggestions">
-                <b>{{ item.label }}</b><small>{{ item.detail }}</small>
-              </button>
-            </li>
-          </ul>
-          <button v-if="offerBox === box" type="button" class="ui-btn dir-use" :data-directions-use="box" @click="useHere(box)">Use {{ hereWords }}</button>
+        <div class="dir-ends-boxes">
+          <div v-for="box in BOXES" :key="box" class="dir-fld-wrap">
+            <label class="dir-fld dir-end"><span>{{ box === 'from' ? 'From' : 'To' }}</span>
+              <input
+                :ref="(el) => setBox(box, el)"
+                v-model="form[box]"
+                class="dir-box"
+                :placeholder="box === 'from' ? 'Regina, or Spinward Marches 1910' : 'A system’s name or hex'"
+                autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                :aria-expanded="suggestFor === box ? 'true' : 'false'"
+                :aria-controls="'dir-sug-' + box"
+                :data-directions-from="box === 'from' ? '' : undefined"
+                :data-directions-to="box === 'to' ? '' : undefined"
+                @input="typed(box)"
+                @keydown="boxKey($event, box)"
+              />
+            </label>
+            <ul v-if="suggestFor === box" :id="'dir-sug-' + box" class="dir-sug" role="listbox" :aria-label="(box === 'from' ? 'From' : 'To') + ' suggestions'" data-directions-suggestions>
+              <li v-for="item in suggestions" :key="item.end.sector + '/' + item.end.hex" role="option" aria-selected="false">
+                <button type="button" class="dir-sug-item" data-directions-suggestion @click="pick(box, item)" @keydown.esc.stop="closeSuggestions">
+                  <b>{{ item.label }}</b><small>{{ item.detail }}</small>
+                </button>
+              </li>
+            </ul>
+            <button v-if="offerBox === box" type="button" class="ui-btn dir-use" :data-directions-use="box" @click="useHere(box)">Use {{ hereWords }}</button>
+          </div>
         </div>
+        <button type="button" class="ui-btn is-icon dir-swap" aria-label="Swap From and To" title="Swap From and To" data-directions-swap @click="swap"><span aria-hidden="true">⇅</span></button>
       </div>
-      <button type="button" class="ui-btn dir-swap" data-directions-swap @click="swap">Swap From and To</button>
       <div class="dir-row">
         <label class="dir-fld dir-small"><span>Jump</span>
           <select v-model.number="form.jump" class="dir-box" data-directions-jump>
@@ -278,7 +310,8 @@ onBeforeUnmount(closeSuggestions);
           </select>
         </label>
       </div>
-      <button v-if="partyJump" type="button" class="ui-btn dir-ship" data-directions-ship-jump @click="useShipJump">Use {{ partyShip || 'the party ship' }}’s jump (Jump-{{ partyJump }})</button>
+      <p v-if="partyJump && form.jump === partyJump" class="dir-ship-note" data-directions-ship-jump>Jump-{{ partyJump }} is {{ partyShip || 'the party ship' }}’s jump.</p>
+      <button v-else-if="partyJump" type="button" class="ui-btn dir-ship" data-directions-ship-jump @click="useShipJump">Use {{ partyShip || 'the party ship' }}’s jump (Jump-{{ partyJump }})</button>
       <div class="dir-checks">
         <label class="dir-check"><input v-model="form.scoops" type="checkbox" data-directions-scoops /> Fuel scoops</label>
         <label class="dir-check"><input v-model="form.processors" type="checkbox" data-directions-processors /> Fuel processors</label>
@@ -291,9 +324,29 @@ onBeforeUnmount(closeSuggestions);
     </form>
     <p v-if="said" class="dir-said" role="status" data-directions-said>{{ said }}</p>
     <div v-if="lines.length" class="dir-result" data-directions-result>
-      <p class="dir-total" role="status" data-directions-total>{{ total }}</p>
+      <div class="dir-sum">
+        <p class="dir-total" role="status" data-directions-total>{{ total }}</p>
+        <button type="button" class="ui-btn dir-fit" data-directions-fit @click="emit('fit')"><Icon name="expand" :size="11" />Show the route</button>
+      </div>
       <ol class="dir-legs">
-        <li v-for="(line, i) in lines" :key="i" data-directions-leg>{{ line }}</li>
+        <li v-if="origin" class="dir-stop is-origin" data-directions-origin>
+          <span class="dir-stop-mark" aria-hidden="true"></span>
+          <span class="dir-stop-body">
+            <button type="button" class="dir-stop-name" :title="'Open ' + origin.name" @click="openStop(origin.end)">{{ origin.name }}</button>
+            <span class="dir-stop-meta">Start</span>
+          </span>
+        </li>
+        <li v-for="(leg, i) in legs" :key="i" class="dir-stop" :class="{ 'is-last': i === legs.length - 1 }" data-directions-leg>
+          <span class="dir-stop-mark" aria-hidden="true">{{ i + 1 }}</span>
+          <span class="dir-stop-body">
+            <span class="dir-stop-top">
+              <button type="button" class="dir-stop-name" :title="'Open ' + leg.name" @click="openStop(leg.end)">{{ leg.name }}</button>
+              <span class="dir-stop-far">{{ leg.parsecs }}</span>
+            </span>
+            <span v-if="leg.fuel" class="dir-stop-meta">{{ leg.fuel }}</span>
+            <span v-for="note in leg.notes" :key="note" class="dir-stop-note">{{ note }}</span>
+          </span>
+        </li>
       </ol>
       <p class="dir-fine">Shown on the chart. Nothing is saved; closing Directions clears the route.</p>
     </div>
@@ -301,13 +354,16 @@ onBeforeUnmount(closeSuggestions);
 </template>
 
 <style>
-/* Under the top bar, to the right of the system panel (--panel-width, published by shell/PanelHost.vue), never
-   under or over it. The frame's own rule sets position and padding, so these are the more specific. */
+/* Under the top bar, docked to the chart's right edge, so the chart between the system panel and Directions
+   stays clear for the route. Its width gives way to the system panel (--panel-width, published by
+   shell/PanelHost.vue): never under or over it. The frame's own rule sets position and padding, so these are
+   the more specific. */
 .ui-frame.dir {
   position: absolute;
   z-index: 6;
   top: calc(var(--chrome-top) + var(--chrome-height) + 8px);
-  left: calc(var(--rail-width) + max(var(--chrome-inset), calc(var(--panel-width, 0px) + 8px)));
+  right: var(--chrome-inset);
+  left: auto;
   box-sizing: border-box;
   width: min(380px, calc(100% - var(--rail-width) - max(var(--chrome-inset), calc(var(--panel-width, 0px) + 8px)) - var(--chrome-inset)));
   max-height: calc(100% - var(--chrome-top) - var(--chrome-height) - 8px - var(--chrome-inset));
@@ -337,14 +393,38 @@ onBeforeUnmount(closeSuggestions);
   margin-top: 8px;
 }
 
+/* The two ends as one block, the swap beside them. */
 .dir-ends {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
+}
+
+.dir-ends-boxes {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dir-fld.dir-end {
+  grid-template-columns: 2.6em minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.dir-swap {
+  font: 400 15px/1 var(--font-text);
 }
 
 .dir-fld-wrap {
   display: grid;
   gap: 6px;
+}
+
+.dir-use,
+.dir-sug {
+  margin-left: calc(2.6em + 6px);
 }
 
 .dir-use {
@@ -412,9 +492,14 @@ onBeforeUnmount(closeSuggestions);
   gap: 8px;
 }
 
-.dir-swap,
 .dir-ship {
   justify-self: start;
+}
+
+.dir-ship-note {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font: 400 11.5px/1.4 var(--font-text);
 }
 
 .dir-checks {
@@ -449,20 +534,130 @@ onBeforeUnmount(closeSuggestions);
   border-top: 1px solid var(--line-1);
 }
 
+.dir-sum {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
 .dir-total {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--text-0);
   font: 600 13px/1.4 var(--font-text);
 }
 
+.dir-fit {
+  flex: 0 0 auto;
+}
+
+/* The stops, start to end: a numbered mark a jump, joined by a line down the marks' column. */
 .dir-legs {
   display: grid;
-  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
   color: var(--text-1);
   font: 400 12.5px/1.45 var(--font-text);
+}
+
+.dir-stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.dir-stop::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  bottom: 0;
+  left: 10px;
+  width: 2px;
+  background: var(--line-2);
+}
+
+.dir-stop.is-last {
+  padding-bottom: 0;
+}
+
+.dir-stop.is-last::before {
+  display: none;
+}
+
+.dir-stop-mark {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--panel-raised);
+  color: var(--text-1);
+  font: 700 10.5px/1 var(--font-code);
+}
+
+.dir-stop.is-origin .dir-stop-mark,
+.dir-stop.is-last .dir-stop-mark {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.dir-stop.is-origin .dir-stop-mark::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.dir-stop-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.dir-stop-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dir-stop-name {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-0);
+  font: 600 13px/1.35 var(--font-text);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.dir-stop-name:hover,
+.dir-stop-name:focus-visible {
+  color: var(--signal);
+}
+
+.dir-stop-far {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font: 400 12px/1.35 var(--font-text);
+}
+
+.dir-stop-meta {
+  color: var(--text-muted);
+}
+
+.dir-stop-note {
+  color: var(--attention);
 }
 
 .dir-fine {

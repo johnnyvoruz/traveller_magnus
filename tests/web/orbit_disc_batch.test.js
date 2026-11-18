@@ -406,10 +406,10 @@ test('Regina and Zeycude: the released systems, at the fitted view', { timeout: 
     // Its three ringed worlds wear rings; the others do not.
     assert.deepEqual(regina.batch.discs.filter((item) => item.ring).map((item) => item.key).sort(), ['w5', 'w6', 'w9']);
     const zeycude = batches.Zeycude;
-    // Engine 1.4.0 belt bulk, significant-body counts, and extreme tilt share the stream,
-    // so Zeycude's ring, A-V's tilt, and A-IV's shading moons moved again.
-    assert.deepEqual(zeycude.batch.discs.filter((item) => item.ring).map((item) => item.key), ['w5']);
-    assert.equal(disc(zeycude.batch, 'w7').tiltDeg, 0.1);
+    // Engine 1.5.0 Size S and belt-body dice share the stream, so Zeycude's rings,
+    // A-V's tilt, and A-IV's shading moons moved again.
+    assert.deepEqual(zeycude.batch.discs.filter((item) => item.ring).map((item) => item.key), ['w1', 'w2', 'w6']);
+    assert.equal(disc(zeycude.batch, 'w7').tiltDeg, 0);
     assert.equal(disc(zeycude.batch, 'w0').body.name, 'Zeycude');
-    assert.equal(disc(zeycude.batch, 'w6').casters.length, 0);
+    assert.equal(disc(zeycude.batch, 'w6').casters.length, 3);
 });

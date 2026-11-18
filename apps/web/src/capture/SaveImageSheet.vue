@@ -4,6 +4,9 @@
  * the area (when there is a choice), the paper, the look, Save and Cancel. The chart, the system map
  * and the world surface map open the same sheet. The paper chosen last is kept per device. Escape or
  * the scrim cancels; focus starts on Cancel, so Enter never saves by accident. No native dialog.
+ *
+ * The world surface map passes `texture` (its bare map's pixels): a third look, Texture, then joins the two.
+ * It has no paper, so the paper row stands down and the size shown is the texture's own.
  */
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { storageGet, storageSet } from '../platform/browser.ts';
@@ -15,7 +18,9 @@ export type SheetChoice = { area: string; paper: Paper; look: Look };
 const props = withDefaults(defineProps<{
     areas: SheetArea[];
     busy?: boolean;
-}>(), { busy: false });
+    /** The bare map's pixels, where the view has a texture to save; absent, the Texture look is not offered. */
+    texture?: { width: number; height: number } | null;
+}>(), { busy: false, texture: null });
 
 const emit = defineEmits<{ (e: 'save', choice: SheetChoice): void; (e: 'cancel'): void }>();
 
@@ -31,7 +36,14 @@ const orientation = computed((): Orientation => {
     return found ? found.orientation : 'portrait';
 });
 
-const pixels = computed(() => sizeWords(paperPixels(paper.value, orientation.value)));
+const onTexture = computed(() => look.value === 'texture' && !!props.texture);
+const pixels = computed(() => (onTexture.value && props.texture
+    ? props.texture.width + ' × ' + props.texture.height + ' px'
+    : sizeWords(paperPixels(paper.value, orientation.value))));
+const note = computed(() => {
+    if (onTexture.value) return 'The bare map at its exact size, edge to edge, with nothing around it. For wrapping a sphere.';
+    return look.value === 'paper' ? 'Ink on white, for printing.' : 'Colour on white, for printing.';
+});
 
 function cancel(): void {
     if (props.busy) return;
@@ -64,7 +76,7 @@ onMounted(() => {
       <form class="ui-modal-card save-img-card" @submit.prevent="send">
         <div class="ui-modal-bar">
           <h2 id="save-img-h" class="ui-modal-title save-img-title">Save image</h2>
-          <p class="ui-modal-meta">PNG, 300 dpi</p>
+          <p class="ui-modal-meta">{{ onTexture ? 'PNG, clear around the map' : 'PNG, 300 dpi' }}</p>
         </div>
         <fieldset v-if="areas.length > 1" class="save-img-set">
           <legend class="save-img-lbl">Area</legend>
@@ -76,7 +88,7 @@ onMounted(() => {
         <div class="save-img-row">
           <span id="save-img-paper" class="save-img-lbl">Paper</span>
           <div class="ui-seg" role="group" aria-labelledby="save-img-paper">
-            <button v-for="item in PAPERS" :key="item" type="button" :aria-pressed="paper === item" :disabled="busy" @click="paper = item">{{ item }}</button>
+            <button v-for="item in PAPERS" :key="item" type="button" :aria-pressed="paper === item" :disabled="busy || onTexture" @click="paper = item">{{ item }}</button>
           </div>
           <span class="save-img-px" data-save-image-pixels>{{ pixels }}</span>
         </div>
@@ -85,9 +97,10 @@ onMounted(() => {
           <div class="ui-seg" role="group" aria-labelledby="save-img-look">
             <button type="button" :aria-pressed="look === 'paper'" :disabled="busy" @click="look = 'paper'">On paper</button>
             <button type="button" :aria-pressed="look === 'screen'" :disabled="busy" @click="look = 'screen'">Full colour</button>
+            <button v-if="texture" type="button" :aria-pressed="look === 'texture'" :disabled="busy" data-save-image-texture @click="look = 'texture'">Texture</button>
           </div>
         </div>
-        <p class="save-img-note">{{ look === 'paper' ? 'Ink on white, for printing.' : 'Colour on white, for printing.' }}</p>
+        <p class="save-img-note">{{ note }}</p>
         <div class="save-img-acts">
           <button ref="cancelEl" type="button" class="ui-btn" :disabled="busy" data-save-image-cancel @click="cancel()">Cancel</button>
           <button type="submit" class="ui-btn is-primary" :disabled="busy || !areaId" data-save-image-save>{{ busy ? 'Saving…' : 'Save' }}</button>

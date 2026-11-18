@@ -73,13 +73,14 @@ import { campaign, setCampaignDate } from '../campaign/store.ts';
 import { publishViewDay, resetViewDay, viewDay, viewReset } from '../campaign/view_day.ts';
 import { systemFacts } from '../living/facts.ts';
 import { maydayKeyPresent, pageMayday } from '../living/comms/mayday.ts';
-import { device, deviceComms, deviceTraffic, livingShown, setCommsShown, setTrafficShown } from '../living/quiet.ts';
+import { device, deviceComms, deviceTraffic, livingShown, minimizeComms as putCommsAway, setCommsShown, setTrafficShown } from '../living/quiet.ts';
 import { FAST_DAYS_PER_SECOND, trafficAtRest, trafficSchedule, type TrafficBody } from '../living/traffic.ts';
 import { bindBuilder, builderEpoch } from '../builder/bind.ts';
 import { buildStore } from '../workspace/build/seam.ts';
 import { isOwnSlug } from '../workspace/build/sectors.ts';
 import type { OwnSector } from '../workspace/build/seam.ts';
 import { dismissToast, showToast } from '../shell/toast.ts';
+import { contactWords, isPromoted, promoteContact, UNIDENTIFIED } from '../living/contacts.ts';
 import { ensureCampaign } from '../workspace/opening.ts';
 import { sameDay, stardate } from '../workspace/stardate.ts';
 import AccountMenu from '../workspace/AccountMenu.vue';
@@ -701,6 +702,36 @@ const backgroundTracks = computed(() => {
     }, trafficBucket.value);
 });
 
+// ---- Sensor contacts (living/contacts.ts): a background ship pressed on the picture, and Promote ----------
+const contactId = ref<string | null>(null);
+/** Bumped when a contact is promoted, so the scenery copy leaves the picture at once. */
+const promotedTurn = ref(0);
+const contactReferee = computed(() => campaign.role === 'owner');
+const contactShip = computed(() => {
+    const id = contactId.value;
+    void promotedTurn.value;
+    if (!id || isPromoted(id)) return null;
+    return backgroundTracks.value.find((track) => track.id === id) ?? null;
+});
+const contactSaid = computed(() => (contactShip.value ? contactWords(contactShip.value, contactReferee.value) : null));
+
+function openContact(id: string): void {
+    contactId.value = id;
+}
+
+function promoteShown(): void {
+    const ship = contactShip.value;
+    if (!ship || !contactReferee.value || !canSetDate.value) return;
+    const date = campaign.clock ? stardate(campaign.clock.days).date : '';
+    promoteContact(ship, hexKey.value, title.value, date);
+    promotedTurn.value += 1;
+    contactId.value = null;
+    showToast(ship.name + ' is now a vessel in your records. Only you can see it.');
+}
+
+// The contact left the system (a new day's traffic, or the switch went off): its card goes with it.
+watch(contactShip, (ship) => { if (!ship) contactId.value = null; });
+
 const tracks = computed((): ShipTrack[] | null => {
     if (!canSetDate.value) return null;
     const out: ShipTrack[] = [];
@@ -712,7 +743,12 @@ const tracks = computed((): ShipTrack[] | null => {
     const scenery = rate > FAST_DAYS_PER_SECOND
         ? backgroundTracks.value.filter((track) => trafficAtRest(track, shownDays.value))
         : backgroundTracks.value;
-    out.push(...scenery);
+    void promotedTurn.value;
+    // A promoted contact is a record now, not scenery; a player is not told a contact's name.
+    for (const track of scenery) {
+        if (isPromoted(track.id)) continue;
+        out.push(contactReferee.value ? track : { ...track, name: UNIDENTIFIED, line: '' } as ShipTrack);
+    }
     return out;
 });
 const selectedShip = ref<string | null>(null);
@@ -828,6 +864,39 @@ function finishCommsLeave(): void {
     if (go) go();
 }
 
+/**
+ * The receiver's own minimize: it shrinks into the System Comms button, and the button answers with a ring,
+ * so the way back is seen. `commsFly` is the move from the receiver's middle to the button's, and the scale.
+ */
+const commsBtnEl = ref<HTMLElement | null>(null);
+const commsFly = ref<{ x: number; y: number; scale: number } | null>(null);
+const commsLanded = ref(false);
+let commsLandTimer: ReturnType<typeof setTimeout> | null = null;
+
+function minimizeComms(): void {
+    const box = commsEl.value;
+    const btn = commsBtnEl.value;
+    if (box && btn) {
+        const from = box.getBoundingClientRect();
+        const to = btn.getBoundingClientRect();
+        if (from.width > 0) {
+            commsFly.value = {
+                x: to.left + to.width / 2 - (from.left + from.width / 2),
+                y: to.top + to.height / 2 - (from.top + from.height / 2),
+                scale: Math.max(0.05, Math.min(1, to.width / from.width)),
+            };
+        }
+    }
+    // Put away for this visit only: it opens again the next time the app loads.
+    putCommsAway();
+    if (commsLandTimer !== null) clearTimeout(commsLandTimer);
+    commsLanded.value = true;
+    commsLandTimer = later(() => {
+        commsLandTimer = null;
+        commsLanded.value = false;
+    }, 1200);
+}
+
 function beginCommsLeave(): void {
     if (!commsHeld.value || commsLeaving.value) return;
     commsLeaving.value = true;
@@ -852,6 +921,7 @@ watch(commsWanted, (want) => {
         commsLeaving.value = false;
         commsHeld.value = true;
         commsEntered.value = false;
+        commsFly.value = null;
         nextFrame(() => {
             if (commsHeld.value && !commsLeaving.value) commsEntered.value = true;
         });
@@ -2297,6 +2367,7 @@ async function saveImage(choice: SheetChoice): Promise<void> {
           :ship-tags="tracks !== null"
           :ship-notes="shipNotes"
           @ship="takeShip"
+          @contact="openContact"
           @plot-hover="onPlotHover"
           @way-grab="onWayGrab"
           @way-drop="onWayDrop"
@@ -2409,8 +2480,10 @@ async function saveImage(choice: SheetChoice): Promise<void> {
         <div ref="footEl" class="orbit-foot">
           <div class="orbit-stage-tools">
             <button
+              ref="commsBtnEl"
               type="button"
               class="orbit-btn orbit-comms-btn"
+              :class="{ 'is-landing': commsLanded }"
               data-command="system-comms"
               :aria-pressed="deviceComms.shown ? 'true' : 'false'"
               :title="deviceComms.shown ? 'System Comms on' : 'System Comms off'"
@@ -2432,11 +2505,25 @@ async function saveImage(choice: SheetChoice): Promise<void> {
               <SaveImageButton v-if="version && state === 'ready'" title="Save an image of this system" @click="openSaveSheet" />
             </div>
           </div>
+          <div v-if="contactShip && contactSaid" class="orbit-contact" role="group" aria-label="Sensor contact" data-contact>
+            <p class="orbit-contact-kicker">Sensor contact</p>
+            <p class="orbit-contact-name">{{ contactSaid.name }}</p>
+            <p class="orbit-contact-role">{{ contactSaid.role }} · {{ title }}</p>
+            <p v-if="contactSaid.line" class="orbit-contact-line">{{ contactSaid.line }}</p>
+            <p v-if="contactReferee" class="orbit-contact-note">Promote adds it to your records as a vessel only you can see. It stops being scenery and stays where you put it.</p>
+            <div class="orbit-contact-acts">
+              <button v-if="contactReferee" type="button" class="orbit-btn orbit-contact-promote" :disabled="!canSetDate" data-contact-promote @click="promoteShown">
+                <Icon name="plus" :size="12" />Promote to a ship
+              </button>
+              <button type="button" class="orbit-btn" data-contact-close @click="contactId = null">Close</button>
+            </div>
+          </div>
           <div
             v-if="commsHeld"
             ref="commsEl"
             class="orbit-comms"
-            :class="{ 'is-hidden': commsLeaving || !commsEntered }"
+            :class="{ 'is-hidden': commsLeaving || !commsEntered, 'is-minimizing': commsFly !== null }"
+            :style="commsFly ? { '--comms-fly-x': commsFly.x + 'px', '--comms-fly-y': commsFly.y + 'px', '--comms-fly-scale': String(commsFly.scale) } : undefined"
             @transitionend="onCommsFade"
           >
           <CommsReceiver
@@ -2446,6 +2533,7 @@ async function saveImage(choice: SheetChoice): Promise<void> {
             :campaign-key="campaign.universeId || 'none'"
             :shown="commsOn && !commsLeaving"
             :mayday="maydayVisit"
+            @minimize="minimizeComms"
           />
           </div>
           <BodyChips
@@ -2846,6 +2934,61 @@ async function saveImage(choice: SheetChoice): Promise<void> {
   gap: 8px;
 }
 
+/* A sensor contact's card: at the picture's lower left, above the foot, clear of System Comms at the right. */
+.orbit-contact {
+  position: absolute;
+  left: 18px;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  width: min(330px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid var(--signal-line);
+  border-radius: var(--r-3);
+  background: var(--chrome-glass);
+  color: var(--text-1);
+  font: 400 12.5px/1.45 var(--font-text);
+}
+
+.orbit-contact p {
+  margin: 0;
+}
+
+.orbit-contact-kicker {
+  color: var(--signal);
+  font: 700 10px/1.3 var(--font-display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.orbit-contact-name {
+  color: var(--text-0);
+  font: 600 15px/1.3 var(--font-text);
+}
+
+.orbit-contact-role,
+.orbit-contact-note {
+  color: var(--text-muted);
+}
+
+.orbit-contact-note {
+  font-size: 11.5px;
+}
+
+.orbit-contact-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.orbit-btn.orbit-contact-promote {
+  gap: 7px;
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
 .orbit-comms {
   position: absolute;
   right: 18px;
@@ -2860,9 +3003,38 @@ async function saveImage(choice: SheetChoice): Promise<void> {
   opacity: 0;
 }
 
+/* Minimized from its own corner: it shrinks into the System Comms button, fading last, so the eye follows it there. */
+.orbit-comms.is-minimizing {
+  transform-origin: center;
+  transition: opacity var(--t-base) var(--ease-in-out), transform var(--t-base) var(--ease-in-out);
+}
+
+.orbit-comms.is-minimizing.is-hidden {
+  transform: translate(var(--comms-fly-x, 0), var(--comms-fly-y, 0)) scale(var(--comms-fly-scale, 1));
+}
+
+/* The button answers: a ring that opens and fades, twice. */
+.orbit-btn.orbit-comms-btn.is-landing {
+  animation: orbit-comms-land var(--t-lock) var(--ease-out) var(--t-fast) 2;
+}
+
+@keyframes orbit-comms-land {
+  from { box-shadow: 0 0 0 0 var(--signal); border-color: var(--signal); }
+  to { box-shadow: 0 0 0 10px transparent; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .orbit-comms {
     transition-duration: var(--t-fast);
+  }
+
+  .orbit-comms.is-minimizing.is-hidden {
+    transform: none;
+  }
+
+  .orbit-btn.orbit-comms-btn.is-landing {
+    animation: none;
+    border-color: var(--signal);
   }
 
   .orbit-card,

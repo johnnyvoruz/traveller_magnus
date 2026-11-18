@@ -51,6 +51,9 @@ function onScroll(): void {
 
 function show(id: string, el: HTMLElement): void {
     clearTimers();
+    // The link went while the card waited (a press opened the record and its list closed): there is nothing to
+    // stand beside, and a card for it would land in the window's corner.
+    if (el.isConnected === false) return;
     if (anchor && anchor !== el) anchor.removeAttribute('aria-describedby');
     const box = el.getBoundingClientRect();
     anchor = el;

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { environmentPolicy, reconcileTree } from '../../packages/engines/src/reconcile_environment.js';
 import { sheetCaption } from '../../apps/web/src/surface/caption.ts';
-import { enhancedProfile } from '../../apps/web/src/surface/enhanced/climate.ts';
+import { CLOUD_SPREAD, enhancedProfile, weathered } from '../../apps/web/src/surface/enhanced/climate.ts';
 import { seaPlan } from '../../apps/web/src/surface/enhanced/map.ts';
 import { worldMapData } from '../../apps/web/src/surface/identity.ts';
 import { surfaceProfile } from '../../apps/web/src/surface/profile.ts';
@@ -52,13 +52,21 @@ test('the same body without the corrected fields keeps today\'s profile byte for
     const id = 'climate-plain';
     const today = surfaceProfile(body, id);
     const enhanced = enhancedProfile(body, id);
-    assert.equal(enhanced, today);
+    // The enhanced profile is today's made this world's own (weathered: its sky, its rock's lean); nothing else moves.
+    assert.equal(enhanced, weathered(today), 'one object per profile');
+    assert.equal(enhancedProfile(body, id), enhanced);
+    for (const key of Object.keys(today)) {
+        if (key === 'clouds' || key === 'rock' || key === 'gas') continue;
+        assert.equal(enhanced[key], today[key], key + ' is today\'s own');
+    }
+    assert.deepEqual(enhanced.clouds.color, today.clouds.color);
+    assert.ok(enhanced.clouds.cover >= today.clouds.cover * (1 - CLOUD_SPREAD) - 1e-9 && enhanced.clouds.cover <= today.clouds.cover * (1 + CLOUD_SPREAD) + 1e-9);
     const plainBody = garden();
     const unknownBody = garden();
     unknownBody.surfaceTempBand = { status: 'unknown' };
     unknownBody.orbitalTempBand = { status: 'unknown', missing: ['hzco'] };
     const shared = 'climate-unknown';
-    assert.equal(JSON.stringify(enhancedProfile(unknownBody, shared)), JSON.stringify(surfaceProfile(plainBody, shared)));
+    assert.equal(JSON.stringify(enhancedProfile(unknownBody, shared)), JSON.stringify(weathered(surfaceProfile(plainBody, shared))));
 });
 
 test('vanilla keeps its temperature rule when the classifier fields are present', () => {

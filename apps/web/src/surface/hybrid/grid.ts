@@ -6,6 +6,13 @@
  * Coordinates: unit vectors with y up, x = cos(lat)·cos(lon), z = cos(lat)·sin(lon), so
  * longitude grows eastward and the noise fields of vanilla/map_fields.ts read them as they are.
  *
+ * The flat net is cut square (Johnny, 2026-11-14): its left and right edges are vertical, so the sheet is
+ * a rectangle five triangle sides wide and a downloaded texture maps onto a sphere as it is. The cut runs
+ * down the meridian through a north corner, so the first north triangle and the first band triangle are
+ * each drawn in two halves: the right half at the left edge, the left half at the right edge. Those two
+ * left halves are the net's last two faces (`ghost`): the same triangles on the sphere, the same hexes,
+ * five sides further right. A point of the net is on the sheet when its x is from 0 to NET_WIDTH.
+ *
  * Addressing: the flat net lays the triangles out in rows. A lattice point's row is its
  * height on the net in lattice steps, 0 (north pole) to 3n (south pole), and is the same on
  * every triangle that shares it. Its column is its rank by longitude within the row. The id
@@ -43,12 +50,23 @@ export type Face = {
     readonly a: NetPoint; readonly b: NetPoint; readonly c: NetPoint;
     /** Net row of A, and the row steps per i and per j (in units of n). */
     readonly rowA: number; readonly rowI: number; readonly rowJ: number;
+    /** A second drawing of a face the cut divides: it adds no hexes and no area. */
+    readonly ghost?: boolean;
 };
 
-export const NET_WIDTH = 5.5;
+export const NET_WIDTH = 5;
 export const NET_HEIGHT = 1.5 * Math.sqrt(3);
+/** The faces of the icosahedron; the net's list holds two more, the second halves at the cut. */
+export const FACE_COUNT = 20;
 
-/** The 20 faces: five north, ten in the band, five south. Side 1. */
+/** A net x brought onto the sheet: a point left of the cut is the same point one net width right. */
+export function onSheetX(x: number): number {
+    if (x < 0) return x + NET_WIDTH;
+    if (x > NET_WIDTH) return x - NET_WIDTH;
+    return x;
+}
+
+/** The 20 faces (five north, ten in the band, five south), then the two the cut divides, again. Side 1. */
 export function buildNet(): readonly Face[] {
     const h = Math.sqrt(3) / 2;
     const T = Math.atan(0.5);
@@ -56,15 +74,18 @@ export function buildNet(): readonly Face[] {
     const SP: V3 = [0, -1, 0];
     const U = (k: number): V3 => sphere(T, (-180 + 72 * k) * D2R);
     const L = (k: number): V3 => sphere(-T, (-144 + 72 * k) * D2R);
-    const Un = (k: number): NetPoint => [k, h];
-    const Ln = (k: number): NetPoint => [k + 0.5, 2 * h];
+    const Un = (k: number): NetPoint => [k - 0.5, h];
+    const Ln = (k: number): NetPoint => [k, 2 * h];
     const faces: Face[] = [];
-    for (let k = 0; k < 5; k += 1) faces.push({ A: NP, B: U(k), C: U(k + 1), a: [k + 0.5, 0], b: Un(k), c: Un(k + 1), rowA: 0, rowI: 1, rowJ: 1 });
+    for (let k = 0; k < 5; k += 1) faces.push({ A: NP, B: U(k), C: U(k + 1), a: [k, 0], b: Un(k), c: Un(k + 1), rowA: 0, rowI: 1, rowJ: 1 });
     for (let k = 0; k < 5; k += 1) {
         faces.push({ A: U(k), B: U(k + 1), C: L(k), a: Un(k), b: Un(k + 1), c: Ln(k), rowA: 1, rowI: 0, rowJ: 1 });
         faces.push({ A: L(k), B: L(k + 1), C: U(k + 1), a: Ln(k), b: Ln(k + 1), c: Un(k + 1), rowA: 2, rowI: 0, rowJ: -1 });
     }
-    for (let k = 0; k < 5; k += 1) faces.push({ A: L(k), B: L(k + 1), C: SP, a: Ln(k), b: Ln(k + 1), c: [k + 1, 3 * h], rowA: 2, rowI: 0, rowJ: 1 });
+    for (let k = 0; k < 5; k += 1) faces.push({ A: L(k), B: L(k + 1), C: SP, a: Ln(k), b: Ln(k + 1), c: [k + 0.5, 3 * h], rowA: 2, rowI: 0, rowJ: 1 });
+    // The cut (x = 0) divides the first north face and the first band face: each again, a net width right.
+    const again = (f: Face): Face => ({ ...f, a: [f.a[0] + NET_WIDTH, f.a[1]], b: [f.b[0] + NET_WIDTH, f.b[1]], c: [f.c[0] + NET_WIDTH, f.c[1]], ghost: true });
+    faces.push(again(faces[0]), again(faces[5]));
     return faces;
 }
 
@@ -189,7 +210,9 @@ function buildGrid(n: number): Grid {
     const vid = raw.map((table) => table.map((oldId) => remap[oldId]));
     const nbs = P.map(() => new Set<number>());
     const area = new Float64Array(count);
-    faces.forEach((_, fi) => {
+    faces.forEach((f, fi) => {
+        // A face drawn twice is one face of the sphere: its area and its neighbours are counted once.
+        if (f.ghost) return;
         const V = (i: number, j: number): number => vid[fi][i * (n + 1) + j];
         for (let i = 0; i <= n; i += 1) {
             for (let j = 0; i + j <= n; j += 1) {

@@ -157,9 +157,9 @@ function onGrabClick(): void {
 <style>
 /* The width switch in the videos' type: small Orbitron capitals, as their kickers. */
 .panel-spans button {
-  padding: 5px 9px 4px;
+  padding: 5px 7px 4px;
   font: 700 10px/1.4 var(--font-display);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -227,49 +227,49 @@ function onGrabClick(): void {
 }
 
 .panel-head {
-  /* Two stacked boxes. The corner buttons sit in the top row, not over the title. */
+  /*
+   * One row: the name at the left, the width switch and the corner buttons at its right, on the name's
+   * own line. The trail, when there is one, is a line over the name; the place, a line under it, with the
+   * pager at its right. A line with nothing in it takes no room, so nothing stands empty over the name or
+   * under the switch. The two boxes are the markup's grouping only: their children sit on this grid.
+   */
   --corner-size: 30px;
   --corner-gap: 4px;
   position: relative;
-  display: flex;
+  display: grid;
   flex: 0 0 auto;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  min-height: 58px;
-  padding: 12px 16px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 10px 12px 10px 16px;
   background: var(--surface-1);
   border-bottom: 1px solid var(--signal-line);
 }
 
 .panel-box-nav,
 .panel-box-name {
-  display: grid;
-  align-items: center;
-  column-gap: 12px;
-  min-width: 0;
-}
-
-.panel-box-nav {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
-.panel-box-name {
-  grid-template-columns: minmax(0, 1fr) auto;
-  row-gap: 4px;
+  display: contents;
 }
 
 .panel-crumb {
   grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 
+.panel-crumb > .panel-eyebrow {
+  margin-bottom: 3px;
+}
+
+/* The switch and the corner stand beside the trail and the name together, centred on them. */
 .panel-spans {
   grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .panel-corner {
   grid-column: 3;
+  grid-row: 1 / span 2;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -279,27 +279,37 @@ function onGrabClick(): void {
 
 .panel-title-row {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: 4px 10px;
   min-width: 0;
-}
-
-.panel-pager {
-  grid-column: 2;
-  grid-row: 1;
+  min-height: var(--corner-size);
 }
 
 .panel-place {
-  grid-column: 1 / -1;
-  grid-row: 2;
+  grid-column: 1;
+  grid-row: 3;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: 8px;
   min-width: 0;
+  margin-top: 2px;
+}
+
+.panel-pager {
+  grid-column: 2 / -1;
+  grid-row: 3;
+  justify-self: end;
+  margin-top: 2px;
+}
+
+/* No place line: the pager takes the line under the name by itself. */
+.panel-title-row:last-child,
+.panel-title-row + .panel-pager:last-child {
+  margin-bottom: 0;
 }
 
 .panel-glyph {
@@ -312,7 +322,7 @@ function onGrabClick(): void {
   min-width: 0;
   overflow: hidden;
   color: var(--text-0);
-  font: 700 21px/1.2 var(--font-text);
+  font: 700 19px/1.2 var(--font-text);
   letter-spacing: -0.2px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -370,8 +380,9 @@ function onGrabClick(): void {
   text-overflow: ellipsis;
 }
 
+/* The badge keeps its word; the place beside it is what shortens. */
 .panel-place .ui-badge {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .panel-close,

@@ -79,7 +79,7 @@ async function openEdge(t, prefix) {
             localStorage.setItem('voyage_welcome_shown', '1');
             localStorage.setItem('voyage_first_hint_done', '1');
             localStorage.setItem('voyage_panel_span', 'column');
-            localStorage.setItem('voyage.comms.on', '1');
+            localStorage.setItem('voyage.comms.on.2', '1');
         });
         return { context, profileDir };
     } catch (error) {

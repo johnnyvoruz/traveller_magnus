@@ -51,8 +51,8 @@ test('the party panel lists ships, keeps the lead separate, and says who a remov
     assert.ok(panel.includes('>Lead</span>'));
     assert.ok(panel.includes('Make lead'));
     assert.ok(panel.includes('>No ship</option>'));
-    // Aboard no ship: the card's rule, per row (DU3b).
-    assert.ok(panel.includes('{{ row.standing }}'));
+    // Aboard no ship: the card's rule, per row (DU3b). One list: the row's own words, never a second column.
+    assert.ok(panel.includes('{{ whoLine(row) }}'));
     assert.match(panel, /@media \(max-width: 599px\)/);
     assert.equal(panel.includes('window.confirm'), false);
     assert.equal(panel.includes('window.alert'), false);

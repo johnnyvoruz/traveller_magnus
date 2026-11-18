@@ -82,6 +82,14 @@ const TOGGLE_KEYS: readonly ToggleKey[] = ['habitable', 'jump', 'paths', 'moons'
 const NOTICE_SHORT_BELOW = 520;
 
 const TAU = Math.PI * 2;
+/** The HUD's mark: its least radius, the disc radius it starts to fade at and is gone by, and the disc radius under which a pip stands in for the world. */
+const HUD_RING_PX = 7;
+const HUD_FADE_FROM = 9;
+const HUD_FADE_TO = 24;
+const HUD_PIP_UNDER = 2.4;
+/** A sensor contact's ping: one every this many milliseconds, and the share of that it takes to fade. */
+const CONTACT_PERIOD_MS = 4200;
+const CONTACT_FADE = 0.3;
 /** About three seconds of frames: how long a still picture keeps painting after its last missing tile. */
 const SETTLE_FRAMES = 180;
 /**
@@ -202,6 +210,8 @@ export type DrawState = {
     time: number;
     /** False under reduced motion: no lock animation, no pulse, lights steady. */
     motion: boolean;
+    /** Background ships are drawn as sensor contacts (the orbit view sets it). Absent: the plain muted wireframe and its name. */
+    contacts?: boolean;
     layers: Layers;
     /** Ship designators. Omitted, the frame is the one without them. */
     ships?: readonly ShipMark[];
@@ -312,6 +322,10 @@ export class OrbitRenderer {
     layersBusy = false;
     /** The switches of the previous frame. Null until the first paint, which never eases. */
     private seenLayers: Layers | null = null;
+    /** The frame's clock and whether motion is allowed, for the sensor contacts' pings. */
+    private contactMs = 0;
+    private contactMotion = true;
+    private contactLook = false;
     private layerRuns = new Map<ToggleKey, LayerRun>();
     /** Jump phase of each ship last frame. Null until the first paint, which never eases. */
     private seenShips: Map<string, JumpPhase> | null = null;
@@ -406,6 +420,9 @@ export class OrbitRenderer {
         this.layers = state.layers;
         // 3227: the stroke width follows the ring strength.
         this.pathWidth = 1 + state.layers.pathStrength * 1.5;
+        this.contactMs = state.time;
+        this.contactMotion = state.motion;
+        this.contactLook = state.contacts === true;
         // js/system_viewer.js:2024-2026: a smoothed frame time, for the station's pace.
         if (this.lastTime) {
             const dt = Math.max(0.001, (state.time - this.lastTime) / 1000);
@@ -1452,6 +1469,7 @@ export class OrbitRenderer {
             }
         }
         this.flatRings(at.x, at.y, this.ringRadii(at), flatA);
+        if (layers.hud && state.selected !== w.key) this.hudMark(at);
 
         if (w.mainworld && !this.mainLive && layers.markMainworld) {
             this.mainworldStar(at.x, at.y, at.r, at.z);
@@ -1468,6 +1486,52 @@ export class OrbitRenderer {
                 if (w.name && at.label > 0) this.name(w.name, at.x, at.y - at.r - 8, 11, at.label * this.mainShare);
             }
         }
+    }
+
+    /**
+     * The HUD's mark on a world too small to make out (Johnny, 2026-11-14): four thin arcs of a ring, open
+     * at the compass points, and a pip in the world's own tone when the disc is under a couple of pixels.
+     * A world with moons carries one short tick outside the ring per moon, up to four, so a glance says
+     * which worlds have company. Deliberately plain: the selection's lock and brackets are the fancy
+     * mark, and this must never compete with them (the selected world has no HUD mark at all). It fades
+     * from HUD_FADE_FROM to HUD_FADE_TO pixels of disc radius, so nothing stands over a surface.
+     */
+    private hudMark(at: WorldDraw): void {
+        const fade = 1 - Math.max(0, Math.min(1, (at.r - HUD_FADE_FROM) / (HUD_FADE_TO - HUD_FADE_FROM)));
+        if (fade <= 0.01) return;
+        const ctx = this.ctx;
+        const ring = Math.max(HUD_RING_PX, at.r + 4);
+        if (this.offCanvas(at.x, at.y, ring + 8)) return;
+        ctx.save();
+        ctx.lineWidth = 1;
+        // The mainworld mark's ink (the signal colour): the HUD is that family of marks, not the selection's.
+        ctx.strokeStyle = this.theme.mainworld;
+        ctx.globalAlpha = 0.8 * fade;
+        for (let k = 0; k < 4; k += 1) {
+            const mid = Math.PI / 4 + k * Math.PI / 2;
+            ctx.beginPath();
+            ctx.arc(at.x, at.y, ring, mid - 0.52, mid + 0.52);
+            ctx.stroke();
+        }
+        const moons = Math.min(4, at.moons.length);
+        if (moons > 0) {
+            ctx.globalAlpha = 0.5 * fade;
+            ctx.beginPath();
+            for (let i = 0; i < moons; i += 1) {
+                const a = -Math.PI / 2 + (i - (moons - 1) / 2) * 0.34;
+                ctx.moveTo(at.x + Math.cos(a) * (ring + 2), at.y + Math.sin(a) * (ring + 2));
+                ctx.lineTo(at.x + Math.cos(a) * (ring + 5), at.y + Math.sin(a) * (ring + 5));
+            }
+            ctx.stroke();
+        }
+        if (at.r < HUD_PIP_UNDER) {
+            ctx.globalAlpha = 0.95 * fade;
+            ctx.fillStyle = this.theme.tones[at.world.tone];
+            ctx.beginPath();
+            ctx.arc(at.x, at.y, 2.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
     }
 
     private moon(plan: Plan, m: MoonAt, parent: WorldDraw, state: DrawState, flatA: number): void {
@@ -2413,9 +2477,58 @@ export class OrbitRenderer {
         this.paintDesignator(mark, designatorAlpha, designatorScale);
     }
 
+    /**
+     * A background ship as a sensor contact (Johnny, 2026-11-14): scenery until the referee promotes it.
+     * Its wireframe rests dim, between four corner ticks; every CONTACT_PERIOD_MS, on its own beat, it is
+     * pinged: a ring opens from it and the mark flares and fades back like phosphor. No name stands on the
+     * picture: the pointer's card says what it is. Plain on purpose, in the HUD's ink, so the campaign's
+     * own ships stay the brightest marks. With reduced motion it stands at one steady strength.
+     */
+    private paintContact(mark: ShipMark, alpha: number, scale: number): void {
+        const ctx = this.ctx;
+        let seed = 0;
+        for (let i = 0; i < mark.id.length; i += 1) seed = (seed * 31 + mark.id.charCodeAt(i)) >>> 0;
+        const beat = this.contactMotion ? ((this.contactMs / CONTACT_PERIOD_MS) + (seed % 997) / 997) % 1 : 1;
+        const flare = this.contactMotion ? (beat < CONTACT_FADE ? 1 - beat / CONTACT_FADE : 0) : 0.35;
+        const ink = this.theme.mainworld;
+        ctx.save();
+        ctx.translate(mark.x, mark.y);
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        if (this.contactMotion && beat < CONTACT_FADE) {
+            ctx.globalAlpha = alpha * 0.55 * flare;
+            ctx.beginPath();
+            ctx.arc(0, 0, 6 + 16 * (beat / CONTACT_FADE), 0, TAU);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = alpha * (0.3 + 0.4 * flare);
+        ctx.beginPath();
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            ctx.moveTo(sx * 10, sy * 6);
+            ctx.lineTo(sx * 10, sy * 10);
+            ctx.lineTo(sx * 6, sy * 10);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = alpha * (0.45 + 0.55 * flare);
+        if (scale !== 1) ctx.scale(scale, scale);
+        ctx.scale(0.8, 0.8);
+        if (typeof mark.heading === 'number') ctx.rotate(mark.heading);
+        ctx.beginPath();
+        this.designator(mark.shape);
+        ctx.stroke();
+        ctx.restore();
+        // The next ping needs a frame of its own.
+        if (this.contactMotion) this.deps.stale();
+    }
+
     /** One designator and its name. `alpha` 1 and `scale` 1 is the settled stroke. */
     private paintDesignator(mark: ShipMark, alpha: number, scale: number): void {
         if (!(alpha > 0) || this.offCanvas(mark.x, mark.y, 40)) return;
+        if (mark.kind === 'traffic' && this.contactLook) {
+            this.paintContact(mark, alpha, scale);
+            return;
+        }
         const ctx = this.ctx;
         const theme = this.theme;
         const colour = mark.kind === 'party' ? theme.signal : mark.kind === 'traffic' ? theme.textMuted : theme.text;

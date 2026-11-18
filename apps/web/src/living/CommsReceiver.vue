@@ -18,6 +18,9 @@ const props = defineProps<{
     mayday?: boolean;
 }>();
 
+/** The corner's minimize was pressed: the view turns System Comms off and shows where it went. */
+const emit = defineEmits<{ minimize: [] }>();
+
 const rootEl = ref<HTMLElement | null>(null);
 const themeMode = ref<CommsTheme>('normal');
 const ids = commsGradientIds();
@@ -110,6 +113,9 @@ defineExpose({ transmit, idle });
             <span class="trx-live-dot" aria-hidden="true"></span>
             <span data-trx-status>MONITORING</span>
             <span class="trx-counter" data-trx-clock>00:00:00</span>
+            <button type="button" class="trx-min" aria-label="Minimize System Comms" title="Minimize to the System Comms button" data-comms-minimize @click="emit('minimize')">
+              <svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 9.5h7" /></svg>
+            </button>
           </div>
         </header>
         <div class="trx-rule" aria-hidden="true"></div>
@@ -339,6 +345,26 @@ defineExpose({ transmit, idle });
   font-variant-numeric: tabular-nums;
   color: var(--comms-clock);
 }
+.trx-min {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: -2px -3px -2px 2px;
+  padding: 0;
+  border: 1px solid var(--trx-counter-line);
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--comms-status);
+  cursor: pointer;
+  /* The receiver lets the pointer through to the picture; its one control takes it. */
+  pointer-events: auto;
+}
+.trx-min svg { display: block; width: 12px; height: 12px; }
+.trx-min path { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+.trx-min:hover,
+.trx-min:focus-visible { border-color: var(--comms-amber); color: var(--comms-amber); }
 .trx-rule { flex: none; height: 10px; margin-top: 3px; position: relative; border-bottom: 1px solid var(--trx-rule); }
 .trx-rule::before { content: ""; position: absolute; width: 34%; bottom: -1px; left: 0; border-bottom: 1px solid var(--trx-rule-hot); }
 .trx-rule::after { content: ""; position: absolute; right: 14%; bottom: -2px; width: 29px; border-bottom: 3px dotted var(--trx-rule-dot); }

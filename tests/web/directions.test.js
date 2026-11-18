@@ -57,6 +57,10 @@ test('a route: the stops, one line per leg with the fuel and the notes, the tota
     assert.equal(result.lines.length, 2);
     assert.match(result.lines[0], /^1\. Alpha → Beta, 1 parsec · Starport B, refined · Amber zone$/);
     assert.match(result.lines[1], /^2\. Beta → Gamma, 1 parsec/);
+    // The same legs as the list's rows: the start, then a row a jump with the notes apart.
+    assert.deepEqual(result.origin, { end: { sector: 'West_Reach', hex: '0205' }, name: 'Alpha' });
+    assert.deepEqual(result.legs[0], { end: { sector: 'West_Reach', hex: '0105' }, name: 'Beta', parsecs: '1 parsec', fuel: 'Starport B, refined', notes: ['Amber zone'] });
+    assert.equal(result.legs.length, result.lines.length);
     assert.equal(result.total, '2 jumps, 2 parsecs, about 2 weeks in jump');
 });
 
@@ -97,6 +101,8 @@ test('pins: MapView mounts the panel and its layer, the command, Escape, the sty
     const view = fs.readFileSync(path.join(webRoot, 'src/views/MapView.vue'), 'utf8');
     assert.match(view, /<canvas ref="directionsEl" class="directions-layer" aria-hidden="true"><\/canvas>/);
     assert.match(view, /<DirectionsPanel\s+v-if="directionsOpen"/);
+    assert.match(view, /@route="showDirections"\s+@fit="fitDirections"/, 'the chart shows the whole route when the panel asks');
+    assert.match(view, /function fitDirections\(\): void \{[\s\S]*?const free = area\(true\);[\s\S]*?querySelector\('\[data-directions\]'\)[\s\S]*?flyTo\(centreIn\(/, 'fitted into the chart beside the pane and Directions');
     assert.match(view, /id: 'directions',\s+name: 'Directions',\s+keys: \['d'\],/);
     assert.match(view, /if \(directionsOpen\.value\) \{\s+closeDirections\(\);\s+return;\s+\}/, 'Escape closes it');
     assert.match(view, /directionsPoints = null;\s+markDirty\(\);/, 'closing clears the route');
@@ -147,10 +153,12 @@ describe('the panel renders', { concurrency: 1 }, () => {
         }
         assert.match(html, />Jump-1<\/option>[\s\S]*>Jump-6<\/option>/);
         assert.match(html, /<option value="any"[^>]*>Any fuel<\/option><option value="starport"[^>]*>Starport only<\/option><option value="refined"[^>]*>Refined only<\/option>/);
-        assert.match(html, />Swap From and To</);
+        assert.match(html, /aria-label="Swap From and To"[^>]*data-directions-swap/, 'the swap is one control beside the two boxes');
         assert.match(html, />Get directions</);
         assert.doesNotMatch(html, /data-directions-ship-jump/);
         const ship = await render({ partyJump: 2, partyShip: 'Kestrel Dawn' });
-        assert.match(ship, /data-directions-ship-jump>Use Kestrel Dawn’s jump \(Jump-2\)</);
+        assert.match(ship, /data-directions-ship-jump>Jump-2 is Kestrel Dawn’s jump\.</, 'the choice starts at the ship’s jump and says so');
+        const fast = await render({ partyJump: 4, partyShip: 'Kestrel Dawn' });
+        assert.match(fast, /<option value="4" selected>Jump-4<\/option>/, 'the ship’s jump is chosen when the panel opens');
     });
 });

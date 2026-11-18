@@ -15,7 +15,7 @@ const ORBIT_DIR = new URL('../../apps/web/src/orbit/', import.meta.url);
 
 test('the keys: 1/2/3 the layout, 4 to 0 the layers, each key once', () => {
     assert.deepEqual(LAYOUTS.map((item) => item.key), ['1', '2', '3']);
-    assert.deepEqual(LAYERS.map((item) => item.hotkey), ['4', '5', '6', '7', '8', '9', '0']);
+    assert.deepEqual(LAYERS.map((item) => item.hotkey), ['4', '5', '6', '7', '8', '9', '0', 'h'], 'and h the HUD');
     const keys = ORBIT_COMMANDS.flatMap((command) => command.keys);
     assert.equal(new Set(keys).size, keys.length, 'no key does two things');
     assert.equal(keyWords(' '), 'Space');
